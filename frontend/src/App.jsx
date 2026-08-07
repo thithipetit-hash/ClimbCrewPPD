@@ -539,6 +539,8 @@ function App() {
     nomOuvreur: "",
     moulinetteOnly: false,
   });
+  const [editingRouteId, setEditingRouteId] = useState("");
+  const [routeEditDraft, setRouteEditDraft] = useState(null);
   const [newRealisation, setNewRealisation] = useState({
     participantId: "",
     selectedDay: "",
@@ -1251,7 +1253,7 @@ function App() {
     }
   }
 
-  function addRoute() {
+  async function addRoute() {
     const numeroVoieUnique = `voie-${Date.now()}`;
     const couleurPrises = newRoute.couleurPrises.trim();
     const nomOuvreur = newRoute.nomOuvreur.trim();
@@ -1271,11 +1273,74 @@ function App() {
       dateCreation: selectedDate,
     };
 
-    setState((prev) => ({ ...prev, routes: [...prev.routes, route] }));
-    setRouteError("");
-    setNewRoute({
-      numeroCorde: "1", couleurPrises: "Blanc", cotationReference: "5c", nomVoie: "", nomOuvreur: "", moulinetteOnly: false,
+    try {
+      const savedRoute = USE_API
+        ? await apiFetch("/routes", { method: "POST", body: JSON.stringify(route) })
+        : route;
+      setState((prev) => ({ ...prev, routes: [...prev.routes, savedRoute] }));
+      setRouteError("");
+      setNewRoute({
+        numeroCorde: "1", couleurPrises: "Blanc", cotationReference: "5c", nomVoie: "", nomOuvreur: "", moulinetteOnly: false,
+      });
+    } catch (error) {
+      setRouteError(error.message || "Création de la voie impossible.");
+    }
+  }
+
+  function startRouteEdition(route) {
+    setEditingRouteId(route.id);
+    setRouteEditDraft({
+      numeroCorde: String(route.numeroCorde ?? 0),
+      couleurPrises: route.couleurPrises || "Blanc",
+      cotationReference: route.cotationReference || route.cotationAjustee || "5c",
+      nomVoie: route.nomVoie || "",
+      nomOuvreur: route.nomOuvreur || "",
+      moulinetteOnly: Boolean(route.moulinetteOnly),
     });
+    setRouteError("");
+  }
+
+  function cancelRouteEdition() {
+    setEditingRouteId("");
+    setRouteEditDraft(null);
+  }
+
+  async function saveRouteEdition(route) {
+    if (!routeEditDraft) return;
+    const couleurPrises = routeEditDraft.couleurPrises.trim();
+    const nomOuvreur = routeEditDraft.nomOuvreur.trim();
+    if (!couleurPrises || !nomOuvreur) {
+      setRouteError("Renseigne au moins la couleur et l’ouvreur.");
+      return;
+    }
+
+    const updatedRoute = {
+      ...route,
+      numeroCorde: Number(routeEditDraft.numeroCorde),
+      couleurPrises,
+      cotationReference: routeEditDraft.cotationReference,
+      cotationAjustee: routeEditDraft.cotationReference,
+      nomVoie: routeEditDraft.nomVoie.trim(),
+      nomOuvreur,
+      moulinetteOnly: routeEditDraft.moulinetteOnly,
+    };
+
+    try {
+      const savedRoute = USE_API
+        ? await apiFetch(`/routes/${encodeURIComponent(route.id)}`, {
+            method: "PUT",
+            body: JSON.stringify(updatedRoute),
+          })
+        : updatedRoute;
+      setState((prev) => ({
+        ...prev,
+        routes: prev.routes.map((item) => (item.id === route.id ? savedRoute : item)),
+      }));
+      cancelRouteEdition();
+      setSyncMessage("Voie mise à jour.");
+    } catch (error) {
+      setRouteError(error.message || "Modification de la voie impossible.");
+    }
   }
 
   function getParticipantSessions(participantId) {
@@ -2917,17 +2982,64 @@ button:not(.danger):not(.secondary):not(.ghost),
                           {ropeRoutes.map((route) => {
                             return (
                               <div className={`route-card ${route.moulinetteOnly ? "moulinette-only" : ""}`} key={route.id} style={getRouteCardStyle(route.couleurPrises)}>
-                                <div className="card-header">
-                                  <strong>
-                                    {route.cotationAjustee} · {formatRouteName(route)}
-                                    {" · "}Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}
-                                  </strong>
-                                  <div className="group">
-                                    {route.moulinetteOnly && <span className="pill">Moulinette uniquement</span>}
-                                    <button className="secondary" onClick={() => openRealisationModal(route.id, state.selectedParticipantProgress)}>Réalisation</button>
+                                {adminUnlocked && editingRouteId === route.id && routeEditDraft ? (
+                                  <>
+                                    <div className="grid three">
+                                      <div>
+                                        <label>Corde</label>
+                                        <select value={routeEditDraft.numeroCorde} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, numeroCorde: event.target.value }))}>
+                                          {ROPE_NUMBERS.map((numero) => <option key={numero} value={String(numero)}>Corde {numero}</option>)}
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label>Couleur</label>
+                                        <select value={routeEditDraft.couleurPrises} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, couleurPrises: event.target.value }))}>
+                                          {ROUTE_COLORS.map((couleur) => <option key={couleur} value={couleur}>{couleur}</option>)}
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label>Cotation</label>
+                                        <select value={routeEditDraft.cotationReference} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, cotationReference: event.target.value }))}>
+                                          {GRADES.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label>Nom de la voie</label>
+                                        <input value={routeEditDraft.nomVoie} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, nomVoie: event.target.value }))} />
+                                      </div>
+                                      <div>
+                                        <label>Ouvreur</label>
+                                        <input value={routeEditDraft.nomOuvreur} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, nomOuvreur: event.target.value }))} />
+                                      </div>
+                                      <div>
+                                        <label>Moulinette uniquement</label>
+                                        <select
+                                          value={routeEditDraft.moulinetteOnly ? "oui" : "non"}
+                                          onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, moulinetteOnly: event.target.value === "oui" }))}
+                                        >
+                                          <option value="non">Non</option>
+                                          <option value="oui">Oui</option>
+                                        </select>
+                                      </div>
+                                    </div>
+                                    <div className="group" style={{ marginTop: 8 }}>
+                                      <button onClick={() => saveRouteEdition(route)}>Enregistrer</button>
+                                      <button className="secondary" onClick={cancelRouteEdition}>Annuler</button>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="card-header">
+                                    <strong>
+                                      {route.cotationAjustee} · {formatRouteName(route)}
+                                      {" · "}Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}
+                                    </strong>
+                                    <div className="group">
+                                      {route.moulinetteOnly && <span className="pill">Moulinette uniquement</span>}
+                                      <button className="secondary" onClick={() => openRealisationModal(route.id, state.selectedParticipantProgress)}>Réalisation</button>
+                                      {adminUnlocked && <button className="secondary" onClick={() => startRouteEdition(route)}>Modifier</button>}
+                                    </div>
                                   </div>
-                                </div>
-                                {/* Détails de référence retirés de l’affichage. */}
+                                )}
                               </div>
                             );
                           })}
