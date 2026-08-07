@@ -1,5 +1,5 @@
 /**
- * Harmonisation de la version affichée et des libellés de consensus.
+ * Harmonisation de la version affichée, des libellés de consensus et des écrans d'accès.
  *
  * La version suit le format aammjj.iii :
  * - aa : année sur deux chiffres ;
@@ -7,10 +7,10 @@
  * - jj : jour ;
  * - iii : index du commit sur trois chiffres, incrémenté à chaque commit.
  *
- * La version de ce commit est donc 260807.050.
+ * La version de ce commit est donc 260807.051.
  */
-const APP_VERSION = "260807.050";
-const APP_VERSION_LABEL = `Version ${APP_VERSION}`;
+const APP_VERSION = "260807.051";
+const APP_VERSION_LABEL = `Version : ${APP_VERSION}`;
 let scheduled = false;
 
 function normalize(value) {
@@ -24,9 +24,36 @@ function normalize(value) {
 function updateVisibleVersion() {
   document.querySelectorAll(".small").forEach((element) => {
     const text = String(element.textContent || "").trim();
-    if (/^Version (?:\d{4}-\d{2}-\d{2}\.\d+|\d{6}\.\d{3})$/.test(text)) {
+    if (/^Version\s*:?\s*(?:\d{4}-\d{2}-\d{2}\.\d+|\d{6}\.\d{3})$/.test(text)) {
       element.textContent = APP_VERSION_LABEL;
+
+      // La version doit rester visible sur les écrans de connexion.
+      // Une ancienne amélioration masquait ce libellé avec cette classe.
+      element.classList.remove("issue13-hidden");
     }
+  });
+}
+
+function enableEnterSubmission() {
+  document.querySelectorAll(".auth-card").forEach((card) => {
+    if (card.dataset.climbclubEnterSubmit === "true") return;
+    card.dataset.climbclubEnterSubmit = "true";
+
+    // Impact ergonomique : Entrée dans un champ de saisie déclenche le bouton
+    // principal de l'écran d'accès actuellement affiché, comme un formulaire HTML.
+    card.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.isComposing || event.repeat) return;
+
+      const input = event.target;
+      if (!(input instanceof HTMLInputElement)) return;
+      if (input.disabled || input.readOnly || input.type === "checkbox") return;
+
+      const submitButton = card.querySelector(".auth-submit-row button:not(:disabled)");
+      if (!submitButton) return;
+
+      event.preventDefault();
+      submitButton.click();
+    });
   });
 }
 
@@ -74,6 +101,7 @@ function refresh() {
   requestAnimationFrame(() => {
     scheduled = false;
     updateVisibleVersion();
+    enableEnterSubmission();
     updateConsensusFallbacks();
     ensureVersionFaq();
   });
