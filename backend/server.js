@@ -778,7 +778,9 @@ app.post("/routes", requireAuth, requireAdmin, async (req, res) => {
       [
         id,
         String(route.numeroVoieUnique || "").trim(),
-        Number(route.numeroCorde) || null,
+        route.numeroCorde === undefined || route.numeroCorde === null || route.numeroCorde === ""
+          ? null
+          : Number(route.numeroCorde),
         String(route.couleurPrises || "").trim(),
         String(route.cotationReference || "").trim(),
         String(route.cotationAjustee || route.cotationReference || "").trim(),
