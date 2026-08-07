@@ -2919,8 +2919,8 @@ button:not(.danger):not(.secondary):not(.ghost),
                               <div className={`route-card ${route.moulinetteOnly ? "moulinette-only" : ""}`} key={route.id} style={getRouteCardStyle(route.couleurPrises)}>
                                 <div className="card-header">
                                   <strong>
-                                    Corde {route.numeroCorde} · {route.cotationAjustee} · {formatRouteName(route)}
-                                    {" · "}Consensus {routeAggregatesById[route.id]?.consensusGrade || "non calculé"}
+                                    {route.cotationAjustee} · {formatRouteName(route)}
+                                    {" · "}Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}
                                   </strong>
                                   <div className="group">
                                     {route.moulinetteOnly && <span className="pill">Moulinette uniquement</span>}
