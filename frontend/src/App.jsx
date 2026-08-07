@@ -541,6 +541,8 @@ function App() {
   });
   const [editingRouteId, setEditingRouteId] = useState("");
   const [routeEditDraft, setRouteEditDraft] = useState(null);
+  // Le tableau peut être regroupé soit par numéro de corde, soit par niveau de cotation.
+  const [routeSortMode, setRouteSortMode] = useState("corde");
   const [newRealisation, setNewRealisation] = useState({
     participantId: "",
     selectedDay: "",
@@ -698,6 +700,37 @@ function App() {
     () => Object.fromEntries(state.routes.map((r) => [r.id, r])),
     [state.routes]
   );
+
+  // Prépare les groupes du tableau des voies. L'ordre des cotations suit GRADES
+  // afin que 6a+ soit placé entre 6a et 6b.
+  const routeDisplayGroups = useMemo(() => {
+    if (routeSortMode === "cotation") {
+      const gradeRank = new Map(GRADES.map((grade, index) => [grade, index]));
+      const grades = [...new Set(state.routes.map((route) => route.cotationAjustee || route.cotationReference || "nc"))]
+        .sort((gradeA, gradeB) => {
+          const rankA = gradeRank.has(gradeA) ? gradeRank.get(gradeA) : Number.MAX_SAFE_INTEGER;
+          const rankB = gradeRank.has(gradeB) ? gradeRank.get(gradeB) : Number.MAX_SAFE_INTEGER;
+          return rankA - rankB || String(gradeA).localeCompare(String(gradeB), "fr");
+        });
+
+      return grades.map((grade) => ({
+        key: `cotation-${grade}`,
+        label: `Cotation ${grade}`,
+        routes: state.routes.filter((route) => (route.cotationAjustee || route.cotationReference || "nc") === grade),
+      }));
+    }
+
+    return [...new Set(state.routes.map((route) => Number(route.numeroCorde)))]
+      .sort((numeroA, numeroB) => numeroA - numeroB)
+      .map((numeroCorde) => {
+        const rope = state.ropes.find((item) => Number(item.numeroCorde) === numeroCorde);
+        return {
+          key: `corde-${numeroCorde}`,
+          label: `Corde ${numeroCorde}${rope?.couleurCorde ? ` · ${rope.couleurCorde}` : ""}`,
+          routes: state.routes.filter((route) => Number(route.numeroCorde) === numeroCorde),
+        };
+      });
+  }, [routeSortMode, state.routes, state.ropes]);
   const sessionsById = useMemo(
     () => Object.fromEntries(state.sessions.map((s) => [s.id, s])),
     [state.sessions]
@@ -2964,22 +2997,34 @@ button:not(.danger):not(.secondary):not(.ghost),
             )}
 
             <div className="card">
-              <div className="card-header"><h2>Tableau des voies</h2></div>
+              <div className="card-header">
+                <h2>Tableau des voies</h2>
+                <div className="group">
+                  <label htmlFor="route-sort-mode">Trier par</label>
+                  <select
+                    id="route-sort-mode"
+                    value={routeSortMode}
+                    onChange={(event) => setRouteSortMode(event.target.value)}
+                    style={{ width: "auto", minWidth: 150 }}
+                  >
+                    <option value="corde">Corde</option>
+                    <option value="cotation">Cotation</option>
+                  </select>
+                </div>
+              </div>
               <div className="stack">
-                {[...new Set(state.routes.map((route) => Number(route.numeroCorde)))].sort((a, b) => a - b).map((numeroCorde) => {
-                  const rope = state.ropes.find((item) => Number(item.numeroCorde) === numeroCorde);
-                  const ropeRoutes = state.routes.filter((route) => Number(route.numeroCorde) === numeroCorde);
+                {routeDisplayGroups.map((group) => {
                   return (
-                    <div className="subcard" key={numeroCorde}>
+                    <div className="subcard" key={group.key}>
                       <div className="card-header">
-                        <strong>Corde {numeroCorde}{rope?.couleurCorde ? ` · ${rope.couleurCorde}` : ""}</strong>
-                        <span className="badge">{ropeRoutes.length} voie(s)</span>
+                        <strong>{group.label}</strong>
+                        <span className="badge">{group.routes.length} voie(s)</span>
                       </div>
-                      {ropeRoutes.length === 0 ? (
-                        <div className="small">Aucune voie sur cette corde.</div>
+                      {group.routes.length === 0 ? (
+                        <div className="small">Aucune voie.</div>
                       ) : (
                         <div className="stack">
-                          {ropeRoutes.map((route) => {
+                          {group.routes.map((route) => {
                             return (
                               <div className={`route-card ${route.moulinetteOnly ? "moulinette-only" : ""}`} key={route.id} style={getRouteCardStyle(route.couleurPrises)}>
                                 {adminUnlocked && editingRouteId === route.id && routeEditDraft ? (
@@ -3309,8 +3354,11 @@ button:not(.danger):not(.secondary):not(.ghost),
                   <div className="card-header"><h2>Gestion des participants</h2></div>
                   <div className="stack">
                     {adminParticipants.map((p) => (
-                      <div className="subcard" key={p.id}>
-                        <div className="grid four">
+                      <details className="subcard participant-admin-details" key={p.id}>
+                        <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+                          {fullName(p)}
+                        </summary>
+                        <div className="grid four" style={{ marginTop: 10 }}>
                           <div><label>Nom</label><input value={p.nom} onChange={(e) => updateParticipant(p.id, { nom: e.target.value })} /></div>
                           <div><label>Prénom</label><input value={p.prenom} onChange={(e) => updateParticipant(p.id, { prenom: e.target.value })} /></div>
                           <div><label>Adresse e-mail</label><input type="email" value={p.email || ""} onChange={(e) => updateParticipant(p.id, { email: e.target.value })} /></div>
@@ -3324,7 +3372,7 @@ button:not(.danger):not(.secondary):not(.ghost),
                           <label><input type="checkbox" checked={p.canReferer} onChange={(e) => updateParticipant(p.id, { canReferer: e.target.checked })} /> Référent</label>
                           <label><input type="checkbox" checked={Boolean(p.canAdmin)} onChange={(e) => updateParticipant(p.id, { canAdmin: e.target.checked })} /> Administrateur</label>
                         </div>
-                      </div>
+                      </details>
                     ))}
                   </div>
                 </div>
