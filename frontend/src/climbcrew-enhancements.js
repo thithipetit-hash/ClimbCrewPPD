@@ -268,6 +268,30 @@ function injectStyles() {
     .subcard,.stat,.modal-panel { padding:6px!important; }
     .app button { padding:7px 10px!important; }
     .app input,.app select,.app textarea { padding:7px 8px!important; }
+
+    /* Les cases restent compactes quelle que soit l'orientation du téléphone. */
+    .app input[type="checkbox"] {
+      appearance:auto!important;
+      width:18px!important;
+      min-width:18px!important;
+      max-width:18px!important;
+      height:18px!important;
+      min-height:18px!important;
+      max-height:18px!important;
+      padding:0!important;
+      margin:0!important;
+      flex:0 0 18px!important;
+      border-radius:4px!important;
+    }
+    .app label:has(> input[type="checkbox"]) {
+      display:inline-flex!important;
+      align-items:center!important;
+      gap:5px!important;
+      width:auto!important;
+      min-height:24px!important;
+      white-space:nowrap!important;
+    }
+
     .grid { gap:6px!important; }
     .stack { gap:4px!important; }
     .card-header { gap:4px!important; margin-bottom:4px!important; }
