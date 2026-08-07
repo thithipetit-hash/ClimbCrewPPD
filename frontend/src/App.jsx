@@ -3414,27 +3414,29 @@ button:not(.danger):not(.secondary):not(.ghost),
                     <div className="muted-box">Aucun compte utilisateur chargé.</div>
                   ) : (
                     adminAuthUsers.map((user) => (
-                      <div className="subcard" key={user.id}>
-                        <div className="card-header">
-                          <div>
-                            <strong>{user.prenom} {user.nom}</strong>
+                      <details className="subcard account-admin-details" key={user.id}>
+                        <summary style={{ cursor: "pointer", fontWeight: 700 }}>
+                          {user.prenom} {user.nom}
+                        </summary>
+                        <div style={{ marginTop: 10 }}>
+                          <div className="card-header">
                             <div className="small">{user.email} · rôle {user.role} · statut {user.status}</div>
+                            <div className="group">
+                              {user.status === "pending" && <button onClick={() => approveAccessRequest(user.id)}>Approuver</button>}
+                              {user.status !== "revoked" ? (
+                                <button className="danger" onClick={() => revokeUserAccess(user.id)}>Répudier</button>
+                              ) : (
+                                <button onClick={() => reactivateUserAccess(user.id)}>Réactiver</button>
+                              )}
+                              <button className="secondary" onClick={() => generatePasswordResetToken(user.id)}>Code reset</button>
+                            </div>
                           </div>
-                          <div className="group">
-                            {user.status === "pending" && <button onClick={() => approveAccessRequest(user.id)}>Approuver</button>}
-                            {user.status !== "revoked" ? (
-                              <button className="danger" onClick={() => revokeUserAccess(user.id)}>Répudier</button>
-                            ) : (
-                              <button onClick={() => reactivateUserAccess(user.id)}>Réactiver</button>
-                            )}
-                            <button className="secondary" onClick={() => generatePasswordResetToken(user.id)}>Code reset</button>
+                          <div className="small">
+                            Créé le {user.created_at ? formatDateFr(user.created_at.slice(0, 10)) : "-"}
+                            {user.last_login_at ? ` · dernière connexion le ${formatDateFr(user.last_login_at.slice(0, 10))}` : " · aucune connexion"}
                           </div>
                         </div>
-                        <div className="small">
-                          Créé le {user.created_at ? formatDateFr(user.created_at.slice(0, 10)) : "-"}
-                          {user.last_login_at ? ` · dernière connexion le ${formatDateFr(user.last_login_at.slice(0, 10))}` : " · aucune connexion"}
-                        </div>
-                      </div>
+                      </details>
                     ))
                   )}
                 </div>
