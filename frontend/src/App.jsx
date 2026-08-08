@@ -20,7 +20,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_
 const USE_API = Boolean(API_BASE);
 
 // La session est conservée uniquement dans un cookie HttpOnly côté backend.
-const APP_VERSION = "260808.057";
+const APP_VERSION = "260808.058";
 const PASSWORD_RULE_TEXT = "Minimum 12 caractères avec majuscule, minuscule, chiffre et caractère spécial.";
 
 const AUTH_LOGIN_INLINE_STYLE = `
@@ -893,6 +893,47 @@ function App() {
       sortedParticipants: [...state.participants].sort((a, b) => fullName(a).localeCompare(fullName(b), "fr")),
     };
   }, [state]);
+
+  // Statistiques des réalisations en tête par cotation de voie.
+  const leadRealisationStats = useMemo(() => {
+    const routesByGrade = Object.fromEntries(GRADES.map((grade) => [grade, 0]));
+    const leadsByGrade = Object.fromEntries(GRADES.map((grade) => [grade, 0]));
+
+    state.routes.forEach((route) => {
+      const grade = route.cotationAjustee || route.cotationReference;
+      if (Object.prototype.hasOwnProperty.call(routesByGrade, grade)) {
+        routesByGrade[grade] += 1;
+      }
+    });
+
+    state.realisations
+      .filter((realisation) => realisation.styleRealisation === "en_tete")
+      .forEach((realisation) => {
+        const route = routesById[realisation.voieId];
+        const grade = route?.cotationAjustee || route?.cotationReference;
+        if (Object.prototype.hasOwnProperty.call(leadsByGrade, grade)) {
+          leadsByGrade[grade] += 1;
+        }
+      });
+
+    const byGrade = GRADES
+      .map((grade) => {
+        const routeCount = routesByGrade[grade];
+        const leadCount = leadsByGrade[grade];
+        return {
+          grade,
+          routeCount,
+          leadCount,
+          ratio: routeCount > 0 ? leadCount / routeCount : null,
+        };
+      })
+      .filter((entry) => entry.routeCount > 0 || entry.leadCount > 0);
+
+    return {
+      total: state.realisations.filter((realisation) => realisation.styleRealisation === "en_tete").length,
+      byGrade,
+    };
+  }, [state.routes, state.realisations, routesById]);
 
   const alphabeticalParticipants = useMemo(() => {
     return [...state.participants].sort((a, b) => fullName(a).localeCompare(fullName(b), "fr"));
@@ -3656,6 +3697,32 @@ button:not(.danger):not(.secondary):not(.ghost),
               <div className="stat"><div className="label">FFME</div><div className="value">{sessionStats.nombreFFME}</div></div>
               <div className="stat"><div className="label">Voies actives</div><div className="value">{sessionStats.nombreVoiesActives}</div></div>
               <div className="stat"><div className="label">Réalisations</div><div className="value">{sessionStats.nombreRealisations}</div></div>
+              <div className="stat"><div className="label">Réalisations en tête</div><div className="value">{leadRealisationStats.total}</div></div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <h2>Réalisations en tête par cotation</h2>
+                <span className="badge">{leadRealisationStats.total} au total</span>
+              </div>
+              <div className="stack">
+                {leadRealisationStats.byGrade.length === 0 ? (
+                  <div className="muted-box">Aucune voie ou réalisation en tête à analyser.</div>
+                ) : (
+                  leadRealisationStats.byGrade.map((entry) => (
+                    <div className="participant-row" key={entry.grade}>
+                      <strong>{entry.grade}</strong>
+                      <span className="small">
+                        {entry.routeCount} voie{entry.routeCount > 1 ? "s" : ""}
+                        {" · "}{entry.leadCount} réalisation{entry.leadCount > 1 ? "s" : ""} en tête
+                        {" · "}Ratio : {entry.ratio === null
+                          ? "nc"
+                          : entry.ratio.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
 
             <div className="card">
@@ -3740,6 +3807,13 @@ button:not(.danger):not(.secondary):not(.ghost),
               <summary><strong>Comment est calculée la cotation consensus ?</strong></summary>
               <div className="small">
                 Le consensus utilise uniquement les cotations proposées pour la voie. Chaque cotation est convertie en indice de 4a = 0 à 7b = 14. L’indice CPR utilisé est limité à l’intervalle 0–14. Le poids d’un avis vaut 1 + (indice CPR du grimpeur ÷ 14) : il varie donc de 1 à 2. Sans CPR calculable, le poids reste égal à 1. La formule est : somme des indices proposés multipliés par leur poids, divisée par la somme des poids. Le résultat est arrondi à l’indice le plus proche puis reconverti en cotation. Ainsi, tous les avis comptent, tandis que l’expérience récente mesurée par le CPR augmente progressivement leur poids sans jamais le doubler au-delà de 2.
+              </div>
+            </details>
+
+            <details className="faq-item">
+              <summary><strong>Comment sont calculées les statistiques des réalisations en tête ?</strong></summary>
+              <div className="small">
+                Le total correspond à tous les enregistrements dont le style est « En tête ». Pour chaque cotation, l’application compte les voies disponibles et les réalisations en tête enregistrées sur ces voies. Le ratio est égal au nombre de réalisations en tête divisé par le nombre de voies de la cotation. Il représente donc le nombre moyen de réalisations en tête par voie et peut dépasser 1. Sans voie pour une cotation, le ratio est indiqué « nc ».
               </div>
             </details>
 
