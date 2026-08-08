@@ -20,7 +20,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_
 const USE_API = Boolean(API_BASE);
 
 // La session est conservée uniquement dans un cookie HttpOnly côté backend.
-const APP_VERSION = "260808.059";
+const APP_VERSION = "260808.060";
 const PASSWORD_RULE_TEXT = "Minimum 12 caractères avec majuscule, minuscule, chiffre et caractère spécial.";
 
 const AUTH_LOGIN_INLINE_STYLE = `
@@ -2262,7 +2262,7 @@ async function handleThemePreferenceChange(nextTheme) {
         .app-logo { width: 48px; height: 48px; object-fit: contain; border-radius: 14px; background: #fff; padding: 4px; box-shadow: 0 8px 22px rgba(0,0,0,.18); }
         .menu-button { background: #020617; color: #e2e8f0; border: 1px solid rgba(148,163,184,.45); min-width: 48px; padding: 10px 12px; }
         .sidebar-backdrop { position: fixed; inset: 0; background: rgba(2,6,23,.62); z-index: 40; }
-        .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: min(310px, 86vw); z-index: 50; transform: translateX(-110%); transition: transform .22s ease; background: rgba(15,23,42,.98); border-right: 1px solid rgba(148,163,184,.25); padding: 18px; box-shadow: 20px 0 60px rgba(0,0,0,.4); display: flex; flex-direction: column; gap: 14px; }
+        .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: min(310px, 86vw); height: 100vh; height: 100dvh; z-index: 50; transform: translateX(-110%); transition: transform .22s ease; background: rgba(15,23,42,.98); border-right: 1px solid rgba(148,163,184,.25); padding: 18px; padding-bottom: calc(18px + env(safe-area-inset-bottom)); box-shadow: 20px 0 60px rgba(0,0,0,.4); display: flex; flex-direction: column; gap: 14px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
         .sidebar.open { transform: translateX(0); }
         .sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
         .sidebar-brand { display: flex; align-items: center; gap: 10px; font-weight: 900; color: #e2e8f0; }
@@ -2451,9 +2451,38 @@ async function handleThemePreferenceChange(nextTheme) {
           .stat .value { font-size: 24px; margin-top: 6px; }
           .participant-row { padding: 8px 10px; font-size: 14px; }
 
-          /* Le drawer devient plein écran sur mobile. */
-          .sidebar { width: 100vw; max-width: none; padding: 18px 14px; }
-          .side-tab { min-height: 48px; }
+          /* Le drawer devient plein écran et compact sur mobile.
+             Il reste défilable pour que tous les onglets, l'ambiance et le compte
+             soient accessibles quelle que soit la hauteur de l'écran. */
+          .sidebar {
+            width: 100vw;
+            max-width: none;
+            height: 100vh;
+            height: 100dvh;
+            padding: 10px 12px;
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
+            gap: 6px;
+            overflow-y: auto;
+          }
+          .sidebar-header {
+            flex: 0 0 auto;
+            min-height: 44px;
+            margin-bottom: 2px;
+          }
+          .sidebar-logo { width: 36px; height: 36px; }
+          .app .sidebar .side-tab {
+            flex: 0 0 auto;
+            min-height: 40px;
+            padding: 6px 10px !important;
+            font-size: 14px;
+            line-height: 1.1;
+          }
+          .sidebar-theme {
+            flex: 0 0 auto;
+            margin-top: 2px;
+            padding-top: 7px;
+          }
+          .sidebar-account { flex: 0 0 auto; }
 
           .grid.five, .grid.four, .grid.three, .grid.two { grid-template-columns: 1fr; }
           .week-grid { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -8px; padding: 0 8px 10px; -webkit-overflow-scrolling: touch; }
@@ -3046,18 +3075,20 @@ button:not(.danger):not(.secondary):not(.ghost),
         </div>
       )}
 
-      <nav className="mobile-bottom-nav" aria-label="Navigation mobile ClimbClubCristal">
-        {visibleTabs.map((item) => (
-          <button
-            key={item.key}
-            className={`bottom-tab ${tab === item.key ? "active" : ""}`}
-            onClick={() => setTab(item.key)}
-            title={item.label}
-          >
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </nav>
+      {!sidebarOpen && (
+        <nav className="mobile-bottom-nav" aria-label="Navigation mobile ClimbClubCristal">
+          {visibleTabs.map((item) => (
+            <button
+              key={item.key}
+              className={`bottom-tab ${tab === item.key ? "active" : ""}`}
+              onClick={() => setTab(item.key)}
+              title={item.label}
+            >
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
 
       <div className="shell">
         <div className="hero">
