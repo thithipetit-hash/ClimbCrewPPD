@@ -20,7 +20,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_
 const USE_API = Boolean(API_BASE);
 
 // La session est conservée uniquement dans un cookie HttpOnly côté backend.
-const APP_VERSION = "260808.055";
+const APP_VERSION = "260808.056";
 const PASSWORD_RULE_TEXT = "Minimum 12 caractères avec majuscule, minuscule, chiffre et caractère spécial.";
 
 const AUTH_LOGIN_INLINE_STYLE = `
@@ -189,6 +189,7 @@ const TABS = [
   { key: "gestion_comptes", label: "Gestion des comptes", adminOnly: true },
   { key: "logs", label: "Log", adminOnly: true },
   { key: "statistiques", label: "Statistiques" },
+  { key: "wall_of_fame", label: "Wall of Fame" },
   { key: "faq", label: "FAQ" },
 ];
 
@@ -932,6 +933,77 @@ function App() {
 
     return points;
   }, [state.participants, state.routes, state.realisations]);
+
+  // Classements publics du Wall of Fame. Chaque tableau est limité aux trois
+  // premiers participants et conserve le même rang en cas d'égalité.
+  const wallOfFameCategories = useMemo(() => {
+    const successfulStyles = new Set(["a_vue", "flash", "en_tete", "moulinette", "travaillee"]);
+
+    const distinctRoutesFor = (participantId, predicate) => new Set(
+      state.realisations
+        .filter((realisation) => String(realisation.participantId) === String(participantId))
+        .filter(predicate)
+        .map((realisation) => String(realisation.voieId))
+    ).size;
+
+    const buildRanking = ({ title, getValue, formatValue, isEligible = (value) => value > 0 }) => {
+      const sorted = state.participants
+        .map((participant) => ({ participant, value: getValue(participant) }))
+        .filter((entry) => Number.isFinite(entry.value) && isEligible(entry.value, entry.participant))
+        .sort((entryA, entryB) => (
+          entryB.value - entryA.value
+          || fullName(entryA.participant).localeCompare(fullName(entryB.participant), "fr")
+        ))
+        .slice(0, 3);
+
+      let previousValue = null;
+      let previousRank = 0;
+      return {
+        title,
+        entries: sorted.map((entry, index) => {
+          const rank = previousValue !== null && entry.value === previousValue ? previousRank : index + 1;
+          previousValue = entry.value;
+          previousRank = rank;
+          return { ...entry, rank, displayValue: formatValue(entry.value, entry.participant) };
+        }),
+      };
+    };
+
+    return [
+      buildRanking({
+        title: "Meilleurs CPR",
+        getValue: (participant) => cprByParticipantId[participant.id]?.averageIndex,
+        formatValue: (_value, participant) => cprByParticipantId[participant.id]?.currentGrade || "nc",
+        isEligible: (_value, participant) => Boolean(cprByParticipantId[participant.id]?.currentGrade),
+      }),
+      buildRanking({
+        title: "Plus de points",
+        getValue: (participant) => pointsByParticipantId[participant.id] || 0,
+        formatValue: (value) => `${formatPoints(value)} points`,
+      }),
+      buildRanking({
+        title: "Plus de participations",
+        getValue: (participant) => sessionStats.participationCount[participant.id] || 0,
+        formatValue: (value) => `${value} séance${value > 1 ? "s" : ""}`,
+      }),
+      buildRanking({
+        title: "Voies distinctes réalisées",
+        getValue: (participant) => distinctRoutesFor(
+          participant.id,
+          (realisation) => successfulStyles.has(realisation.styleRealisation)
+        ),
+        formatValue: (value) => `${value} voie${value > 1 ? "s" : ""}`,
+      }),
+      buildRanking({
+        title: "Voies réalisées en tête",
+        getValue: (participant) => distinctRoutesFor(
+          participant.id,
+          (realisation) => realisation.styleRealisation === "en_tete"
+        ),
+        formatValue: (value) => `${value} voie${value > 1 ? "s" : ""}`,
+      }),
+    ];
+  }, [state.participants, state.realisations, cprByParticipantId, pointsByParticipantId, sessionStats.participationCount]);
 
   const sortedStatsParticipants = useMemo(() => {
     const direction = statsSortDirection === "asc" ? 1 : -1;
@@ -3483,6 +3555,49 @@ button:not(.danger):not(.secondary):not(.ghost),
           </>
         )}
 
+        {tab === "wall_of_fame" && (
+          <>
+            <div className="card">
+              <div className="card-header">
+                <h2>Wall of Fame</h2>
+                <span className="small">Les trois meilleurs de chaque classement</span>
+              </div>
+              <div className="grid three">
+                {wallOfFameCategories.map((category) => (
+                  <div className="subcard" key={category.title}>
+                    <div className="card-header">
+                      <h3>{category.title}</h3>
+                    </div>
+                    <div className="stack">
+                      {category.entries.length === 0 ? (
+                        <div className="muted-box">Pas encore de classement.</div>
+                      ) : (
+                        category.entries.map((entry) => (
+                          <div
+                            className="participant-row passport-row"
+                            key={entry.participant.id}
+                            style={getPassportStyle(entry.participant)}
+                            data-passport={normalizePassport(entry.participant.passport)}
+                          >
+                            <span className="participant-identity">
+                              <span aria-hidden="true">
+                                {entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : "🥉"}
+                              </span>
+                              <span className="passport-dot" style={getPassportDotStyle(entry.participant)} aria-hidden="true" />
+                              <span className="participant-name">{fullName(entry.participant)}</span>
+                            </span>
+                            <strong style={{ color: "inherit" }}>{entry.displayValue}</strong>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
         {tab === "statistiques" && (
           <>
             <div className="stats-grid">
@@ -3575,6 +3690,13 @@ button:not(.danger):not(.secondary):not(.ghost),
               <summary><strong>Comment est calculée la cotation consensus ?</strong></summary>
               <div className="small">
                 Le consensus utilise uniquement les cotations proposées pour la voie. Chaque cotation est convertie en indice de 4a = 0 à 7b = 14. L’indice CPR utilisé est limité à l’intervalle 0–14. Le poids d’un avis vaut 1 + (indice CPR du grimpeur ÷ 14) : il varie donc de 1 à 2. Sans CPR calculable, le poids reste égal à 1. La formule est : somme des indices proposés multipliés par leur poids, divisée par la somme des poids. Le résultat est arrondi à l’indice le plus proche puis reconverti en cotation. Ainsi, tous les avis comptent, tandis que l’expérience récente mesurée par le CPR augmente progressivement leur poids sans jamais le doubler au-delà de 2.
+              </div>
+            </details>
+
+            <details className="faq-item">
+              <summary><strong>Comment fonctionne le Wall of Fame ?</strong></summary>
+              <div className="small">
+                Le Wall of Fame affiche les trois premiers grimpeurs pour le CPR, les points, le nombre de participations aux séances, les voies distinctes réalisées et les voies distinctes réalisées en tête. Une même voie n’est comptée qu’une fois par grimpeur dans les deux derniers classements. Les personnes ayant la même valeur conservent le même rang. Les classements sans résultat ne sont pas affichés.
               </div>
             </details>
 
