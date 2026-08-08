@@ -20,7 +20,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_
 const USE_API = Boolean(API_BASE);
 
 // La session est conservée uniquement dans un cookie HttpOnly côté backend.
-const APP_VERSION = "260808.060";
+const APP_VERSION = "260808.061";
 const PASSWORD_RULE_TEXT = "Minimum 12 caractères avec majuscule, minuscule, chiffre et caractère spécial.";
 
 const AUTH_LOGIN_INLINE_STYLE = `
@@ -2451,6 +2451,16 @@ async function handleThemePreferenceChange(nextTheme) {
           .stat .value { font-size: 24px; margin-top: 6px; }
           .participant-row { padding: 8px 10px; font-size: 14px; }
 
+          /* Contraste renforcé pour les statistiques affichées sur fond sombre. */
+          .lead-grade-row,
+          .lead-grade-row strong,
+          .lead-grade-row .small {
+            color: #ffffff !important;
+            opacity: 1 !important;
+            font-weight: 700;
+            text-shadow: 0 1px 1px rgba(0, 0, 0, .35);
+          }
+
           /* Le drawer devient plein écran et compact sur mobile.
              Il reste défilable pour que tous les onglets, l'ambiance et le compte
              soient accessibles quelle que soit la hauteur de l'écran. */
@@ -3741,7 +3751,7 @@ button:not(.danger):not(.secondary):not(.ghost),
                   <div className="muted-box">Aucune voie ou réalisation en tête à analyser.</div>
                 ) : (
                   leadRealisationStats.byGrade.map((entry) => (
-                    <div className="participant-row" key={entry.grade} style={{ color: "#ffffff" }}>
+                    <div className="participant-row lead-grade-row" key={entry.grade}>
                       <strong style={{ color: "#ffffff" }}>{entry.grade}</strong>
                       <span className="small" style={{ color: "#ffffff" }}>
                         {entry.routeCount} voie{entry.routeCount > 1 ? "s" : ""}
