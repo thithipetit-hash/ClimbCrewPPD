@@ -20,7 +20,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_
 const USE_API = Boolean(API_BASE);
 
 // La session est conservée uniquement dans un cookie HttpOnly côté backend.
-const APP_VERSION = "260808.054";
+const APP_VERSION = "260808.055";
 const PASSWORD_RULE_TEXT = "Minimum 12 caractères avec majuscule, minuscule, chiffre et caractère spécial.";
 
 const AUTH_LOGIN_INLINE_STYLE = `
@@ -3538,7 +3538,10 @@ button:not(.danger):not(.secondary):not(.ghost),
 
         {tab === "faq" && (
           <div className="card">
-            <div className="card-header"><h2>FAQ – fonctionnement de ClimbClubCristal</h2></div>
+            <div className="card-header">
+              <h2>FAQ – fonctionnement de ClimbClubCristal</h2>
+              <span className="small">Version : {APP_VERSION}</span>
+            </div>
 
             <details className="faq-item">
               <summary><strong>À quoi sert ClimbClubCristal ?</strong></summary>
@@ -3581,10 +3584,6 @@ button:not(.danger):not(.secondary):not(.ghost),
                 Chaque voie distribue exactement 1 000 points entre les grimpeurs distincts qui l’ont enregistrée avec le style « En tête ». La part reçue pour une voie est donc égale à 1 000 divisé par le nombre de grimpeurs concernés. Par exemple, une personne seule reçoit 1 000 points ; quatre personnes reçoivent 250 points chacune. Plusieurs enregistrements en tête de la même voie par le même grimpeur ne lui donnent qu’une seule part. Les réalisations dans les autres styles ne distribuent pas de points. Le total d’un grimpeur est la somme de ses parts sur toutes les voies.
               </div>
             </details>
-
-            <div className="small" style={{ marginTop: 12 }}>
-              Version : {APP_VERSION}
-            </div>
 
             {canAccessAdminTabs && (
               <>
