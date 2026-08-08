@@ -20,7 +20,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_
 const USE_API = Boolean(API_BASE);
 
 // La session est conservée uniquement dans un cookie HttpOnly côté backend.
-const APP_VERSION = "260808.056";
+const APP_VERSION = "260808.057";
 const PASSWORD_RULE_TEXT = "Minimum 12 caractères avec majuscule, minuscule, chiffre et caractère spécial.";
 
 const AUTH_LOGIN_INLINE_STYLE = `
@@ -939,12 +939,47 @@ function App() {
   const wallOfFameCategories = useMemo(() => {
     const successfulStyles = new Set(["a_vue", "flash", "en_tete", "moulinette", "travaillee"]);
 
+    const successfulRealisationsFor = (participantId) => state.realisations
+      .filter((realisation) => String(realisation.participantId) === String(participantId))
+      .filter((realisation) => successfulStyles.has(realisation.styleRealisation));
+
     const distinctRoutesFor = (participantId, predicate) => new Set(
       state.realisations
         .filter((realisation) => String(realisation.participantId) === String(participantId))
         .filter(predicate)
         .map((realisation) => String(realisation.voieId))
     ).size;
+
+    // Regroupe les voies réussies par séance. Les anciennes données sans sessionId
+    // utilisent la date comme solution de repli.
+    const sessionRouteSetsFor = (participantId) => {
+      const groups = new Map();
+      successfulRealisationsFor(participantId).forEach((realisation) => {
+        const sessionKey = realisation.sessionId || String(realisation.dateRealisation || "").slice(0, 10);
+        if (!sessionKey) return;
+        if (!groups.has(sessionKey)) groups.set(sessionKey, new Set());
+        groups.get(sessionKey).add(String(realisation.voieId));
+      });
+      return [...groups.values()];
+    };
+
+    const maxRoutesInSessionFor = (participantId) => {
+      const routeSets = sessionRouteSetsFor(participantId);
+      return routeSets.length ? Math.max(...routeSets.map((routeIds) => routeIds.size)) : 0;
+    };
+
+    const maxDifficultyInSessionFor = (participantId) => {
+      const routeSets = sessionRouteSetsFor(participantId);
+      return routeSets.reduce((record, routeIds) => {
+        const total = [...routeIds].reduce((sum, routeId) => {
+          const route = routesById[routeId];
+          const grade = route?.cotationAjustee || route?.cotationReference;
+          const gradeIndex = GRADES.indexOf(grade);
+          return sum + (gradeIndex >= 0 ? gradeIndex + 1 : 0);
+        }, 0);
+        return Math.max(record, total);
+      }, 0);
+    };
 
     const buildRanking = ({ title, getValue, formatValue, isEligible = (value) => value > 0 }) => {
       const sorted = state.participants
@@ -987,6 +1022,21 @@ function App() {
         formatValue: (value) => `${value} séance${value > 1 ? "s" : ""}`,
       }),
       buildRanking({
+        title: "Nombre total de voies",
+        getValue: (participant) => successfulRealisationsFor(participant.id).length,
+        formatValue: (value) => `${value} voie${value > 1 ? "s" : ""}`,
+      }),
+      buildRanking({
+        title: "Maximum de voies en une séance",
+        getValue: (participant) => maxRoutesInSessionFor(participant.id),
+        formatValue: (value) => `${value} voie${value > 1 ? "s" : ""}`,
+      }),
+      buildRanking({
+        title: "Difficulté cumulée en une séance",
+        getValue: (participant) => maxDifficultyInSessionFor(participant.id),
+        formatValue: (value) => `${value} point${value > 1 ? "s" : ""}`,
+      }),
+      buildRanking({
         title: "Voies distinctes réalisées",
         getValue: (participant) => distinctRoutesFor(
           participant.id,
@@ -1003,7 +1053,7 @@ function App() {
         formatValue: (value) => `${value} voie${value > 1 ? "s" : ""}`,
       }),
     ];
-  }, [state.participants, state.realisations, cprByParticipantId, pointsByParticipantId, sessionStats.participationCount]);
+  }, [state.participants, state.realisations, routesById, cprByParticipantId, pointsByParticipantId, sessionStats.participationCount]);
 
   const sortedStatsParticipants = useMemo(() => {
     const direction = statsSortDirection === "asc" ? 1 : -1;
@@ -3696,7 +3746,7 @@ button:not(.danger):not(.secondary):not(.ghost),
             <details className="faq-item">
               <summary><strong>Comment fonctionne le Wall of Fame ?</strong></summary>
               <div className="small">
-                Le Wall of Fame affiche les trois premiers grimpeurs pour le CPR, les points, le nombre de participations aux séances, les voies distinctes réalisées et les voies distinctes réalisées en tête. Une même voie n’est comptée qu’une fois par grimpeur dans les deux derniers classements. Les personnes ayant la même valeur conservent le même rang. Les classements sans résultat ne sont pas affichés.
+                Le Wall of Fame affiche les trois premiers grimpeurs pour le CPR, les points, les participations, le nombre total de réalisations réussies, les voies distinctes réalisées, les voies réalisées en tête et les records sur une séance. Le nombre total compte chaque réalisation réussie, même si une voie est refaite lors d’une autre séance. Pour les records d’une séance, une même voie n’est comptée qu’une fois. La difficulté cumulée attribue 1 point à 4a, puis un point supplémentaire par niveau jusqu’à 15 points pour 7b, avant d’additionner les voies de la séance. Les personnes ayant la même valeur conservent le même rang.
               </div>
             </details>
 
