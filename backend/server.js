@@ -6,6 +6,14 @@ import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { readFile } from "node:fs/promises";
+import {
+  ValidationError,
+  validateLegacyImportPayload,
+  validateParticipantPayload,
+  validateRealisationPayload,
+  validateRoutePayload,
+  validateSessionPayload,
+} from "./validation.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -463,6 +471,9 @@ async function ensureSchema() {
   await pool.query(`create index if not exists idx_realisations_voie on realisations(voie_id)`);
 
   await pool.query(`alter table users add column if not exists theme_preference text not null default 'auto'`);
+
+  // Les migrations de données restent séparées du démarrage de l'API.
+  // Une donnée historique inattendue ne doit jamais empêcher le serveur de répondre.
 }
 
 async function ensureDefaultAdmin() {
@@ -606,13 +617,13 @@ app.get("/realisations", requireAuth, async (_req, res) => {
     `);
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
 app.post("/realisations", requireAuth, async (req, res) => {
-  const realisation = req.body || {};
   try {
+    const realisation = validateRealisationPayload(req.body || {});
     await pool.query(
       `
         insert into realisations (
@@ -634,13 +645,13 @@ app.post("/realisations", requireAuth, async (req, res) => {
     );
     res.json(realisation);
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
 app.put("/realisations/:id", requireAuth, async (req, res) => {
-  const patch = req.body || {};
   try {
+    const patch = validateRealisationPayload(req.body || {}, { partial: true });
     await pool.query(
       `
         update realisations
@@ -670,7 +681,7 @@ app.put("/realisations/:id", requireAuth, async (req, res) => {
     );
     res.json({ ok: true });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -679,7 +690,7 @@ app.delete("/realisations/:id", requireAuth, async (req, res) => {
     await pool.query(`delete from realisations where id = $1`, [req.params.id]);
     res.json({ ok: true });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -764,9 +775,14 @@ app.get("/routes", requireAuth, async (_req, res) => {
 });
 
 app.post("/routes", requireAuth, requireAdmin, async (req, res) => {
-  const route = req.body || {};
-  const id = route.id || `route-${Date.now()}`;
   try {
+    const requestedRoute = req.body || {};
+    const id = requestedRoute.id || `route-${Date.now()}`;
+    const route = validateRoutePayload({
+      ...requestedRoute,
+      id,
+      numeroVoieUnique: requestedRoute.numeroVoieUnique || id,
+    });
     const result = await pool.query(
       `
         insert into routes (
@@ -794,13 +810,13 @@ app.post("/routes", requireAuth, requireAdmin, async (req, res) => {
     res.status(201).json(routeDbToApi(result.rows[0]));
   } catch (error) {
     console.error("POST /routes", error);
-    res.status(500).json({ error: "Erreur création voie" });
+    res.status(error.status || 500).json({ error: error.message || "Erreur création voie", fields: error.fields || undefined });
   }
 });
 
 app.put("/routes/:id", requireAuth, requireAdmin, async (req, res) => {
-  const route = req.body || {};
   try {
+    const route = validateRoutePayload(req.body || {}, { partial: true });
     const result = await pool.query(
       `
         update routes
@@ -837,7 +853,7 @@ app.put("/routes/:id", requireAuth, requireAdmin, async (req, res) => {
     res.json(routeDbToApi(result.rows[0]));
   } catch (error) {
     console.error("PUT /routes/:id", error);
-    res.status(500).json({ error: "Erreur mise à jour voie" });
+    res.status(error.status || 500).json({ error: error.message || "Erreur mise à jour voie", fields: error.fields || undefined });
   }
 });
 
@@ -969,7 +985,7 @@ app.post("/auth/login", authRateLimit, async (req, res) => {
       user: serializeUser(updatedUserResult.rows[0]),
     });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1008,7 +1024,7 @@ app.put("/auth/theme", requireAuth, async (req, res) => {
 
     res.json({ ok: true, user });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1088,7 +1104,7 @@ app.post("/auth/request-access", authRateLimit, async (req, res) => {
       user: serializeUser(result.rows[0]),
     });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1112,7 +1128,7 @@ app.post("/auth/forgot-password", resetRateLimit, async (req, res) => {
       message: "La demande a été enregistrée. Un administrateur peut désormais générer un code de réinitialisation.",
     });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1198,7 +1214,7 @@ app.post("/auth/reset-password", resetRateLimit, async (req, res) => {
     });
   } catch (error) {
     await client.query("rollback");
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   } finally {
     client.release();
   }
@@ -1227,7 +1243,7 @@ app.get("/admin/auth/users", requireAuth, requireAdmin, async (_req, res) => {
 
     res.json({ ok: true, users: result.rows.map(serializeUser) });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1256,7 +1272,7 @@ app.get("/admin/auth/logs", requireAuth, requireAdmin, async (req, res) => {
 
     res.json({ ok: true, logs: result.rows });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1290,7 +1306,7 @@ app.post("/admin/auth/users/:id/approve", requireAuth, requireAdmin, async (req,
 
     res.json({ ok: true, user: serializeUser(result.rows[0]) });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1327,7 +1343,7 @@ app.post("/admin/auth/users/:id/revoke", requireAuth, requireAdmin, async (req, 
 
     res.json({ ok: true, user: serializeUser(result.rows[0]) });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1360,7 +1376,7 @@ app.post("/admin/auth/users/:id/reactivate", requireAuth, requireAdmin, async (r
 
     res.json({ ok: true, user: serializeUser(result.rows[0]) });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1398,7 +1414,7 @@ app.post("/admin/auth/users/:id/reset-token", requireAuth, requireAdmin, async (
       expiresAt,
     });
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1414,27 +1430,23 @@ app.get("/participants", requireAuth, async (_req, res) => {
     `);
     res.json(result.rows.map(participantDbToApi));
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
 app.post("/participants", requireAuth, requireAdmin, async (req, res) => {
   try {
     const {
-      nom = "",
-      prenom = "",
-      email = "",
-      passport = "sans",
-      cotisation = false,
-      ffme = false,
-      canEncadrer = false,
-      canReferer = false,
-      canAdmin = false,
-    } = req.body || {};
-
-    if (!nom || !prenom) {
-      return res.status(400).json({ error: "nom and prenom are required" });
-    }
+      nom,
+      prenom,
+      email,
+      passport,
+      cotisation,
+      ffme,
+      canEncadrer,
+      canReferer,
+      canAdmin,
+    } = validateParticipantPayload(req.body || {});
 
     const result = await pool.query(
       `
@@ -1448,24 +1460,29 @@ app.post("/participants", requireAuth, requireAdmin, async (req, res) => {
 
     res.status(201).json(participantDbToApi(result.rows[0]));
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
 app.put("/participants/:id", requireAuth, requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new ValidationError("L'identifiant du participant est invalide.", {
+        id: "invalid_identifier",
+      });
+    }
     const {
-      nom = "",
-      prenom = "",
-      email = "",
-      passport = "sans",
-      cotisation = false,
-      ffme = false,
-      canEncadrer = false,
-      canReferer = false,
-      canAdmin = false,
-    } = req.body || {};
+      nom,
+      prenom,
+      email,
+      passport,
+      cotisation,
+      ffme,
+      canEncadrer,
+      canReferer,
+      canAdmin,
+    } = validateParticipantPayload(req.body || {});
 
     const result = await pool.query(
       `
@@ -1491,7 +1508,7 @@ app.put("/participants/:id", requireAuth, requireAdmin, async (req, res) => {
 
     res.json(participantDbToApi(result.rows[0]));
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1506,7 +1523,7 @@ app.delete("/participants/:id", requireAuth, requireAdmin, async (req, res) => {
 
     res.status(204).send();
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1541,7 +1558,7 @@ app.get("/sessions", requireAuth, async (_req, res) => {
 
     res.json(sessions);
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1549,19 +1566,15 @@ app.put("/sessions/:id", requireAuth, async (req, res) => {
   const client = await pool.connect();
 
   try {
-    const { id } = req.params;
     const {
+      id,
       date,
       slot,
-      status = null,
-      encadrantId = null,
-      referentId = null,
-      participantIds = [],
-    } = req.body || {};
-
-    if (!id || !date || !slot) {
-      return res.status(400).json({ error: "id, date and slot are required" });
-    }
+      status,
+      encadrantId,
+      referentId,
+      participantIds,
+    } = validateSessionPayload(req.body || {}, req.params.id);
 
     const resolvedStatus = status || defaultSessionStatus(date, slot);
 
@@ -1629,7 +1642,7 @@ app.put("/sessions/:id", requireAuth, async (req, res) => {
     res.json(sessionDbToApi(sessionResult.rows[0], uniqueParticipantIds));
   } catch (error) {
     await client.query("rollback");
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   } finally {
     client.release();
   }
@@ -1641,7 +1654,7 @@ app.delete("/sessions/:id", requireAuth, requireAdmin, async (req, res) => {
     await pool.query("delete from sessions where id = $1", [id]);
     res.status(204).send();
   } catch (error) {
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   }
 });
 
@@ -1658,13 +1671,7 @@ app.delete("/sessions/:id", requireAuth, requireAdmin, async (req, res) => {
  * PostgreSQL tout en conservant les liens sessions/réalisations.
  */
 async function importLegacyPayload(inputPayload) {
-  const payload = inputPayload?.data || inputPayload || {};
-
-  if (!Array.isArray(payload.participants)) {
-    const error = new Error("Fichier legacy invalide : le tableau participants est obligatoire.");
-    error.status = 400;
-    throw error;
-  }
+  const payload = validateLegacyImportPayload(inputPayload);
 
   const client = await pool.connect();
   try {
@@ -1738,7 +1745,7 @@ async function importLegacyPayload(inputPayload) {
         [
           String(route.id || `route-${route.numeroVoieUnique || Date.now()}`),
           String(route.numeroVoieUnique || route.id || ""),
-          Number(route.numeroCorde) || null,
+          Number(route.numeroCorde),
           String(route.couleurPrises || ""),
           String(route.cotationReference || ""),
           String(route.cotationAjustee || route.cotationReference || ""),
@@ -2023,7 +2030,7 @@ app.post("/import-data", requireSetupAccess, async (req, res) => {
         [
           route.id,
           route.numeroVoieUnique,
-          Number(route.numeroCorde) || null,
+          Number(route.numeroCorde),
           route.couleurPrises || "",
           route.cotationReference || "",
           route.cotationAjustee || route.cotationReference || "",
@@ -2088,7 +2095,7 @@ app.post("/import-data", requireSetupAccess, async (req, res) => {
     });
   } catch (error) {
     await client.query("rollback");
-    res.status(500).json({ error: String(error) });
+    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
   } finally {
     client.release();
   }
