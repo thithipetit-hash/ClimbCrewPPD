@@ -417,6 +417,44 @@ function injectStyles() {
         padding:5px 8px!important;
         font-size:14px!important;
       }
+      /* Tableau des voies : cartes plus denses, sans réduire les informations. */
+      .route-card {
+        min-height:0!important;
+        padding:4px 6px!important;
+        margin:0!important;
+      }
+      .route-card > .card-header {
+        display:grid!important;
+        grid-template-columns:minmax(0,1fr) auto!important;
+        align-items:center!important;
+        gap:5px!important;
+        margin:0!important;
+      }
+      .route-card > .card-header > strong {
+        min-width:0!important;
+        font-size:13px!important;
+        line-height:1.2!important;
+        overflow-wrap:anywhere;
+      }
+      .route-card > .card-header > .group {
+        display:flex!important;
+        justify-content:flex-end!important;
+        align-items:center!important;
+        flex-wrap:wrap!important;
+        gap:3px!important;
+      }
+      .route-card .pill {
+        padding:2px 5px!important;
+        font-size:10px!important;
+        line-height:1.1!important;
+      }
+      .route-card button {
+        min-height:32px!important;
+        padding:3px 7px!important;
+        font-size:12px!important;
+        line-height:1.1!important;
+      }
+
       .session-card {
         padding:8px!important;
       }
