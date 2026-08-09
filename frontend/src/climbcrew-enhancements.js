@@ -364,8 +364,19 @@ function injectStyles() {
       font-weight:800!important;
     }
     .route-card.moulinette-only {
-      border:3px solid #ef4444!important;
-      box-shadow:0 0 0 2px rgba(239,68,68,.22)!important;
+      border:2px solid #ef4444!important;
+      box-shadow:inset 0 0 0 1px rgba(239,68,68,.18)!important;
+    }
+    .route-summary {
+      display:flex;
+      align-items:center;
+      flex-wrap:wrap;
+      gap:4px 7px;
+    }
+    .route-card .moulinette-badge {
+      background:#fee2e2!important;
+      border-color:#ef4444!important;
+      color:#991b1b!important;
     }
     .demo-badge {
       display:inline-flex;
@@ -435,6 +446,16 @@ function injectStyles() {
         font-size:13px!important;
         line-height:1.2!important;
         overflow-wrap:anywhere;
+      }
+      .route-card.moulinette-only > .card-header {
+        grid-template-columns:minmax(0,1fr)!important;
+      }
+      .route-card.moulinette-only > .card-header > .group {
+        width:100%!important;
+        flex-wrap:nowrap!important;
+      }
+      .route-card.moulinette-only > .card-header > .group button {
+        flex:1 1 0!important;
       }
       .route-card > .card-header > .group {
         display:flex!important;
