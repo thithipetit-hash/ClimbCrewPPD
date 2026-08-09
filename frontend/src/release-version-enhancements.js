@@ -7,9 +7,9 @@
  * - jj : jour ;
  * - iii : index du commit sur trois chiffres, incrémenté à chaque commit.
  *
- * La version de ce commit est donc 260807.051.
+ * La version de ce commit est donc 260809.064.
  */
-const APP_VERSION = "260807.051";
+const APP_VERSION = "260809.064";
 const APP_VERSION_LABEL = `Version : ${APP_VERSION}`;
 let scheduled = false;
 
@@ -71,29 +71,6 @@ function updateConsensusFallbacks() {
   });
 }
 
-function ensureVersionFaq() {
-  const faqTitle = [...document.querySelectorAll(".card-header h2")]
-    .find((title) => normalize(title.textContent).startsWith("faq"));
-  const faqCard = faqTitle?.closest(".card");
-  if (!faqCard || faqCard.querySelector('[data-climbclub-version-faq="true"]')) return;
-
-  const details = document.createElement("details");
-  details.className = "faq-item";
-  details.dataset.climbclubVersionFaq = "true";
-
-  const summary = document.createElement("summary");
-  const strong = document.createElement("strong");
-  strong.textContent = "Comment est définie la version de l’application ?";
-  summary.appendChild(strong);
-
-  const content = document.createElement("div");
-  content.className = "small";
-  content.textContent = `La version suit le format aammjj.iii. « aa » correspond à l’année, « mm » au mois, « jj » au jour et « iii » à l’index du commit sur trois chiffres. L’index iii doit être incrémenté à chaque commit. Version actuelle : ${APP_VERSION}.`;
-
-  details.append(summary, content);
-  faqCard.appendChild(details);
-}
-
 function refresh() {
   if (scheduled) return;
   scheduled = true;
@@ -103,7 +80,6 @@ function refresh() {
     updateVisibleVersion();
     enableEnterSubmission();
     updateConsensusFallbacks();
-    ensureVersionFaq();
   });
 }
 
