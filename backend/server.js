@@ -12,6 +12,7 @@ import {
   validateParticipantPayload,
   validateRealisationPayload,
   validateRoutePayload,
+  validateRouteRating,
   validateSessionPayload,
 } from "./validation.js";
 
@@ -448,6 +449,17 @@ async function ensureSchema() {
 
     create index if not exists idx_routes_numero_corde on routes(numero_corde);
     create index if not exists idx_routes_active on routes(active);
+
+    create table if not exists route_ratings (
+      route_id text not null references routes(id) on delete cascade,
+      user_id bigint not null references users(id) on delete cascade,
+      rating integer not null check (rating between 1 and 5),
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      primary key (route_id, user_id)
+    );
+
+    create index if not exists idx_route_ratings_route on route_ratings(route_id);
   `);
 
   await pool.query(`
@@ -743,6 +755,9 @@ function routeDbToApi(row) {
     moulinetteOnly: Boolean(row.moulinette_only),
     active: Boolean(row.active),
     dateCreation: row.date_creation || "",
+    ratingAverage: Number(row.rating_average || 0),
+    ratingCount: Number(row.rating_count || 0),
+    myRating: Number(row.my_rating || 0),
   };
 }
 
@@ -760,17 +775,54 @@ app.get("/ropes", requireAuth, async (_req, res) => {
   }
 });
 
-app.get("/routes", requireAuth, async (_req, res) => {
+app.get("/routes", requireAuth, async (req, res) => {
   try {
-    const result = await pool.query(`
-      select *
-      from routes
-      order by numero_corde asc nulls last, numero_voie_unique asc
-    `);
+    const result = await pool.query(
+      `
+        select
+          r.*,
+          coalesce(avg(rr.rating), 0)::float as rating_average,
+          count(rr.rating)::integer as rating_count,
+          coalesce(max(rr.rating) filter (where rr.user_id = $1), 0)::integer as my_rating
+        from routes r
+        left join route_ratings rr on rr.route_id = r.id
+        group by r.id
+        order by r.numero_corde asc nulls last, r.numero_voie_unique asc
+      `,
+      [req.auth.user.id],
+    );
     res.json(result.rows.map(routeDbToApi));
   } catch (error) {
     console.error("GET /routes", error);
     res.status(500).json({ error: "Erreur chargement voies" });
+  }
+});
+
+app.put("/routes/:id/rating", requireAuth, async (req, res) => {
+  try {
+    const rating = validateRouteRating(req.body?.rating);
+    const result = await pool.query(
+      `
+        insert into route_ratings (route_id, user_id, rating)
+        values ($1, $2, $3)
+        on conflict (route_id, user_id)
+        do update set rating = excluded.rating, updated_at = now()
+        returning rating
+      `,
+      [req.params.id, req.auth.user.id, rating],
+    );
+    const aggregate = await pool.query(
+      `select avg(rating)::float as average, count(*)::integer as count from route_ratings where route_id = $1`,
+      [req.params.id],
+    );
+    res.json({
+      myRating: Number(result.rows[0].rating),
+      ratingAverage: Number(aggregate.rows[0].average || 0),
+      ratingCount: Number(aggregate.rows[0].count || 0),
+    });
+  } catch (error) {
+    if (error.code === "23503") return res.status(404).json({ error: "Voie introuvable" });
+    res.status(error.status || 500).json({ error: error.message || "Évaluation impossible", fields: error.fields || undefined });
   }
 });
 
