@@ -3820,8 +3820,6 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
               <div className="stat"><div className="label">Cotisations</div><div className="value">{sessionStats.nombreCotisations}</div></div>
               <div className="stat"><div className="label">FFME</div><div className="value">{sessionStats.nombreFFME}</div></div>
               <div className="stat"><div className="label">Voies actives</div><div className="value">{sessionStats.nombreVoiesActives}</div></div>
-              <div className="stat"><div className="label">Réalisations</div><div className="value">{sessionStats.nombreRealisations}</div></div>
-              <div className="stat"><div className="label">Réalisations en tête</div><div className="value">{leadRealisationStats.total}</div></div>
             </div>
 
             <div className="card">
