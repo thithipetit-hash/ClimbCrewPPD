@@ -8,7 +8,7 @@ test("les principales écritures affichent une confirmation accessible", async (
   for (const message of [
     "Séance enregistrée.",
     "Participant ajouté.",
-    "Participant supprimé.",
+    "Grimpeur supprimé.",
     "Voie ajoutée.",
     "Voie modifiée.",
     "Réalisation enregistrée.",
@@ -19,5 +19,5 @@ test("les principales écritures affichent une confirmation accessible", async (
 
   assert.match(source, /role="status"/);
   assert.match(source, /aria-live="polite"/);
-  assert.match(source, /setTimeout\(\(\) => setConfirmationMessage\(""), 3000\)/);
+  assert.match(source, /setTimeout\(\(\) => setConfirmationMessage\(""\), 3000\)/);
 });
