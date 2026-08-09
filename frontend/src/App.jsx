@@ -3032,7 +3032,7 @@ button:not(.danger):not(.secondary):not(.ghost),
                       role="radio"
                       aria-checked={newRealisation.rating === rating}
                       aria-label={`${rating} étoile${rating > 1 ? "s" : ""}`}
-                    >★</button>
+                    >{rating <= newRealisation.rating ? "★" : "☆"}</button>
                   ))}
                 </div>
               </div>
