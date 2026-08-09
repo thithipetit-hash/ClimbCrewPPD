@@ -1203,6 +1203,22 @@ function App() {
   }
 
   async function deleteParticipant(id) {
+    const participant = state.participants.find((item) => String(item.id) === String(id));
+    if (!participant) return;
+    const relatedRealisations = state.realisations.filter(
+      (item) => String(item.participantId) === String(id),
+    ).length;
+    const relatedInscriptions = state.sessions.reduce(
+      (count, session) => count + session.participantIds.filter(
+        (participantId) => String(participantId) === String(id),
+      ).length,
+      0,
+    );
+    const warning = relatedInscriptions || relatedRealisations
+      ? ` Cette action supprimera aussi ${relatedInscriptions} inscription(s) et ${relatedRealisations} réalisation(s).`
+      : "";
+    if (!window.confirm(`Supprimer définitivement le grimpeur ${fullName(participant)} ?${warning}`)) return;
+
     const previousParticipants = state.participants;
     setState((prev) => ({
       ...prev,
@@ -1217,11 +1233,14 @@ function App() {
     }));
     setRecentlyAddedParticipantIds((prev) => prev.filter((pid) => String(pid) !== String(id)));
 
-    if (!USE_API) return;
+    if (!USE_API) {
+      setConfirmationMessage("Grimpeur supprimé.");
+      return;
+    }
     try {
       await apiFetch(`/participants/${id}`, { method: "DELETE" });
       setSyncMessage("Participant supprimé via l’API");
-      setConfirmationMessage("Participant supprimé.");
+      setConfirmationMessage("Grimpeur supprimé.");
     } catch (e) {
       setState((prev) => ({ ...prev, participants: previousParticipants }));
       setSyncMessage("Erreur suppression participant");
@@ -1275,6 +1294,33 @@ function App() {
       moulinetteOnly: Boolean(route.moulinetteOnly),
     });
     setRouteError("");
+  }
+
+  async function deleteRoute(route) {
+    if (!route?.id) return;
+    const relatedRealisations = state.realisations.filter(
+      (item) => String(item.voieId) === String(route.id),
+    ).length;
+    const routeLabel = formatRouteName(route);
+    const warning = relatedRealisations
+      ? ` Cette action supprimera aussi ${relatedRealisations} réalisation(s).`
+      : "";
+    if (!window.confirm(`Supprimer définitivement la voie « ${routeLabel} » ?${warning}`)) return;
+
+    try {
+      if (USE_API) {
+        await apiFetch(`/routes/${encodeURIComponent(route.id)}`, { method: "DELETE" });
+      }
+      setState((prev) => ({
+        ...prev,
+        routes: prev.routes.filter((item) => item.id !== route.id),
+        realisations: prev.realisations.filter((item) => item.voieId !== route.id),
+      }));
+      cancelRouteEdition();
+      setConfirmationMessage("Voie supprimée.");
+    } catch (error) {
+      setRouteError(error.message || "Suppression de la voie impossible.");
+    }
   }
 
   function cancelRouteEdition() {
@@ -1694,6 +1740,21 @@ async function handleThemePreferenceChange(nextTheme) {
         body: JSON.stringify({ reason: "Révocation / répudiation par administrateur" }),
       });
       await loadAdminAccessData();
+    } catch (error) {
+      setAuthError(String(error.message || error));
+    }
+  }
+
+  async function deleteUserAccount(user) {
+    if (!user?.id) return;
+    if (!window.confirm(
+      `Supprimer définitivement le compte de ${user.prenom} ${user.nom} (${user.email}) ? Le grimpeur associé sera conservé.`,
+    )) return;
+
+    try {
+      await authApiFetch(`/admin/auth/users/${user.id}`, authToken, { method: "DELETE" });
+      await loadAdminAccessData();
+      setConfirmationMessage("Compte supprimé.");
     } catch (error) {
       setAuthError(String(error.message || error));
     }
@@ -3105,6 +3166,7 @@ button:not(.danger):not(.secondary):not(.ghost),
                                     <div className="group" style={{ marginTop: 8 }}>
                                       <button onClick={() => saveRouteEdition(route)}>Enregistrer</button>
                                       <button className="secondary" onClick={cancelRouteEdition}>Annuler</button>
+                                      <button className="danger" onClick={() => deleteRoute(route)}>Supprimer la voie</button>
                                     </div>
                                   </>
                                 ) : (
@@ -3441,7 +3503,7 @@ button:not(.danger):not(.secondary):not(.ghost),
                   <button className="secondary" onClick={loadAdminAccessData}>Actualiser</button>
                 </div>
                 <div className="small" style={{ marginBottom: 10 }}>
-                  L’administrateur peut approuver une demande, répudier un compte, réactiver un accès et générer un code de réinitialisation.
+                  L’administrateur peut approuver, révoquer, réactiver ou supprimer définitivement un compte.
                 </div>
                 {generatedResetToken && <div className="success" style={{ marginBottom: 12 }}>{generatedResetToken}</div>}
                 <div className="stack">
@@ -3464,6 +3526,9 @@ button:not(.danger):not(.secondary):not(.ghost),
                                 <button onClick={() => reactivateUserAccess(user.id)}>Réactiver</button>
                               )}
                               <button className="secondary" onClick={() => generatePasswordResetToken(user.id)}>Code reset</button>
+                              {Number(authUser?.id) !== Number(user.id) && (
+                                <button className="danger" onClick={() => deleteUserAccount(user)}>Supprimer le compte</button>
+                              )}
                             </div>
                           </div>
                           <div className="small">
