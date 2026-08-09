@@ -1330,6 +1330,7 @@ function App() {
 
   async function saveRouteEdition(route) {
     if (!routeEditDraft) return;
+    setRouteError("");
     const couleurPrises = routeEditDraft.couleurPrises.trim();
     const nomOuvreur = routeEditDraft.nomOuvreur.trim();
     if (!couleurPrises || !nomOuvreur) {
@@ -1337,8 +1338,7 @@ function App() {
       return;
     }
 
-    const updatedRoute = {
-      ...route,
+    const routePatch = {
       numeroCorde: Number(routeEditDraft.numeroCorde),
       couleurPrises,
       cotationReference: routeEditDraft.cotationReference,
@@ -1347,12 +1347,13 @@ function App() {
       nomOuvreur,
       moulinetteOnly: routeEditDraft.moulinetteOnly,
     };
+    const updatedRoute = { ...route, ...routePatch };
 
     try {
       const savedRoute = USE_API
         ? await apiFetch(`/routes/${encodeURIComponent(route.id)}`, {
             method: "PUT",
-            body: JSON.stringify(updatedRoute),
+            body: JSON.stringify(routePatch),
           })
         : updatedRoute;
       setState((prev) => ({
@@ -3163,6 +3164,7 @@ button:not(.danger):not(.secondary):not(.ghost),
                                         </select>
                                       </div>
                                     </div>
+                                    {routeError && <div className="error" style={{ marginTop: 8 }}>{routeError}</div>}
                                     <div className="group" style={{ marginTop: 8 }}>
                                       <button onClick={() => saveRouteEdition(route)}>Enregistrer</button>
                                       <button className="secondary" onClick={cancelRouteEdition}>Annuler</button>
