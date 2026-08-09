@@ -12,7 +12,6 @@ import {
   validateParticipantPayload,
   validateRealisationPayload,
   validateRoutePayload,
-  validateRouteRating,
   validateSessionPayload,
 } from "./validation.js";
 
@@ -473,11 +472,13 @@ async function ensureSchema() {
       commentaire text,
       cotation_proposee text,
       nb_essais text,
+      rating integer check (rating between 1 and 5),
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     )
   `);
 
+  await pool.query(`alter table realisations add column if not exists rating integer check (rating between 1 and 5)`);
   await pool.query(`create index if not exists idx_realisations_participant on realisations(participant_id)`);
   await pool.query(`create index if not exists idx_realisations_session on realisations(session_id)`);
   await pool.query(`create index if not exists idx_realisations_voie on realisations(voie_id)`);
@@ -623,7 +624,8 @@ app.get("/realisations", requireAuth, async (_req, res) => {
         style_realisation as "styleRealisation",
         commentaire,
         cotation_proposee as "cotationProposee",
-        nb_essais as "nbEssais"
+        nb_essais as "nbEssais",
+        rating
       from realisations
       order by date_realisation desc, created_at desc
     `);
@@ -640,8 +642,8 @@ app.post("/realisations", requireAuth, async (req, res) => {
       `
         insert into realisations (
           id, participant_id, session_id, voie_id, date_realisation, style_realisation,
-          commentaire, cotation_proposee, nb_essais
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+          commentaire, cotation_proposee, nb_essais, rating
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       `,
       [
         realisation.id,
@@ -653,6 +655,7 @@ app.post("/realisations", requireAuth, async (req, res) => {
         realisation.commentaire || "",
         realisation.cotationProposee || "",
         realisation.nbEssais || "",
+        realisation.rating ?? null,
       ]
     );
     res.json(realisation);
@@ -676,6 +679,7 @@ app.put("/realisations/:id", requireAuth, async (req, res) => {
           commentaire = coalesce($7, commentaire),
           cotation_proposee = coalesce($8, cotation_proposee),
           nb_essais = coalesce($9, nb_essais),
+          rating = coalesce($10, rating),
           updated_at = now()
         where id = $1
       `,
@@ -689,6 +693,7 @@ app.put("/realisations/:id", requireAuth, async (req, res) => {
         patch.commentaire ?? null,
         patch.cotationProposee ?? null,
         patch.nbEssais ?? null,
+        patch.rating ?? null,
       ]
     );
     res.json({ ok: true });
@@ -757,7 +762,6 @@ function routeDbToApi(row) {
     dateCreation: row.date_creation || "",
     ratingAverage: Number(row.rating_average || 0),
     ratingCount: Number(row.rating_count || 0),
-    myRating: Number(row.my_rating || 0),
   };
 }
 
@@ -775,54 +779,24 @@ app.get("/ropes", requireAuth, async (_req, res) => {
   }
 });
 
-app.get("/routes", requireAuth, async (req, res) => {
+app.get("/routes", requireAuth, async (_req, res) => {
   try {
     const result = await pool.query(
       `
         select
           r.*,
-          coalesce(avg(rr.rating), 0)::float as rating_average,
-          count(rr.rating)::integer as rating_count,
-          coalesce(max(rr.rating) filter (where rr.user_id = $1), 0)::integer as my_rating
+          coalesce(avg(re.rating), 0)::float as rating_average,
+          count(re.rating)::integer as rating_count
         from routes r
-        left join route_ratings rr on rr.route_id = r.id
+        left join realisations re on re.voie_id = r.id
         group by r.id
         order by r.numero_corde asc nulls last, r.numero_voie_unique asc
       `,
-      [req.auth.user.id],
     );
     res.json(result.rows.map(routeDbToApi));
   } catch (error) {
     console.error("GET /routes", error);
     res.status(500).json({ error: "Erreur chargement voies" });
-  }
-});
-
-app.put("/routes/:id/rating", requireAuth, async (req, res) => {
-  try {
-    const rating = validateRouteRating(req.body?.rating);
-    const result = await pool.query(
-      `
-        insert into route_ratings (route_id, user_id, rating)
-        values ($1, $2, $3)
-        on conflict (route_id, user_id)
-        do update set rating = excluded.rating, updated_at = now()
-        returning rating
-      `,
-      [req.params.id, req.auth.user.id, rating],
-    );
-    const aggregate = await pool.query(
-      `select avg(rating)::float as average, count(*)::integer as count from route_ratings where route_id = $1`,
-      [req.params.id],
-    );
-    res.json({
-      myRating: Number(result.rows[0].rating),
-      ratingAverage: Number(aggregate.rows[0].average || 0),
-      ratingCount: Number(aggregate.rows[0].count || 0),
-    });
-  } catch (error) {
-    if (error.code === "23503") return res.status(404).json({ error: "Voie introuvable" });
-    res.status(error.status || 500).json({ error: error.message || "Évaluation impossible", fields: error.fields || undefined });
   }
 });
 
