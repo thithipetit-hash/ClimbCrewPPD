@@ -528,6 +528,7 @@ function App() {
     styleRealisation: "a_vue",
     commentaire: "",
     cotationProposee: "",
+    rating: 0,
   });
 
   // Route sélectionnée pour le popup "Enregistrer une réalisation"
@@ -1007,6 +1008,20 @@ function App() {
     [state.routes, state.realisations, cprByParticipantId],
   );
 
+  const routeRatingsById = useMemo(() => {
+    const ratings = {};
+    state.realisations.forEach((realisation) => {
+      const rating = Number(realisation.rating);
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) return;
+      const current = ratings[realisation.voieId] || { total: 0, count: 0, average: 0 };
+      current.total += rating;
+      current.count += 1;
+      current.average = current.total / current.count;
+      ratings[realisation.voieId] = current;
+    });
+    return ratings;
+  }, [state.realisations]);
+
   function setSelectedDate(date) {
     setState((prev) => ({ ...prev, selectedDate: date }));
   }
@@ -1384,24 +1399,6 @@ function App() {
     }
   }
 
-  async function rateRoute(route, rating) {
-    try {
-      const result = USE_API
-        ? await apiFetch(`/routes/${encodeURIComponent(route.id)}/rating`, {
-            method: "PUT",
-            body: JSON.stringify({ rating }),
-          })
-        : { myRating: rating, ratingAverage: rating, ratingCount: 1 };
-      setState((prev) => ({
-        ...prev,
-        routes: prev.routes.map((item) => (item.id === route.id ? { ...item, ...result } : item)),
-      }));
-      setConfirmationMessage(`Note enregistrée : ${rating}/5.`);
-    } catch (error) {
-      setRouteError(error.message || "Évaluation de la voie impossible.");
-    }
-  }
-
   function getParticipantSessions(participantId) {
     if (!participantId) return [];
 
@@ -1475,6 +1472,7 @@ function App() {
       styleRealisation: route?.moulinetteOnly ? "moulinette" : (prev.styleRealisation || "a_vue"),
       cotationProposee: route?.cotationAjustee || route?.cotationReference || "",
       commentaire: "",
+      rating: 0,
     }));
 
     setRealisationModalRouteId(routeId);
@@ -1535,8 +1533,8 @@ async function deleteRealisation(realisation) {
 }
 
   async function addRealisation() {
-    if (!newRealisation.participantId || !newRealisation.selectedDay || !newRealisation.voieId) {
-      alert("Sélectionne au minimum un jour, un participant et une voie.");
+    if (!newRealisation.participantId || !newRealisation.selectedDay || !newRealisation.voieId || !newRealisation.rating) {
+      alert("Sélectionne un jour, un participant, une voie et une note de 1 à 5 étoiles.");
       return;
     }
 
@@ -1561,6 +1559,7 @@ async function deleteRealisation(realisation) {
       styleRealisation: newRealisation.styleRealisation,
       commentaire: newRealisation.commentaire,
       cotationProposee: newRealisation.cotationProposee,
+      rating: newRealisation.rating,
     };
 
     try {
@@ -1573,6 +1572,7 @@ async function deleteRealisation(realisation) {
         sessionId: "",
         commentaire: "",
         cotationProposee: "",
+        rating: 0,
       }));
       setRealisationModalRouteId(null);
       setConfirmationMessage("Réalisation enregistrée.");
@@ -3020,6 +3020,23 @@ button:not(.danger):not(.secondary):not(.ghost),
                 <input value={routeAggregatesById[realisationModalRoute.id]?.consensusGrade || "Non calculée"} readOnly />
               </div>
 
+              <div className="realisation-rating">
+                <label>Évaluation de la voie</label>
+                <div className="rating-stars" role="radiogroup" aria-label="Évaluation de la voie de 1 à 5 étoiles">
+                  {[1, 2, 3, 4, 5].map((rating) => (
+                    <button
+                      type="button"
+                      className={rating <= newRealisation.rating ? "rating-star selected" : "rating-star"}
+                      key={rating}
+                      onClick={() => setNewRealisation((prev) => ({ ...prev, rating }))}
+                      role="radio"
+                      aria-checked={newRealisation.rating === rating}
+                      aria-label={`${rating} étoile${rating > 1 ? "s" : ""}`}
+                    >★</button>
+                  ))}
+                </div>
+              </div>
+
             </div>
 
             <div style={{ marginTop: 12 }}>
@@ -3029,7 +3046,7 @@ button:not(.danger):not(.secondary):not(.ghost),
 
             <div className="modal-actions">
               <button className="secondary" onClick={closeRealisationModal}>Annuler</button>
-              <button onClick={addRealisation} disabled={!newRealisation.selectedDay || !newRealisation.participantId || modalEligibleParticipants.length === 0}>Enregistrer</button>
+              <button onClick={addRealisation} disabled={!newRealisation.selectedDay || !newRealisation.participantId || !newRealisation.rating || modalEligibleParticipants.length === 0}>Enregistrer</button>
             </div>
           </div>
         </div>
@@ -3187,6 +3204,7 @@ button:not(.danger):not(.secondary):not(.ghost),
                       ) : (
                         <div className="stack">
                           {group.routes.map((route) => {
+                            const routeRating = routeRatingsById[route.id] || { average: 0, count: 0 };
                             return (
                               <div className={`route-card ${route.moulinetteOnly ? "moulinette-only" : ""}`} key={route.id} style={getRouteCardStyle(route.couleurPrises)}>
                                 {adminUnlocked && editingRouteId === route.id && routeEditDraft ? (
@@ -3255,21 +3273,8 @@ button:not(.danger):not(.secondary):not(.ghost),
                                       </div>
                                       <div className="route-rating">
                                         <span className="rating-average">
-                                          {route.ratingCount ? `★ ${Number(route.ratingAverage).toFixed(1)} (${route.ratingCount})` : "Pas encore notée"}
+                                          {routeRating.count ? `★ ${routeRating.average.toFixed(1)} (${routeRating.count} réalisation${routeRating.count > 1 ? "s" : ""})` : "Pas encore notée (0 réalisation)"}
                                         </span>
-                                        <div className="rating-stars" role="radiogroup" aria-label={`Noter ${formatRouteName(route)}`}>
-                                          {[1, 2, 3, 4, 5].map((rating) => (
-                                            <button
-                                              type="button"
-                                              className={rating <= Number(route.myRating || 0) ? "rating-star selected" : "rating-star"}
-                                              key={rating}
-                                              onClick={() => rateRoute(route, rating)}
-                                              role="radio"
-                                              aria-checked={Number(route.myRating || 0) === rating}
-                                              aria-label={`${rating} étoile${rating > 1 ? "s" : ""}`}
-                                            >★</button>
-                                          ))}
-                                        </div>
                                       </div>
                                     </div>
                                     <div className="group">
