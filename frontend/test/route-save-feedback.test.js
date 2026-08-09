@@ -1,0 +1,21 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+test("le bouton indique l'enregistrement d'une voie en cours", async () => {
+  const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+
+  assert.match(source, /setSavingRouteId\(route\.id\)/);
+  assert.match(source, /finally \{/);
+  assert.match(source, /disabled=\{savingRouteId === route\.id\}/);
+  assert.match(source, /aria-busy=\{savingRouteId === route\.id\}/);
+  assert.match(source, /"Enregistrement…" : "Enregistrer"/);
+});
+
+test("la voie est présentée sur deux lignes sans répéter la corde", async () => {
+  const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+
+  assert.match(source, /className="route-primary-line"/);
+  assert.match(source, /className="route-secondary-line"/);
+  assert.match(source, /routeSortMode !== "corde"/);
+});
