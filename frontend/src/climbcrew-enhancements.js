@@ -388,9 +388,22 @@ function injectStyles() {
     }
     .route-characteristics {
       display:flex;
+      align-items:center;
       flex-wrap:wrap;
       gap:3px;
       margin-top:2px;
+    }
+    .route-characteristics-label,
+    .route-characteristics-empty {
+      font-size:9px;
+      line-height:1.15;
+    }
+    .route-characteristics-label {
+      font-weight:700;
+    }
+    .route-characteristics-empty {
+      font-style:italic;
+      opacity:.8;
     }
     .route-characteristic {
       padding:2px 6px;
