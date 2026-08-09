@@ -20,7 +20,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_
 const USE_API = Boolean(API_BASE);
 
 // La session est conservée uniquement dans un cookie HttpOnly côté backend.
-const APP_VERSION = "260808.061";
+const APP_VERSION = "260809.063";
 const PASSWORD_RULE_TEXT = "Minimum 12 caractères avec majuscule, minuscule, chiffre et caractère spécial.";
 
 const AUTH_LOGIN_INLINE_STYLE = `
@@ -926,8 +926,10 @@ function App() {
           leadCount,
           ratio: routeCount > 0 ? leadCount / routeCount : null,
         };
-      })
-      .filter((entry) => entry.routeCount > 0 || entry.leadCount > 0);
+      });
+
+    // Toutes les cotations restent visibles, y compris lorsqu'aucune voie
+    // ou aucune réalisation en tête n'est enregistrée pour le niveau.
 
     return {
       total: state.realisations.filter((realisation) => realisation.styleRealisation === "en_tete").length,
