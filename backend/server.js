@@ -857,6 +857,35 @@ app.put("/routes/:id", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+app.delete("/routes/:id", requireAuth, requireAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const routeResult = await client.query(
+      "select id from routes where id = $1 for update",
+      [req.params.id],
+    );
+    if (!routeResult.rowCount) {
+      await client.query("rollback");
+      return res.status(404).json({ error: "Voie introuvable" });
+    }
+
+    const realisationsResult = await client.query(
+      "delete from realisations where voie_id = $1",
+      [req.params.id],
+    );
+    await client.query("delete from routes where id = $1", [req.params.id]);
+    await client.query("commit");
+
+    res.json({ ok: true, deletedRealisations: realisationsResult.rowCount });
+  } catch (error) {
+    await client.query("rollback");
+    res.status(500).json({ error: error.message || "Suppression de la voie impossible" });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/", (_req, res) => {
   res.send("ClimbCrew API running");
 });
@@ -1347,6 +1376,57 @@ app.post("/admin/auth/users/:id/revoke", requireAuth, requireAdmin, async (req, 
   }
 });
 
+app.delete("/admin/auth/users/:id", requireAuth, requireAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: "Identifiant du compte invalide" });
+    }
+    if (Number(req.auth.user.id) === userId) {
+      return res.status(409).json({ error: "Vous ne pouvez pas supprimer votre propre compte." });
+    }
+
+    await client.query("begin");
+    const userResult = await client.query(
+      "select id, email, role, status from users where id = $1 for update",
+      [userId],
+    );
+    if (!userResult.rowCount) {
+      await client.query("rollback");
+      return res.status(404).json({ error: "Compte introuvable" });
+    }
+
+    const user = userResult.rows[0];
+    if (user.role === "admin" && user.status === "active") {
+      const adminsResult = await client.query(
+        "select count(*)::integer as count from users where role = 'admin' and status = 'active'",
+      );
+      if (adminsResult.rows[0].count <= 1) {
+        await client.query("rollback");
+        return res.status(409).json({ error: "Le dernier compte administrateur actif ne peut pas être supprimé." });
+      }
+    }
+
+    await client.query("delete from users where id = $1", [userId]);
+    await client.query("commit");
+
+    await logAccess({
+      userId: req.auth.user.id,
+      eventType: "account_deleted",
+      success: true,
+      req,
+      details: { deletedUserId: userId, deletedEmail: user.email },
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    await client.query("rollback");
+    res.status(500).json({ error: error.message || "Suppression du compte impossible" });
+  } finally {
+    client.release();
+  }
+});
+
 app.post("/admin/auth/users/:id/reactivate", requireAuth, requireAdmin, async (req, res) => {
   try {
     const userId = Number(req.params.id);
@@ -1513,17 +1593,53 @@ app.put("/participants/:id", requireAuth, requireAdmin, async (req, res) => {
 });
 
 app.delete("/participants/:id", requireAuth, requireAdmin, async (req, res) => {
+  const client = await pool.connect();
   try {
     const id = Number(req.params.id);
-    const result = await pool.query("delete from participants where id = $1", [id]);
-
-    if (!result.rowCount) {
-      return res.status(404).json({ error: "participant not found" });
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: "Identifiant du grimpeur invalide" });
     }
 
-    res.status(204).send();
+    await client.query("begin");
+    const participantResult = await client.query(
+      "select id from participants where id = $1 for update",
+      [id],
+    );
+    if (!participantResult.rowCount) {
+      await client.query("rollback");
+      return res.status(404).json({ error: "Grimpeur introuvable" });
+    }
+
+    await client.query("update users set participant_id = null where participant_id = $1", [id]);
+    const inscriptionsResult = await client.query(
+      "delete from session_participants where participant_id = $1",
+      [String(id)],
+    );
+    await client.query(
+      "update sessions set encadrant_id = null where encadrant_id = $1",
+      [String(id)],
+    );
+    await client.query(
+      "update sessions set referent_id = null where referent_id = $1",
+      [String(id)],
+    );
+    const realisationsResult = await client.query(
+      "delete from realisations where participant_id = $1",
+      [String(id)],
+    );
+    await client.query("delete from participants where id = $1", [id]);
+    await client.query("commit");
+
+    res.json({
+      ok: true,
+      deletedInscriptions: inscriptionsResult.rowCount,
+      deletedRealisations: realisationsResult.rowCount,
+    });
   } catch (error) {
-    res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
+    await client.query("rollback");
+    res.status(500).json({ error: error.message || "Suppression du grimpeur impossible" });
+  } finally {
+    client.release();
   }
 });
 
