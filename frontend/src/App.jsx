@@ -20,7 +20,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_
 const USE_API = Boolean(API_BASE);
 
 // La session est conservée uniquement dans un cookie HttpOnly côté backend.
-const APP_VERSION = "260809.067";
+const APP_VERSION = "260809.071";
 const PASSWORD_RULE_TEXT = "Minimum 12 caractères avec majuscule, minuscule, chiffre et caractère spécial.";
 
 const AUTH_LOGIN_INLINE_STYLE = `
@@ -3314,7 +3314,7 @@ button:not(.danger):not(.secondary):not(.ghost),
                                 ) : (
                                   <div className="card-header">
                                     <strong>
-                                      {route.cotationAjustee} · {formatRouteName(route)}
+                                      Corde {route.numeroCorde} · {route.cotationAjustee} · {formatRouteName(route)}
                                       {" · "}Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}
                                     </strong>
                                     <div className="group">
