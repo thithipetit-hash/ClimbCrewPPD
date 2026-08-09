@@ -256,6 +256,9 @@ export function validateRealisationPayload(payload = {}, { partial = false } = {
   if (!partial || payload.nbEssais !== undefined) {
     validated.nbEssais = optionalString(payload.nbEssais, "nbEssais", 50);
   }
+  if (payload.rating !== undefined && payload.rating !== null && payload.rating !== "") {
+    validated.rating = validateRouteRating(payload.rating);
+  }
 
   return validated;
 }
