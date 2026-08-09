@@ -128,6 +128,8 @@ export function normalizeRealisation(realisation = {}) {
       realisation.cotationProposee ?? realisation.cotation_proposee,
       "",
     ),
+    rating: Number.isInteger(Number(realisation.rating)) ? Number(realisation.rating) : null,
+    tags: Array.isArray(realisation.tags) ? [...new Set(realisation.tags.map(text).filter(Boolean))] : [],
   };
 }
 
