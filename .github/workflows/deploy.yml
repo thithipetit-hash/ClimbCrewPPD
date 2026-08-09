@@ -1,6 +1,9 @@
-name: Deploy to Production
+name: Validate and Deploy
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -10,20 +13,64 @@ permissions:
   contents: read
 
 concurrency:
-  group: climbcrew-production-deploy
+  group: climbcrew-validation-deploy-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  validate:
+    name: Validation du code
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Installer le frontend
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Tester le frontend
+        working-directory: frontend
+        run: npm test
+
+      - name: Construire le frontend
+        working-directory: frontend
+        run: npm run build
+
+      # Le backend ne possède pas encore de package-lock.json.
+      # npm install reste donc nécessaire jusqu'à sa génération contrôlée.
+      - name: Installer le backend
+        working-directory: backend
+        run: npm install --no-audit --no-fund
+
+      - name: Vérifier la syntaxe du backend
+        working-directory: backend
+        run: node --check server.js
+
+      - name: Tester le backend
+        working-directory: backend
+        run: npm test
+
   deploy:
-    name: Deploy on production server
+    name: Déployer sur le serveur de production
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: self-hosted
     timeout-minutes: 30
 
     steps:
-      - name: Checkout repository
+      - name: Récupérer le dépôt
         uses: actions/checkout@v4
 
-      - name: Check production environment file
+      - name: Vérifier le fichier d'environnement de production
         shell: bash
         run: |
           set -euo pipefail
@@ -36,18 +83,30 @@ jobs:
 
           echo ".env.production found"
 
-      - name: Deploy to production
+      - name: Déployer en production
         shell: bash
         run: |
           set -euo pipefail
 
           cd /opt/climbcrew
 
-          echo "=== Synchronizing the selected stable version ==="
+          echo "=== Synchronizing latest validated code ==="
           git fetch origin main
           git reset --hard origin/main
 
           echo "=== Building and starting containers ==="
           docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 
-          echo "=== Deployment completed ==="
+          echo "=== Checking backend health ==="
+          for attempt in $(seq 1 24); do
+            if curl --fail --silent http://127.0.0.1:3000/health >/dev/null; then
+              echo "Backend healthy"
+              echo "=== Deployment completed ==="
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "ERROR: backend health check failed"
+          docker logs --tail 200 climbcrew-backend || true
+          exit 1
