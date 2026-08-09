@@ -233,6 +233,17 @@ const STYLE_LABELS = {
   non_enchainee: "Non enchaînée",
   test: "Essai / test",
 };
+const THECRAG_STYLE_BY_CLIMBCREW = {
+  a_vue: "Onsight",
+  flash: "Flash",
+  en_tete: "Redpoint",
+  moulinette: "Top rope",
+  avec_repos: "Dog",
+  travaillee: "Redpoint",
+  projet: "Attempt",
+  non_enchainee: "Attempt",
+  test: "Attempt",
+};
 function fullName(p) {
   return p ? `${p.nom} ${p.prenom}`.trim() : "";
 }
@@ -1820,31 +1831,31 @@ async function handleThemePreferenceChange(nextTheme) {
     const participant = participantsById[state.selectedParticipantProgress];
     if (!participant) return;
 
-    const headers = [
-      "Date", "Grimpeur", "Corde", "Couleur", "Cotation de référence",
-      "Cotation ajustée", "Consensus", "Ouvreur", "Voie", "Style",
-      "Cotation proposée", "Commentaire",
-    ];
+    const headers = ["country", "crag", "sector", "route", "grade", "date", "style", "comment"];
     const rows = selectedParticipantRealisations.map((realisation) => {
       const route = routesById[realisation.voieId];
-      return [
-        realisation.dateRealisation?.slice(0, 10) || "",
-        fullName(participant),
-        route ? normalizeRopeNumber(route.numeroCorde) : "",
-        route?.couleurPrises || "",
-        route?.cotationReference || "",
-        route?.cotationAjustee || "",
-        routeAggregatesById[realisation.voieId]?.consensusGrade || "nc",
-        route?.nomOuvreur || "",
-        route?.nomVoie || "",
-        STYLE_LABELS[realisation.styleRealisation] || realisation.styleRealisation || "",
-        realisation.cotationProposee || "",
+      const ropeNumber = route ? normalizeRopeNumber(route.numeroCorde) : 0;
+      const routeName = route?.nomVoie?.trim() || `Voie corde ${ropeNumber}`;
+      const details = [
+        route?.nomOuvreur ? `Ouvreur : ${route.nomOuvreur}` : "",
+        route?.couleurPrises ? `Couleur : ${route.couleurPrises}` : "",
+        realisation.cotationProposee ? `Cotation proposée : ${realisation.cotationProposee}` : "",
         realisation.commentaire || "",
+      ].filter(Boolean).join(" · ");
+      return [
+        "France",
+        "ASTC",
+        `Corde ${ropeNumber}`,
+        routeName,
+        route?.cotationAjustee || route?.cotationReference || "",
+        realisation.dateRealisation?.slice(0, 10) || "",
+        THECRAG_STYLE_BY_CLIMBCREW[realisation.styleRealisation] || "Attempt",
+        details,
       ];
     });
-    const filename = `realisations-${csvFileSlug(fullName(participant))}.csv`;
+    const filename = `thecrag-${csvFileSlug(fullName(participant))}.csv`;
     downloadFile(filename, buildCsv(headers, rows), "text/csv;charset=utf-8;");
-    setConfirmationMessage("Export CSV téléchargé.");
+    setConfirmationMessage("Export theCrag téléchargé.");
   }
 
   async function importJsonFile(event) {
@@ -3336,7 +3347,7 @@ button:not(.danger):not(.secondary):not(.ghost),
                       onClick={exportSelectedParticipantRealisationsCsv}
                       disabled={selectedParticipantRealisations.length === 0}
                     >
-                      Exporter CSV
+                      Exporter pour theCrag
                     </button>
                   )}
                   {(state.selectedParticipantProgress || selectedRouteProgress) && (
