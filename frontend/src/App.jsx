@@ -1384,6 +1384,24 @@ function App() {
     }
   }
 
+  async function rateRoute(route, rating) {
+    try {
+      const result = USE_API
+        ? await apiFetch(`/routes/${encodeURIComponent(route.id)}/rating`, {
+            method: "PUT",
+            body: JSON.stringify({ rating }),
+          })
+        : { myRating: rating, ratingAverage: rating, ratingCount: 1 };
+      setState((prev) => ({
+        ...prev,
+        routes: prev.routes.map((item) => (item.id === route.id ? { ...item, ...result } : item)),
+      }));
+      setConfirmationMessage(`Note enregistrée : ${rating}/5.`);
+    } catch (error) {
+      setRouteError(error.message || "Évaluation de la voie impossible.");
+    }
+  }
+
   function getParticipantSessions(participantId) {
     if (!participantId) return [];
 
@@ -3234,6 +3252,24 @@ button:not(.danger):not(.secondary):not(.ghost),
                                       <div className="route-secondary-line">
                                         <span>Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}</span>
                                         {route.moulinetteOnly && <span className="pill moulinette-badge" title="Moulinette uniquement">Moulinette</span>}
+                                      </div>
+                                      <div className="route-rating">
+                                        <span className="rating-average">
+                                          {route.ratingCount ? `★ ${Number(route.ratingAverage).toFixed(1)} (${route.ratingCount})` : "Pas encore notée"}
+                                        </span>
+                                        <div className="rating-stars" role="radiogroup" aria-label={`Noter ${formatRouteName(route)}`}>
+                                          {[1, 2, 3, 4, 5].map((rating) => (
+                                            <button
+                                              type="button"
+                                              className={rating <= Number(route.myRating || 0) ? "rating-star selected" : "rating-star"}
+                                              key={rating}
+                                              onClick={() => rateRoute(route, rating)}
+                                              role="radio"
+                                              aria-checked={Number(route.myRating || 0) === rating}
+                                              aria-label={`${rating} étoile${rating > 1 ? "s" : ""}`}
+                                            >★</button>
+                                          ))}
+                                        </div>
                                       </div>
                                     </div>
                                     <div className="group">
