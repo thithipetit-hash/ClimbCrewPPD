@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { normalizeRopeNumber } from "./route-utils.js";
+import { APP_VERSION } from "./version.js";
 
 // Données de repli volontairement vides : les données legacy sont importées côté backend/PostgreSQL.
 // Cela évite d'exposer les participants dans le bundle JavaScript public.
@@ -21,7 +22,6 @@ const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_
 const USE_API = Boolean(API_BASE);
 
 // La session est conservée uniquement dans un cookie HttpOnly côté backend.
-const APP_VERSION = "260809.078";
 const PASSWORD_RULE_TEXT = "Minimum 12 caractères avec majuscule, minuscule, chiffre et caractère spécial.";
 
 const AUTH_LOGIN_INLINE_STYLE = `
