@@ -440,6 +440,7 @@ async function ensureSchema() {
       nom_voie text not null default '',
       nom_ouvreur text not null default '',
       moulinette_only boolean not null default false,
+      tags text[] not null default '{}',
       active boolean not null default true,
       date_creation text not null default '',
       created_at timestamptz not null default now(),
@@ -460,6 +461,7 @@ async function ensureSchema() {
 
     create index if not exists idx_route_ratings_route on route_ratings(route_id);
   `);
+  await pool.query(`alter table routes add column if not exists tags text[] not null default '{}'`);
 
   await pool.query(`
     create table if not exists realisations (
@@ -481,6 +483,7 @@ async function ensureSchema() {
 
   await pool.query(`alter table realisations add column if not exists rating integer check (rating between 1 and 5)`);
   await pool.query(`alter table realisations add column if not exists tags text[] not null default '{}'`);
+
   await pool.query(`create index if not exists idx_realisations_participant on realisations(participant_id)`);
   await pool.query(`create index if not exists idx_realisations_session on realisations(session_id)`);
   await pool.query(`create index if not exists idx_realisations_voie on realisations(voie_id)`);
@@ -627,8 +630,7 @@ app.get("/realisations", requireAuth, async (_req, res) => {
         commentaire,
         cotation_proposee as "cotationProposee",
         nb_essais as "nbEssais",
-        rating,
-        tags
+        rating
       from realisations
       order by date_realisation desc, created_at desc
     `);
@@ -645,8 +647,8 @@ app.post("/realisations", requireAuth, async (req, res) => {
       `
         insert into realisations (
           id, participant_id, session_id, voie_id, date_realisation, style_realisation,
-          commentaire, cotation_proposee, nb_essais, rating, tags
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          commentaire, cotation_proposee, nb_essais, rating
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       `,
       [
         realisation.id,
@@ -659,7 +661,6 @@ app.post("/realisations", requireAuth, async (req, res) => {
         realisation.cotationProposee || "",
         realisation.nbEssais || "",
         realisation.rating ?? null,
-        realisation.tags || [],
       ]
     );
     res.json(realisation);
@@ -684,7 +685,6 @@ app.put("/realisations/:id", requireAuth, async (req, res) => {
           cotation_proposee = coalesce($8, cotation_proposee),
           nb_essais = coalesce($9, nb_essais),
           rating = coalesce($10, rating),
-          tags = coalesce($11, tags),
           updated_at = now()
         where id = $1
       `,
@@ -699,7 +699,6 @@ app.put("/realisations/:id", requireAuth, async (req, res) => {
         patch.cotationProposee ?? null,
         patch.nbEssais ?? null,
         patch.rating ?? null,
-        patch.tags ?? null,
       ]
     );
     res.json({ ok: true });
@@ -764,6 +763,7 @@ function routeDbToApi(row) {
     nomVoie: row.nom_voie || "",
     nomOuvreur: row.nom_ouvreur || "",
     moulinetteOnly: Boolean(row.moulinette_only),
+    tags: Array.isArray(row.tags) ? row.tags : [],
     active: Boolean(row.active),
     dateCreation: row.date_creation || "",
     ratingAverage: Number(row.rating_average || 0),
@@ -819,8 +819,8 @@ app.post("/routes", requireAuth, requireAdmin, async (req, res) => {
       `
         insert into routes (
           id, numero_voie_unique, numero_corde, couleur_prises, cotation_reference,
-          cotation_ajustee, nom_voie, nom_ouvreur, moulinette_only, active, date_creation
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          cotation_ajustee, nom_voie, nom_ouvreur, moulinette_only, active, date_creation, tags
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
         returning *
       `,
       [
@@ -837,6 +837,7 @@ app.post("/routes", requireAuth, requireAdmin, async (req, res) => {
         Boolean(route.moulinetteOnly),
         route.active !== false,
         String(route.dateCreation || "").trim(),
+        route.tags || [],
       ]
     );
     res.status(201).json(routeDbToApi(result.rows[0]));
@@ -863,6 +864,7 @@ app.put("/routes/:id", requireAuth, requireAdmin, async (req, res) => {
           moulinette_only = coalesce($9, moulinette_only),
           active = coalesce($10, active),
           date_creation = coalesce($11, date_creation),
+          tags = coalesce($12, tags),
           updated_at = now()
         where id = $1
         returning *
@@ -879,6 +881,7 @@ app.put("/routes/:id", requireAuth, requireAdmin, async (req, res) => {
         route.moulinetteOnly ?? null,
         route.active ?? null,
         route.dateCreation ?? null,
+        route.tags ?? null,
       ]
     );
     if (result.rowCount === 0) return res.status(404).json({ error: "Voie introuvable" });
