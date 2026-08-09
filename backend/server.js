@@ -473,12 +473,14 @@ async function ensureSchema() {
       cotation_proposee text,
       nb_essais text,
       rating integer check (rating between 1 and 5),
+      tags text[] not null default '{}',
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     )
   `);
 
   await pool.query(`alter table realisations add column if not exists rating integer check (rating between 1 and 5)`);
+  await pool.query(`alter table realisations add column if not exists tags text[] not null default '{}'`);
   await pool.query(`create index if not exists idx_realisations_participant on realisations(participant_id)`);
   await pool.query(`create index if not exists idx_realisations_session on realisations(session_id)`);
   await pool.query(`create index if not exists idx_realisations_voie on realisations(voie_id)`);
@@ -625,7 +627,8 @@ app.get("/realisations", requireAuth, async (_req, res) => {
         commentaire,
         cotation_proposee as "cotationProposee",
         nb_essais as "nbEssais",
-        rating
+        rating,
+        tags
       from realisations
       order by date_realisation desc, created_at desc
     `);
@@ -642,8 +645,8 @@ app.post("/realisations", requireAuth, async (req, res) => {
       `
         insert into realisations (
           id, participant_id, session_id, voie_id, date_realisation, style_realisation,
-          commentaire, cotation_proposee, nb_essais, rating
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          commentaire, cotation_proposee, nb_essais, rating, tags
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       `,
       [
         realisation.id,
@@ -656,6 +659,7 @@ app.post("/realisations", requireAuth, async (req, res) => {
         realisation.cotationProposee || "",
         realisation.nbEssais || "",
         realisation.rating ?? null,
+        realisation.tags || [],
       ]
     );
     res.json(realisation);
@@ -680,6 +684,7 @@ app.put("/realisations/:id", requireAuth, async (req, res) => {
           cotation_proposee = coalesce($8, cotation_proposee),
           nb_essais = coalesce($9, nb_essais),
           rating = coalesce($10, rating),
+          tags = coalesce($11, tags),
           updated_at = now()
         where id = $1
       `,
@@ -694,6 +699,7 @@ app.put("/realisations/:id", requireAuth, async (req, res) => {
         patch.cotationProposee ?? null,
         patch.nbEssais ?? null,
         patch.rating ?? null,
+        patch.tags ?? null,
       ]
     );
     res.json({ ok: true });
