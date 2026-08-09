@@ -410,13 +410,16 @@ function injectStyles() {
       padding:0!important;
       border-radius:50%!important;
       background:rgba(255,255,255,.55)!important;
-      color:#64748b!important;
+      color:#94a3b8!important;
+      border:1px solid rgba(100,116,139,.45)!important;
       font-size:15px!important;
       line-height:1!important;
     }
     .rating-stars .rating-star.selected {
-      background:#fef3c7!important;
-      color:#d97706!important;
+      background:rgba(15,23,42,.82)!important;
+      color:#facc15!important;
+      border-color:#eab308!important;
+      box-shadow:0 0 0 1px rgba(250,204,21,.22)!important;
     }
     .realisation-rating .rating-stars {
       min-height:44px;
