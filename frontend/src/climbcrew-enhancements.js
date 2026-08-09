@@ -402,7 +402,7 @@ function injectStyles() {
       display:inline-flex;
       gap:1px;
     }
-    .route-card .rating-star {
+    .rating-stars .rating-star {
       min-width:22px!important;
       min-height:22px!important;
       width:22px!important;
@@ -414,9 +414,19 @@ function injectStyles() {
       font-size:15px!important;
       line-height:1!important;
     }
-    .route-card .rating-star.selected {
+    .rating-stars .rating-star.selected {
       background:#fef3c7!important;
       color:#d97706!important;
+    }
+    .realisation-rating .rating-stars {
+      min-height:44px;
+      align-items:center;
+    }
+    .realisation-rating .rating-star {
+      min-width:38px!important;
+      width:38px!important;
+      height:38px!important;
+      font-size:24px!important;
     }
     .route-card .moulinette-badge {
       background:#fee2e2!important;
