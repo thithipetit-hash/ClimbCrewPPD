@@ -369,9 +369,22 @@ function injectStyles() {
     }
     .route-summary {
       display:flex;
+      min-width:0;
+      flex-direction:column;
+      align-items:flex-start;
+      gap:2px;
+    }
+    .route-primary-line {
+      line-height:1.2!important;
+    }
+    .route-secondary-line {
+      display:flex;
       align-items:center;
       flex-wrap:wrap;
       gap:4px 7px;
+      font-size:11px;
+      line-height:1.1;
+      opacity:.9;
     }
     .route-card .moulinette-badge {
       background:#fee2e2!important;
@@ -441,7 +454,7 @@ function injectStyles() {
         gap:5px!important;
         margin:0!important;
       }
-      .route-card > .card-header > strong {
+      .route-card > .card-header > .route-summary {
         min-width:0!important;
         font-size:13px!important;
         line-height:1.2!important;
