@@ -452,14 +452,18 @@ function injectStyles() {
     }
     .route-ranking-row {
       gap:8px!important;
+      background:#334155!important;
+      color:#f8fafc!important;
     }
     .route-ranking-row > span {
       min-width:0;
       overflow-wrap:anywhere;
+      color:#f8fafc!important;
     }
     .route-ranking-row > strong {
       flex:0 0 auto;
       white-space:nowrap;
+      color:#ffffff!important;
     }
     .route-card .moulinette-badge {
       background:#fee2e2!important;
