@@ -449,6 +449,7 @@ function App() {
   const [routeError, setRouteError] = useState("");
   const [importMessage, setImportMessage] = useState("");
   const [, setSyncMessage] = useState(USE_API ? "API activée" : "Mode local");
+  const [confirmationMessage, setConfirmationMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [authToken, setAuthToken] = useState(() => (USE_API ? "cookie" : ""));
@@ -527,6 +528,12 @@ function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
+
+  useEffect(() => {
+    if (!confirmationMessage) return undefined;
+    const timeoutId = window.setTimeout(() => setConfirmationMessage(""), 3000);
+    return () => window.clearTimeout(timeoutId);
+  }, [confirmationMessage]);
 
   useEffect(() => {
     const applyTheme = () => {
@@ -1014,6 +1021,7 @@ function App() {
         body: JSON.stringify(session),
       });
       setSyncMessage("Séance synchronisée via l’API");
+      setConfirmationMessage("Séance enregistrée.");
     } catch (e) {
       setSyncMessage("Erreur synchronisation séance");
       console.error(e);
@@ -1162,6 +1170,7 @@ function App() {
       setNewParticipant({
         nom: "", prenom: "", email: "", passport: "sans", cotisation: false, ffme: false, canEncadrer: false, canReferer: false, canAdmin: false,
       });
+      setConfirmationMessage("Participant ajouté.");
     } catch (e) {
       setSyncMessage(`Erreur ajout participant`);
       console.error(e);
@@ -1212,6 +1221,7 @@ function App() {
     try {
       await apiFetch(`/participants/${id}`, { method: "DELETE" });
       setSyncMessage("Participant supprimé via l’API");
+      setConfirmationMessage("Participant supprimé.");
     } catch (e) {
       setState((prev) => ({ ...prev, participants: previousParticipants }));
       setSyncMessage("Erreur suppression participant");
@@ -1248,6 +1258,7 @@ function App() {
       setNewRoute({
         numeroCorde: "1", couleurPrises: "Blanc", cotationReference: "5c", nomVoie: "", nomOuvreur: "", moulinetteOnly: false,
       });
+      setConfirmationMessage("Voie ajoutée.");
     } catch (error) {
       setRouteError(error.message || "Création de la voie impossible.");
     }
@@ -1304,6 +1315,7 @@ function App() {
       }));
       cancelRouteEdition();
       setSyncMessage("Voie mise à jour.");
+      setConfirmationMessage("Voie modifiée.");
     } catch (error) {
       setRouteError(error.message || "Modification de la voie impossible.");
     }
@@ -1434,6 +1446,7 @@ async function deleteRealisation(realisation) {
         method: "DELETE",
       });
     }
+    setConfirmationMessage("Réalisation supprimée.");
   } catch (error) {
     setState((prev) => ({ ...prev, realisations: previousRealisations }));
     alert(`Suppression impossible : ${error.message || error}`);
@@ -1481,6 +1494,7 @@ async function deleteRealisation(realisation) {
         cotationProposee: "",
       }));
       setRealisationModalRouteId(null);
+      setConfirmationMessage("Réalisation enregistrée.");
     } catch (error) {
       alert(String(error.message || error));
     }
@@ -2022,10 +2036,16 @@ async function handleThemePreferenceChange(nextTheme) {
 
   return (
     <div className="app">
+      {confirmationMessage && (
+        <div className="confirmation-toast" role="status" aria-live="polite">
+          {confirmationMessage}
+        </div>
+      )}
       <style>{`
         * { box-sizing: border-box; }
         body { margin: 0; font-family: Inter, Arial, sans-serif; background: #0f172a; color: #e2e8f0; }
         .app { min-height: 100vh; padding: 20px; background: linear-gradient(135deg,#020617,#0f172a,#1e293b); }
+        .confirmation-toast { position: fixed; top: max(16px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 120; width: max-content; max-width: calc(100vw - 32px); padding: 11px 16px; border-radius: 14px; background: #166534; color: #fff; font-weight: 800; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,.3); pointer-events: none; }
         .shell { max-width: 1400px; margin: 0 auto; }
         .topbar { display: flex; align-items: center; justify-content: flex-start; gap: 16px; }
         .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
