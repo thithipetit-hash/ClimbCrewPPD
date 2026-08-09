@@ -186,6 +186,16 @@ export function validateRoutePayload(payload = {}, { partial = false } = {}) {
   return validated;
 }
 
+export function validateRouteRating(value) {
+  const rating = Number(value);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    throw new ValidationError("La note doit être un entier compris entre 1 et 5.", {
+      rating: "out_of_range",
+    });
+  }
+  return rating;
+}
+
 export function validateSessionPayload(payload = {}, idFromPath = "") {
   const participantIds = payload.participantIds ?? [];
   if (!Array.isArray(participantIds)) {
