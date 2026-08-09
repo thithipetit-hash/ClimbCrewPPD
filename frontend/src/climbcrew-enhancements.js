@@ -490,6 +490,42 @@ function injectStyles() {
       }
     }
 
+    /* Accessibilité : le focus reste clairement visible au clavier sans
+       modifier l'apparence lors d'un appui tactile ou d'un clic classique. */
+    :where(button, a, input, select, textarea, summary):focus-visible {
+      outline:3px solid #f59e0b!important;
+      outline-offset:3px!important;
+      box-shadow:0 0 0 2px #ffffff!important;
+    }
+
+    /* Les commandes composées uniquement d'une icône disposent d'une zone
+       tactile suffisante sur téléphone. */
+    @media (max-width:700px) {
+      .menu-button,
+      .nav-symbol,
+      .remove-button,
+      .modal-close {
+        min-width:44px!important;
+        min-height:44px!important;
+      }
+    }
+
+    /* Renforcement non intrusif pour les appareils demandant plus de contraste. */
+    @media (prefers-contrast:more) {
+      button,
+      input,
+      select,
+      textarea,
+      summary {
+        border-width:2px!important;
+      }
+      .small,
+      .muted,
+      .muted-box {
+        opacity:1!important;
+      }
+    }
+
     @media (prefers-reduced-motion:reduce) {
       *,*::before,*::after {
         scroll-behavior:auto!important;
