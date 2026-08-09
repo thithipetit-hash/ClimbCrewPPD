@@ -386,6 +386,22 @@ function injectStyles() {
       line-height:1.1;
       opacity:.9;
     }
+    .route-characteristics {
+      display:flex;
+      flex-wrap:wrap;
+      gap:3px;
+      margin-top:2px;
+    }
+    .route-characteristic {
+      padding:2px 6px;
+      border:1px solid currentColor;
+      border-radius:999px;
+      background:rgba(255,255,255,.42);
+      color:inherit;
+      font-size:9px;
+      font-weight:700;
+      line-height:1.15;
+    }
     .route-rating {
       display:flex;
       align-items:center;
