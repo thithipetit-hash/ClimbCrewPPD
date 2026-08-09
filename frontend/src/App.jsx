@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { normalizeRopeNumber } from "./route-utils.js";
 import { APP_VERSION } from "./version.js";
 import { normalizeAppData } from "./data-normalization.js";
+import { buildCsv, csvFileSlug } from "./csv-utils.js";
 import {
   GRADES,
   calculateLeadPoints,
@@ -1815,6 +1816,37 @@ async function handleThemePreferenceChange(nextTheme) {
     downloadFile("climbcrew_export.json", JSON.stringify(state, null, 2));
   }
 
+  function exportSelectedParticipantRealisationsCsv() {
+    const participant = participantsById[state.selectedParticipantProgress];
+    if (!participant) return;
+
+    const headers = [
+      "Date", "Grimpeur", "Corde", "Couleur", "Cotation de référence",
+      "Cotation ajustée", "Consensus", "Ouvreur", "Voie", "Style",
+      "Cotation proposée", "Commentaire",
+    ];
+    const rows = selectedParticipantRealisations.map((realisation) => {
+      const route = routesById[realisation.voieId];
+      return [
+        realisation.dateRealisation?.slice(0, 10) || "",
+        fullName(participant),
+        route ? normalizeRopeNumber(route.numeroCorde) : "",
+        route?.couleurPrises || "",
+        route?.cotationReference || "",
+        route?.cotationAjustee || "",
+        routeAggregatesById[realisation.voieId]?.consensusGrade || "nc",
+        route?.nomOuvreur || "",
+        route?.nomVoie || "",
+        STYLE_LABELS[realisation.styleRealisation] || realisation.styleRealisation || "",
+        realisation.cotationProposee || "",
+        realisation.commentaire || "",
+      ];
+    });
+    const filename = `realisations-${csvFileSlug(fullName(participant))}.csv`;
+    downloadFile(filename, buildCsv(headers, rows), "text/csv;charset=utf-8;");
+    setConfirmationMessage("Export CSV téléchargé.");
+  }
+
   async function importJsonFile(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -3297,9 +3329,20 @@ button:not(.danger):not(.secondary):not(.ghost),
                       ? "Grimpeurs ayant réalisé la voie"
                       : "Réalisations"}
                 </h3>
-                {(state.selectedParticipantProgress || selectedRouteProgress) && (
-                  <span className="badge">{progressViewRealisations.length}</span>
-                )}
+                <div className="group">
+                  {state.selectedParticipantProgress && (
+                    <button
+                      className="secondary"
+                      onClick={exportSelectedParticipantRealisationsCsv}
+                      disabled={selectedParticipantRealisations.length === 0}
+                    >
+                      Exporter CSV
+                    </button>
+                  )}
+                  {(state.selectedParticipantProgress || selectedRouteProgress) && (
+                    <span className="badge">{progressViewRealisations.length}</span>
+                  )}
+                </div>
               </div>
 
               <div className="stack">
