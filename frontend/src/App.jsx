@@ -244,7 +244,7 @@ const THECRAG_STYLE_BY_CLIMBCREW = {
   non_enchainee: "Attempt",
   test: "Attempt",
 };
-const REALISATION_TAGS = [
+const ROUTE_TAGS = [
   { value: "dalle", label: "Dalle" },
   { value: "devers", label: "Dévers" },
   { value: "physique", label: "Physique" },
@@ -524,6 +524,7 @@ function App() {
     nomVoie: "",
     nomOuvreur: "",
     moulinetteOnly: false,
+    tags: [],
   });
   const [editingRouteId, setEditingRouteId] = useState("");
   const [routeEditDraft, setRouteEditDraft] = useState(null);
@@ -539,7 +540,6 @@ function App() {
     commentaire: "",
     cotationProposee: "",
     rating: 0,
-    tags: [],
   });
 
   // Route sélectionnée pour le popup "Enregistrer une réalisation"
@@ -1342,6 +1342,7 @@ function App() {
       moulinetteOnly: newRoute.moulinetteOnly,
       active: true,
       dateCreation: selectedDate,
+      tags: newRoute.tags,
     };
 
     try {
@@ -1351,7 +1352,7 @@ function App() {
       setState((prev) => ({ ...prev, routes: [...prev.routes, savedRoute] }));
       setRouteError("");
       setNewRoute({
-        numeroCorde: "1", couleurPrises: "Blanc", cotationReference: "5c", nomVoie: "", nomOuvreur: "", moulinetteOnly: false,
+        numeroCorde: "1", couleurPrises: "Blanc", cotationReference: "5c", nomVoie: "", nomOuvreur: "", moulinetteOnly: false, tags: [],
       });
       setConfirmationMessage("Voie ajoutée.");
     } catch (error) {
@@ -1368,6 +1369,7 @@ function App() {
       nomVoie: route.nomVoie || "",
       nomOuvreur: route.nomOuvreur || "",
       moulinetteOnly: Boolean(route.moulinetteOnly),
+      tags: route.tags || [],
     });
     setRouteError("");
   }
@@ -1422,6 +1424,7 @@ function App() {
       nomVoie: routeEditDraft.nomVoie.trim(),
       nomOuvreur,
       moulinetteOnly: routeEditDraft.moulinetteOnly,
+      tags: routeEditDraft.tags,
     };
     const updatedRoute = { ...route, ...routePatch };
 
@@ -1521,7 +1524,6 @@ function App() {
       cotationProposee: route?.cotationAjustee || route?.cotationReference || "",
       commentaire: "",
       rating: 0,
-      tags: [],
     }));
 
     setRealisationModalRouteId(routeId);
@@ -1609,7 +1611,6 @@ async function deleteRealisation(realisation) {
       commentaire: newRealisation.commentaire,
       cotationProposee: newRealisation.cotationProposee,
       rating: newRealisation.rating,
-      tags: newRealisation.tags,
     };
 
     try {
@@ -1623,7 +1624,6 @@ async function deleteRealisation(realisation) {
         commentaire: "",
         cotationProposee: "",
         rating: 0,
-        tags: [],
       }));
       setRealisationModalRouteId(null);
       setConfirmationMessage("Réalisation enregistrée.");
@@ -1909,7 +1909,7 @@ async function handleThemePreferenceChange(nextTheme) {
         route?.nomOuvreur ? `Ouvreur : ${route.nomOuvreur}` : "",
         route?.couleurPrises ? `Couleur : ${route.couleurPrises}` : "",
         realisation.cotationProposee ? `Cotation proposée : ${realisation.cotationProposee}` : "",
-        realisation.tags?.length ? `Tags : ${realisation.tags.map((tag) => REALISATION_TAGS.find((item) => item.value === tag)?.label || tag).join(", ")}` : "",
+        route?.tags?.length ? `Caractéristiques : ${route.tags.map((tag) => ROUTE_TAGS.find((item) => item.value === tag)?.label || tag).join(", ")}` : "",
         realisation.commentaire || "",
       ].filter(Boolean).join(" · ");
       return [
@@ -3089,29 +3089,6 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                 </div>
               </div>
 
-              <div className="realisation-tags">
-                <label>Caractéristiques de la voie</label>
-                <div className="tag-selector" aria-label="Caractéristiques de la voie">
-                  {REALISATION_TAGS.map((tag) => {
-                    const selected = newRealisation.tags.includes(tag.value);
-                    return (
-                      <button
-                        type="button"
-                        className={selected ? "tag-option selected" : "tag-option"}
-                        aria-pressed={selected}
-                        key={tag.value}
-                        onClick={() => setNewRealisation((prev) => ({
-                          ...prev,
-                          tags: selected
-                            ? prev.tags.filter((value) => value !== tag.value)
-                            : [...prev.tags, tag.value],
-                        }))}
-                      >{tag.label}</button>
-                    );
-                  })}
-                </div>
-              </div>
-
             </div>
 
             <div style={{ marginTop: 12 }}>
@@ -3246,6 +3223,15 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                   <div><label>Moulinette uniquement</label><select value={newRoute.moulinetteOnly ? "oui" : "non"} onChange={(e) => setNewRoute((p) => ({ ...p, moulinetteOnly: e.target.value === "oui" }))}><option value="non">Non</option><option value="oui">Oui</option></select></div>
                   <div style={{ display: "flex", alignItems: "end" }}><button onClick={addRoute}>Ajouter</button></div>
                 </div>
+                <div className="realisation-tags" style={{ marginTop: 10 }}>
+                  <label>Caractéristiques de la voie</label>
+                  <div className="tag-selector" aria-label="Caractéristiques de la nouvelle voie">
+                    {ROUTE_TAGS.map((tag) => {
+                      const selected = newRoute.tags.includes(tag.value);
+                      return <button type="button" className={selected ? "tag-option selected" : "tag-option"} aria-pressed={selected} key={tag.value} onClick={() => setNewRoute((prev) => ({ ...prev, tags: selected ? prev.tags.filter((value) => value !== tag.value) : [...prev.tags, tag.value] }))}>{tag.label}</button>;
+                    })}
+                  </div>
+                </div>
                 {routeError && <div className="error" style={{ marginTop: 10 }}>{routeError}</div>}
               </div>
             )}
@@ -3320,6 +3306,15 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                                           <option value="non">Non</option>
                                           <option value="oui">Oui</option>
                                         </select>
+                                      </div>
+                                    </div>
+                                    <div className="realisation-tags" style={{ marginTop: 8 }}>
+                                      <label>Caractéristiques de la voie</label>
+                                      <div className="tag-selector" aria-label="Modifier les caractéristiques de la voie">
+                                        {ROUTE_TAGS.map((tag) => {
+                                          const selected = routeEditDraft.tags.includes(tag.value);
+                                          return <button type="button" className={selected ? "tag-option selected" : "tag-option"} aria-pressed={selected} key={tag.value} onClick={() => setRouteEditDraft((prev) => ({ ...prev, tags: selected ? prev.tags.filter((value) => value !== tag.value) : [...prev.tags, tag.value] }))}>{tag.label}</button>;
+                                        })}
                                       </div>
                                     </div>
                                     {routeError && <div className="error" style={{ marginTop: 8 }}>{routeError}</div>}
