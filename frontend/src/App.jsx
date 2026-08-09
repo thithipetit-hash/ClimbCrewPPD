@@ -3173,12 +3173,14 @@ button:not(.danger):not(.secondary):not(.ghost),
                                   </>
                                 ) : (
                                   <div className="card-header">
-                                    <strong>
-                                      Corde {normalizeRopeNumber(route.numeroCorde)} · {route.cotationAjustee} · {formatRouteName(route)}
-                                      {" · "}Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}
+                                    <strong className="route-summary">
+                                      <span>
+                                        Corde {normalizeRopeNumber(route.numeroCorde)} · {route.cotationAjustee} · {formatRouteName(route)}
+                                        {" · "}Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}
+                                      </span>
+                                      {route.moulinetteOnly && <span className="pill moulinette-badge" title="Moulinette uniquement">Moulinette</span>}
                                     </strong>
                                     <div className="group">
-                                      {route.moulinetteOnly && <span className="pill">Moulinette uniquement</span>}
                                       <button className="secondary" onClick={() => openRealisationModal(route.id, state.selectedParticipantProgress)}>Réalisation</button>
                                       {adminUnlocked && <button className="secondary" onClick={() => startRouteEdition(route)}>Modifier</button>}
                                     </div>
