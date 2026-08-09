@@ -1,16 +1,8 @@
 /**
- * Harmonisation de la version affichée, des libellés de consensus et des écrans d'accès.
+ * Ajustements transitoires des écrans d'accès et des libellés de consensus.
  *
- * La version suit le format aammjj.iii :
- * - aa : année sur deux chiffres ;
- * - mm : mois ;
- * - jj : jour ;
- * - iii : index du commit sur trois chiffres, incrémenté à chaque commit.
- *
- * La version de ce commit est donc 260809.080.
+ * La version est désormais fournie directement par React depuis version.js.
  */
-const APP_VERSION = "260809.080";
-const APP_VERSION_LABEL = `Version : ${APP_VERSION}`;
 let scheduled = false;
 
 function normalize(value) {
@@ -19,19 +11,6 @@ function normalize(value) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
-}
-
-function updateVisibleVersion() {
-  document.querySelectorAll(".small").forEach((element) => {
-    const text = String(element.textContent || "").trim();
-    if (/^Version\s*:?\s*(?:\d{4}-\d{2}-\d{2}\.\d+|\d{6}\.\d{3})$/.test(text)) {
-      element.textContent = APP_VERSION_LABEL;
-
-      // La version doit rester visible sur les écrans de connexion.
-      // Une ancienne amélioration masquait ce libellé avec cette classe.
-      element.classList.remove("issue13-hidden");
-    }
-  });
 }
 
 function enableEnterSubmission() {
@@ -77,7 +56,6 @@ function refresh() {
 
   requestAnimationFrame(() => {
     scheduled = false;
-    updateVisibleVersion();
     enableEnterSubmission();
     updateConsensusFallbacks();
   });
