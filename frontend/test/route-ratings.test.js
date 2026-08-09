@@ -9,6 +9,7 @@ test("la note de une à cinq étoiles est saisie avec la réalisation", async ()
   assert.match(source, /newRealisation\.rating/);
   assert.match(source, /rating <= newRealisation\.rating/);
   assert.match(source, /\? "★" : "☆"/);
+  assert.match(source, /button:not\(\.danger\):not\(\.secondary\):not\(\.ghost\):not\(\.rating-star\)/);
   assert.match(source, /routeRatingsById/);
   assert.match(source, /routeRating\.average\.toFixed\(1\)/);
   assert.match(source, /Pas encore notée \(0 réalisation\)/);
