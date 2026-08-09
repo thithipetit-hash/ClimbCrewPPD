@@ -379,6 +379,79 @@ function injectStyles() {
       background-blend-mode:overlay;
     }
 
+    /* Sur téléphone, tout le bandeau de commande précédant les inscrits
+       utilise une échelle typographique homogène et moins de hauteur. */
+    @media (max-width:700px) {
+      .hero {
+        padding:5px 7px!important;
+      }
+      .hero h1 {
+        font-size:18px!important;
+        line-height:1.1!important;
+      }
+      .toolbar {
+        gap:5px!important;
+        padding:5px!important;
+        margin-top:5px!important;
+      }
+      .date-nav {
+        grid-template-columns:38px minmax(0,1fr) 38px!important;
+      }
+      .date-nav .nav-symbol,
+      .date-nav .date-input {
+        min-height:38px!important;
+        height:38px!important;
+        font-size:14px!important;
+        padding:4px 8px!important;
+      }
+      .date-nav .nav-symbol {
+        width:38px!important;
+        min-width:38px!important;
+      }
+      .view-toggle {
+        gap:4px!important;
+        padding:4px!important;
+      }
+      .view-toggle button {
+        min-height:38px!important;
+        padding:5px 8px!important;
+        font-size:14px!important;
+      }
+      .session-card {
+        padding:8px!important;
+      }
+      .session-card > .card-header {
+        margin-bottom:3px!important;
+      }
+      .session-card > .card-header h3 {
+        font-size:16px!important;
+        line-height:1.1!important;
+      }
+      .session-card > .card-header .badge {
+        font-size:13px!important;
+      }
+      .session-card .session-form-row {
+        gap:4px!important;
+        margin-bottom:5px!important;
+      }
+      .session-card .inline-field {
+        grid-template-columns:82px minmax(0,1fr)!important;
+        gap:6px!important;
+      }
+      .session-card .inline-field label {
+        font-size:13px!important;
+        font-weight:700!important;
+        line-height:1.1!important;
+      }
+      .session-card .inline-field select {
+        min-height:38px!important;
+        height:38px!important;
+        padding:4px 9px!important;
+        font-size:14px!important;
+        line-height:1.1!important;
+      }
+    }
+
     @media (prefers-reduced-motion:reduce) {
       *,*::before,*::after {
         scroll-behavior:auto!important;
