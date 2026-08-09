@@ -2842,7 +2842,7 @@ h1, h2, h3, strong, label {
   min-width: 130px;
 }
 
-button:not(.danger):not(.secondary):not(.ghost),
+button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
 .side-tab.active,
 .bottom-tab.active {
   background: var(--theme-accent) !important;
