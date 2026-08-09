@@ -18,6 +18,10 @@ export const REALISATION_STYLES = [
   "a_vue", "flash", "en_tete", "moulinette", "avec_repos",
   "travaillee", "projet", "non_enchainee", "test",
 ];
+export const REALISATION_TAGS = [
+  "dalle", "devers", "physique", "technique", "a_doigts",
+  "continuite", "morphologique", "engagee",
+];
 
 export class ValidationError extends Error {
   constructor(message, fields = {}) {
@@ -258,6 +262,16 @@ export function validateRealisationPayload(payload = {}, { partial = false } = {
   }
   if (payload.rating !== undefined && payload.rating !== null && payload.rating !== "") {
     validated.rating = validateRouteRating(payload.rating);
+  }
+  if (!partial || payload.tags !== undefined) {
+    if (payload.tags !== undefined && !Array.isArray(payload.tags)) {
+      throw new ValidationError("tags doit être un tableau.", { tags: "invalid_array" });
+    }
+    const tags = [...new Set((payload.tags || []).map((tag) => stringValue(tag).toLowerCase()))];
+    if (tags.some((tag) => !REALISATION_TAGS.includes(tag))) {
+      throw new ValidationError("Un tag de réalisation est invalide.", { tags: "invalid_enum" });
+    }
+    validated.tags = tags;
   }
 
   return validated;
