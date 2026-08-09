@@ -107,6 +107,7 @@ export function normalizeRoute(route = {}) {
     moulinetteOnly: booleanValue(route.moulinetteOnly ?? route.moulinette_only),
     active: booleanValue(route.active, true),
     dateCreation: isoDate(route.dateCreation ?? route.date_creation),
+    tags: Array.isArray(route.tags) ? [...new Set(route.tags.map(text).filter(Boolean))] : [],
   };
 }
 
@@ -129,7 +130,6 @@ export function normalizeRealisation(realisation = {}) {
       "",
     ),
     rating: Number.isInteger(Number(realisation.rating)) ? Number(realisation.rating) : null,
-    tags: Array.isArray(realisation.tags) ? [...new Set(realisation.tags.map(text).filter(Boolean))] : [],
   };
 }
 
