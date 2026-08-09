@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: climbcrew-production-deploy
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -43,8 +43,9 @@ jobs:
 
           cd /opt/climbcrew
 
-          echo "=== Pulling latest code ==="
-          git pull --ff-only origin main
+          echo "=== Synchronizing the selected stable version ==="
+          git fetch origin main
+          git reset --hard origin/main
 
           echo "=== Building and starting containers ==="
           docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
