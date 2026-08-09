@@ -27,6 +27,8 @@ test("les caractéristiques sont associées à la voie à sa création et à sa 
   assert.match(source, /tags: newRoute\.tags/);
   assert.match(source, /tags: routeEditDraft\.tags/);
   assert.doesNotMatch(source, /newRealisation\.tags/);
+  assert.match(source, /route\.tags\?\.length > 0/);
+  assert.match(source, /className="route-characteristic"/);
   assert.match(source, /prev\.tags\.filter/);
   assert.match(source, /\.\.\.prev\.tags/);
   assert.match(source, /aria-pressed=\{selected\}/);
