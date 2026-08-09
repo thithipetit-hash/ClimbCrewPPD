@@ -1,6 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { normalizeRopeNumber } from "./route-utils.js";
 import { APP_VERSION } from "./version.js";
+import { normalizeAppData } from "./data-normalization.js";
+import {
+  GRADES,
+  calculateLeadPoints,
+  calculateLeadRealisationStats,
+  calculateRouteAggregates,
+  calculateSimpleCpr,
+  calculateWallOfFameCategories,
+  gradeToIndex,
+} from "./climbing-calculations.js";
 
 // Données de repli volontairement vides : les données legacy sont importées côté backend/PostgreSQL.
 // Cela évite d'exposer les participants dans le bundle JavaScript public.
@@ -209,7 +219,6 @@ const PASSPORT_STYLES = {
   "découvertes": { backgroundColor: "#64748b", color: "#ffffff" },
 };
 
-const GRADES = ["4a","4b","4c","5a","5b","5c","6a","6a+","6b","6b+","6c","6c+","7a","7a+","7b"];
 const ROPE_NUMBERS = Array.from({ length: 22 }, (_, index) => index);
 const ROUTE_COLORS = ["Blanc", "Bleu", "Gris", "Jaune", "Marron", "Noir", "Ocre", "Orange", "Rose", "Rouge", "Vert", "Violet"];
 const STYLE_LABELS = {
@@ -223,18 +232,6 @@ const STYLE_LABELS = {
   non_enchainee: "Non enchaînée",
   test: "Essai / test",
 };
-const STYLE_WEIGHTS = {
-  a_vue: 1.25,
-  flash: 1.2,
-  en_tete: 1,
-  moulinette: 0.85,
-  avec_repos: 0.6,
-  travaillee: 0.75,
-  projet: 0.3,
-  non_enchainee: 0.2,
-  test: 0.1,
-};
-
 function fullName(p) {
   return p ? `${p.nom} ${p.prenom}`.trim() : "";
 }
@@ -314,13 +311,6 @@ function getPassportDotStyle(participant) {
 
   return { backgroundColor: baseStyle.backgroundColor };
 }
-function gradeToIndex(grade) {
-  return GRADES.indexOf(grade);
-}
-function indexToGrade(index) {
-  const i = Math.max(0, Math.min(GRADES.length - 1, index));
-  return GRADES[i];
-}
 function getRouteBackgroundColor(color) {
   const normalized = String(color || "").trim().toLowerCase();
   const map = {
@@ -379,43 +369,6 @@ function nextBusinessDay(dateStr, delta) {
   const d = new Date(`${dateStr}T12:00:00`);
   do { d.setDate(d.getDate() + delta); } while (d.getDay() === 0 || d.getDay() === 6);
   return d.toISOString().slice(0, 10);
-}
-function calculateSimpleCpr(realisations, routesById) {
-  const now = Date.now();
-  const cutoff = now - (90 * 24 * 60 * 60 * 1000);
-
-  const bestRecent = realisations
-    .map((r) => {
-      const route = routesById[r.voieId];
-      const dateTimestamp = new Date(r.dateRealisation).getTime();
-      if (!route || !Number.isFinite(dateTimestamp) || dateTimestamp < cutoff || dateTimestamp > now) return null;
-
-      return {
-        id: r.id,
-        date: r.dateRealisation,
-        grade: route.cotationAjustee,
-        weightedIndex: gradeToIndex(route.cotationAjustee) * (STYLE_WEIGHTS[r.styleRealisation] || 1),
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.weightedIndex - a.weightedIndex || b.date.localeCompare(a.date))
-    .slice(0, 10);
-
-  if (!bestRecent.length) return { currentGrade: null, averageIndex: null, timeline: [] };
-
-  const averageIndex = bestRecent.reduce((sum, item) => sum + item.weightedIndex, 0) / bestRecent.length;
-  return { currentGrade: indexToGrade(Math.round(averageIndex)), averageIndex, timeline: bestRecent };
-}
-function weightedMedian(values) {
-  if (!values.length) return null;
-  const sorted = [...values].sort((a, b) => gradeToIndex(a.grade) - gradeToIndex(b.grade));
-  const total = sorted.reduce((sum, item) => sum + item.weight, 0);
-  let cumulative = 0;
-  for (const item of sorted) {
-    cumulative += item.weight;
-    if (cumulative >= total / 2) return item.grade;
-  }
-  return sorted[sorted.length - 1].grade;
 }
 function downloadFile(filename, content, type = "application/json;charset=utf-8;") {
   const blob = new Blob([content], { type });
@@ -477,9 +430,17 @@ function App() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       const base = saved ? JSON.parse(saved) : IMPORTED_DATA;
-      return { ...base, selectedDate: todayIso(), selectedParticipantProgress: "" };
+      return normalizeAppData({
+        ...base,
+        selectedDate: todayIso(),
+        selectedParticipantProgress: "",
+      }, IMPORTED_DATA);
     } catch {
-      return { ...IMPORTED_DATA, selectedDate: todayIso(), selectedParticipantProgress: "" };
+      return normalizeAppData({
+        ...IMPORTED_DATA,
+        selectedDate: todayIso(),
+        selectedParticipantProgress: "",
+      }, IMPORTED_DATA);
     }
   });
   const [adminInput, setAdminInput] = useState("");
@@ -612,14 +573,14 @@ function App() {
 
       if (!isMounted()) return null;
 
-      setState((prev) => ({
+      setState((prev) => normalizeAppData({
         ...prev,
         participants: Array.isArray(participants) ? participants : prev.participants,
         sessions: Array.isArray(sessions) && sessions.length ? sessions : prev.sessions,
         realisations: Array.isArray(realisations) ? realisations : prev.realisations,
         ropes: Array.isArray(ropes) && ropes.length ? ropes : prev.ropes,
         routes: Array.isArray(routes) && routes.length ? routes : prev.routes,
-      }));
+      }, prev));
 
       setSyncMessage("Données actualisées");
       return { participants, sessions, realisations, ropes, routes };
@@ -896,47 +857,14 @@ function App() {
   }, [state]);
 
   // Statistiques des réalisations en tête par cotation de voie.
-  const leadRealisationStats = useMemo(() => {
-    const routesByGrade = Object.fromEntries(GRADES.map((grade) => [grade, 0]));
-    const leadsByGrade = Object.fromEntries(GRADES.map((grade) => [grade, 0]));
-
-    state.routes.forEach((route) => {
-      const grade = route.cotationAjustee || route.cotationReference;
-      if (Object.prototype.hasOwnProperty.call(routesByGrade, grade)) {
-        routesByGrade[grade] += 1;
-      }
-    });
-
-    state.realisations
-      .filter((realisation) => realisation.styleRealisation === "en_tete")
-      .forEach((realisation) => {
-        const route = routesById[realisation.voieId];
-        const grade = route?.cotationAjustee || route?.cotationReference;
-        if (Object.prototype.hasOwnProperty.call(leadsByGrade, grade)) {
-          leadsByGrade[grade] += 1;
-        }
-      });
-
-    const byGrade = GRADES
-      .map((grade) => {
-        const routeCount = routesByGrade[grade];
-        const leadCount = leadsByGrade[grade];
-        return {
-          grade,
-          routeCount,
-          leadCount,
-          ratio: routeCount > 0 ? leadCount / routeCount : null,
-        };
-      });
-
-    // Toutes les cotations restent visibles, y compris lorsqu'aucune voie
-    // ou aucune réalisation en tête n'est enregistrée pour le niveau.
-
-    return {
-      total: state.realisations.filter((realisation) => realisation.styleRealisation === "en_tete").length,
-      byGrade,
-    };
-  }, [state.routes, state.realisations, routesById]);
+  const leadRealisationStats = useMemo(
+    () => calculateLeadRealisationStats(
+      state.routes,
+      state.realisations,
+      routesById,
+    ),
+    [state.routes, state.realisations, routesById],
+  );
 
   const alphabeticalParticipants = useMemo(() => {
     return [...state.participants].sort((a, b) => fullName(a).localeCompare(fullName(b), "fr"));
@@ -954,150 +882,34 @@ function App() {
     );
   }, [state.participants, state.realisations, routesById]);
 
-  const pointsByParticipantId = useMemo(() => {
-    const points = Object.fromEntries(state.participants.map((participant) => [participant.id, 0]));
+  const pointsByParticipantId = useMemo(
+    () => calculateLeadPoints(
+      state.participants,
+      state.routes,
+      state.realisations,
+    ),
+    [state.participants, state.routes, state.realisations],
+  );
 
-    state.routes.forEach((route) => {
-      const leadClimbers = new Set(
-        state.realisations
-          .filter((realisation) => (
-            String(realisation.voieId) === String(route.id)
-            && realisation.styleRealisation === "en_tete"
-          ))
-          .map((realisation) => String(realisation.participantId))
-      );
-
-      if (leadClimbers.size === 0) return;
-      const share = 1000 / leadClimbers.size;
-
-      leadClimbers.forEach((participantId) => {
-        points[participantId] = (points[participantId] || 0) + share;
-      });
-    });
-
-    return points;
-  }, [state.participants, state.routes, state.realisations]);
-
-  // Classements publics du Wall of Fame. Chaque tableau est limité aux trois
-  // premiers participants et conserve le même rang en cas d'égalité.
-  const wallOfFameCategories = useMemo(() => {
-    const successfulStyles = new Set(["a_vue", "flash", "en_tete", "moulinette", "travaillee"]);
-
-    const successfulRealisationsFor = (participantId) => state.realisations
-      .filter((realisation) => String(realisation.participantId) === String(participantId))
-      .filter((realisation) => successfulStyles.has(realisation.styleRealisation));
-
-    const distinctRoutesFor = (participantId, predicate) => new Set(
-      state.realisations
-        .filter((realisation) => String(realisation.participantId) === String(participantId))
-        .filter(predicate)
-        .map((realisation) => String(realisation.voieId))
-    ).size;
-
-    // Regroupe les voies réussies par séance. Les anciennes données sans sessionId
-    // utilisent la date comme solution de repli.
-    const sessionRouteSetsFor = (participantId) => {
-      const groups = new Map();
-      successfulRealisationsFor(participantId).forEach((realisation) => {
-        const sessionKey = realisation.sessionId || String(realisation.dateRealisation || "").slice(0, 10);
-        if (!sessionKey) return;
-        if (!groups.has(sessionKey)) groups.set(sessionKey, new Set());
-        groups.get(sessionKey).add(String(realisation.voieId));
-      });
-      return [...groups.values()];
-    };
-
-    const maxRoutesInSessionFor = (participantId) => {
-      const routeSets = sessionRouteSetsFor(participantId);
-      return routeSets.length ? Math.max(...routeSets.map((routeIds) => routeIds.size)) : 0;
-    };
-
-    const maxDifficultyInSessionFor = (participantId) => {
-      const routeSets = sessionRouteSetsFor(participantId);
-      return routeSets.reduce((record, routeIds) => {
-        const total = [...routeIds].reduce((sum, routeId) => {
-          const route = routesById[routeId];
-          const grade = route?.cotationAjustee || route?.cotationReference;
-          const gradeIndex = GRADES.indexOf(grade);
-          return sum + (gradeIndex >= 0 ? gradeIndex + 1 : 0);
-        }, 0);
-        return Math.max(record, total);
-      }, 0);
-    };
-
-    const buildRanking = ({ title, getValue, formatValue, isEligible = (value) => value > 0 }) => {
-      const sorted = state.participants
-        .map((participant) => ({ participant, value: getValue(participant) }))
-        .filter((entry) => Number.isFinite(entry.value) && isEligible(entry.value, entry.participant))
-        .sort((entryA, entryB) => (
-          entryB.value - entryA.value
-          || fullName(entryA.participant).localeCompare(fullName(entryB.participant), "fr")
-        ))
-        .slice(0, 3);
-
-      let previousValue = null;
-      let previousRank = 0;
-      return {
-        title,
-        entries: sorted.map((entry, index) => {
-          const rank = previousValue !== null && entry.value === previousValue ? previousRank : index + 1;
-          previousValue = entry.value;
-          previousRank = rank;
-          return { ...entry, rank, displayValue: formatValue(entry.value, entry.participant) };
-        }),
-      };
-    };
-
-    return [
-      buildRanking({
-        title: "Meilleurs CPR",
-        getValue: (participant) => cprByParticipantId[participant.id]?.averageIndex,
-        formatValue: (_value, participant) => cprByParticipantId[participant.id]?.currentGrade || "nc",
-        isEligible: (_value, participant) => Boolean(cprByParticipantId[participant.id]?.currentGrade),
-      }),
-      buildRanking({
-        title: "Plus de points",
-        getValue: (participant) => pointsByParticipantId[participant.id] || 0,
-        formatValue: (value) => `${formatPoints(value)} points`,
-      }),
-      buildRanking({
-        title: "Plus de participations",
-        getValue: (participant) => sessionStats.participationCount[participant.id] || 0,
-        formatValue: (value) => `${value} séance${value > 1 ? "s" : ""}`,
-      }),
-      buildRanking({
-        title: "Nombre total de voies",
-        getValue: (participant) => successfulRealisationsFor(participant.id).length,
-        formatValue: (value) => `${value} voie${value > 1 ? "s" : ""}`,
-      }),
-      buildRanking({
-        title: "Maximum de voies en une séance",
-        getValue: (participant) => maxRoutesInSessionFor(participant.id),
-        formatValue: (value) => `${value} voie${value > 1 ? "s" : ""}`,
-      }),
-      buildRanking({
-        title: "Difficulté cumulée en une séance",
-        getValue: (participant) => maxDifficultyInSessionFor(participant.id),
-        formatValue: (value) => `${value} point${value > 1 ? "s" : ""}`,
-      }),
-      buildRanking({
-        title: "Voies distinctes réalisées",
-        getValue: (participant) => distinctRoutesFor(
-          participant.id,
-          (realisation) => successfulStyles.has(realisation.styleRealisation)
-        ),
-        formatValue: (value) => `${value} voie${value > 1 ? "s" : ""}`,
-      }),
-      buildRanking({
-        title: "Voies réalisées en tête",
-        getValue: (participant) => distinctRoutesFor(
-          participant.id,
-          (realisation) => realisation.styleRealisation === "en_tete"
-        ),
-        formatValue: (value) => `${value} voie${value > 1 ? "s" : ""}`,
-      }),
-    ];
-  }, [state.participants, state.realisations, routesById, cprByParticipantId, pointsByParticipantId, sessionStats.participationCount]);
+  // Classements publics du Wall of Fame calculés hors du composant React.
+  const wallOfFameCategories = useMemo(
+    () => calculateWallOfFameCategories({
+      participants: state.participants,
+      realisations: state.realisations,
+      routesById,
+      cprByParticipantId,
+      pointsByParticipantId,
+      participationCount: sessionStats.participationCount,
+    }),
+    [
+      state.participants,
+      state.realisations,
+      routesById,
+      cprByParticipantId,
+      pointsByParticipantId,
+      sessionStats.participationCount,
+    ],
+  );
 
   const sortedStatsParticipants = useMemo(() => {
     const direction = statsSortDirection === "asc" ? 1 : -1;
@@ -1166,59 +978,14 @@ function App() {
     return [...recentParticipants, ...alphabeticalParticipants];
   }, [state.participants, recentlyAddedParticipantIds]);
 
-  const routeAggregatesById = useMemo(() => {
-    return Object.fromEntries(
-      state.routes.map((route) => {
-        const proposals = state.realisations
-          .filter((realisation) => realisation.voieId === route.id && realisation.cotationProposee)
-          .map((realisation) => {
-            const cprIndex = cprByParticipantId[realisation.participantId]?.averageIndex;
-            const normalizedCpr = Number.isFinite(cprIndex)
-              ? Math.max(0, Math.min(GRADES.length - 1, cprIndex)) / (GRADES.length - 1)
-              : 0;
-
-            return {
-              grade: realisation.cotationProposee,
-              style: realisation.styleRealisation,
-              consensusWeight: 1 + normalizedCpr,
-            };
-          });
-
-        const weightedProposals = proposals.map((proposal) => ({ grade: proposal.grade, weight: STYLE_WEIGHTS[proposal.style] || 1 }));
-
-        const distribution = GRADES.filter((g) => proposals.some((p) => p.grade === g)).map((g) => ({
-          grade: g,
-          count: proposals.filter((p) => p.grade === g).length,
-        }));
-
-        const averageIndex = proposals.length
-          ? proposals.reduce((sum, p) => sum + gradeToIndex(p.grade), 0) / proposals.length
-          : null;
-
-        const medianGrade = proposals.length
-          ? indexToGrade([...proposals].map((p) => gradeToIndex(p.grade)).sort((a, b) => a - b)[Math.floor((proposals.length - 1) / 2)])
-          : null;
-
-        const consensusWeightTotal = proposals.reduce((sum, proposal) => sum + proposal.consensusWeight, 0);
-        const consensusIndex = consensusWeightTotal
-          ? proposals.reduce(
-              (sum, proposal) => sum + (gradeToIndex(proposal.grade) * proposal.consensusWeight),
-              0
-            ) / consensusWeightTotal
-          : null;
-
-        return [route.id, {
-          count: proposals.length,
-          averageGrade: averageIndex === null ? null : indexToGrade(Math.round(averageIndex)),
-          medianGrade,
-          weightedMedianGrade: proposals.length >= 5 ? weightedMedian(weightedProposals) : null,
-          consensusGrade: consensusIndex === null ? null : indexToGrade(Math.round(consensusIndex)),
-          consensusIndex,
-          distribution,
-        }];
-      })
-    );
-  }, [state.routes, state.realisations, cprByParticipantId]);
+  const routeAggregatesById = useMemo(
+    () => calculateRouteAggregates(
+      state.routes,
+      state.realisations,
+      cprByParticipantId,
+    ),
+    [state.routes, state.realisations, cprByParticipantId],
+  );
 
   function setSelectedDate(date) {
     setState((prev) => ({ ...prev, selectedDate: date }));
@@ -1984,7 +1751,7 @@ async function handleThemePreferenceChange(nextTheme) {
           `Import API réussi : ${result.participantsImported || 0} participants, ${result.sessionsImported || 0} séances, ${result.routesImported || 0} voies.`
         );
       } else {
-        setState(parsed);
+        setState((prev) => normalizeAppData(parsed, prev));
         setImportMessage("Import JSON local réussi.");
       }
     } catch (error) {
