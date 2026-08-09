@@ -3341,6 +3341,15 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                                         <span>Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}</span>
                                         {route.moulinetteOnly && <span className="pill moulinette-badge" title="Moulinette uniquement">Moulinette</span>}
                                       </div>
+                                      {route.tags?.length > 0 && (
+                                        <div className="route-characteristics" aria-label="Caractéristiques de la voie">
+                                          {route.tags.map((tag) => (
+                                            <span className="route-characteristic" key={tag}>
+                                              {ROUTE_TAGS.find((item) => item.value === tag)?.label || tag}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
                                       <div className="route-rating">
                                         <span className="rating-average">
                                           {routeRating.count ? `★ ${routeRating.average.toFixed(1)} (${routeRating.count} réalisation${routeRating.count > 1 ? "s" : ""})` : "Pas encore notée (0 réalisation)"}
