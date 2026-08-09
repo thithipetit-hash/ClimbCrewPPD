@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { normalizeRopeNumber } from "./route-utils.js";
 
 // Données de repli volontairement vides : les données legacy sont importées côté backend/PostgreSQL.
 // Cela évite d'exposer les participants dans le bundle JavaScript public.
@@ -20,7 +21,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_
 const USE_API = Boolean(API_BASE);
 
 // La session est conservée uniquement dans un cookie HttpOnly côté backend.
-const APP_VERSION = "260809.073";
+const APP_VERSION = "260809.078";
 const PASSWORD_RULE_TEXT = "Minimum 12 caractères avec majuscule, minuscule, chiffre et caractère spécial.";
 
 const AUTH_LOGIN_INLINE_STYLE = `
@@ -721,14 +722,14 @@ function App() {
       }));
     }
 
-    return [...new Set(state.routes.map((route) => Number(route.numeroCorde)))]
+    return [...new Set(state.routes.map((route) => normalizeRopeNumber(route.numeroCorde)))]
       .sort((numeroA, numeroB) => numeroA - numeroB)
       .map((numeroCorde) => {
-        const rope = state.ropes.find((item) => Number(item.numeroCorde) === numeroCorde);
+        const rope = state.ropes.find((item) => normalizeRopeNumber(item.numeroCorde) === numeroCorde);
         return {
           key: `corde-${numeroCorde}`,
           label: `Corde ${numeroCorde}${rope?.couleurCorde ? ` · ${rope.couleurCorde}` : ""}`,
-          routes: state.routes.filter((route) => Number(route.numeroCorde) === numeroCorde),
+          routes: state.routes.filter((route) => normalizeRopeNumber(route.numeroCorde) === numeroCorde),
         };
       });
   }, [routeSortMode, state.routes, state.ropes]);
@@ -3314,7 +3315,7 @@ button:not(.danger):not(.secondary):not(.ghost),
                                 ) : (
                                   <div className="card-header">
                                     <strong>
-                                      Corde {Number(route.numeroCorde) || 0} · {route.cotationAjustee} · {formatRouteName(route)}
+                                      Corde {normalizeRopeNumber(route.numeroCorde)} · {route.cotationAjustee} · {formatRouteName(route)}
                                       {" · "}Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}
                                     </strong>
                                     <div className="group">
