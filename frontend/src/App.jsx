@@ -244,6 +244,16 @@ const THECRAG_STYLE_BY_CLIMBCREW = {
   non_enchainee: "Attempt",
   test: "Attempt",
 };
+const REALISATION_TAGS = [
+  { value: "dalle", label: "Dalle" },
+  { value: "devers", label: "Dévers" },
+  { value: "physique", label: "Physique" },
+  { value: "technique", label: "Technique" },
+  { value: "a_doigts", label: "À doigts" },
+  { value: "continuite", label: "Continuité" },
+  { value: "morphologique", label: "Morphologique" },
+  { value: "engagee", label: "Engagée" },
+];
 function fullName(p) {
   return p ? `${p.nom} ${p.prenom}`.trim() : "";
 }
@@ -529,6 +539,7 @@ function App() {
     commentaire: "",
     cotationProposee: "",
     rating: 0,
+    tags: [],
   });
 
   // Route sélectionnée pour le popup "Enregistrer une réalisation"
@@ -1022,6 +1033,43 @@ function App() {
     return ratings;
   }, [state.realisations]);
 
+  const topRouteRankings = useMemo(() => {
+    const entries = state.routes.map((route) => {
+      const routeRealisations = state.realisations.filter((item) => item.voieId === route.id);
+      const rating = routeRatingsById[route.id] || { average: 0, count: 0 };
+      return {
+        route,
+        ratingAverage: rating.average,
+        ratingCount: rating.count,
+        realisationCount: routeRealisations.length,
+        leadCount: routeRealisations.filter((item) => item.styleRealisation === "en_tete").length,
+      };
+    });
+    const takeFive = (items, compare) => [...items].sort(compare).slice(0, 5);
+    return [
+      {
+        title: "Voies les mieux notées",
+        entries: takeFive(entries.filter((item) => item.ratingCount > 0), (a, b) => b.ratingAverage - a.ratingAverage || b.ratingCount - a.ratingCount),
+        value: (item) => `★ ${item.ratingAverage.toFixed(1)} (${item.ratingCount})`,
+      },
+      {
+        title: "Voies les plus réalisées",
+        entries: takeFive(entries.filter((item) => item.realisationCount > 0), (a, b) => b.realisationCount - a.realisationCount),
+        value: (item) => `${item.realisationCount} réalisation${item.realisationCount > 1 ? "s" : ""}`,
+      },
+      {
+        title: "Voies les plus réalisées en tête",
+        entries: takeFive(entries.filter((item) => item.leadCount > 0), (a, b) => b.leadCount - a.leadCount),
+        value: (item) => `${item.leadCount} en tête`,
+      },
+      {
+        title: "Mieux notées avec au moins 3 avis",
+        entries: takeFive(entries.filter((item) => item.ratingCount >= 3), (a, b) => b.ratingAverage - a.ratingAverage || b.ratingCount - a.ratingCount),
+        value: (item) => `★ ${item.ratingAverage.toFixed(1)} (${item.ratingCount})`,
+      },
+    ];
+  }, [state.routes, state.realisations, routeRatingsById]);
+
   function setSelectedDate(date) {
     setState((prev) => ({ ...prev, selectedDate: date }));
   }
@@ -1473,6 +1521,7 @@ function App() {
       cotationProposee: route?.cotationAjustee || route?.cotationReference || "",
       commentaire: "",
       rating: 0,
+      tags: [],
     }));
 
     setRealisationModalRouteId(routeId);
@@ -1560,6 +1609,7 @@ async function deleteRealisation(realisation) {
       commentaire: newRealisation.commentaire,
       cotationProposee: newRealisation.cotationProposee,
       rating: newRealisation.rating,
+      tags: newRealisation.tags,
     };
 
     try {
@@ -1573,6 +1623,7 @@ async function deleteRealisation(realisation) {
         commentaire: "",
         cotationProposee: "",
         rating: 0,
+        tags: [],
       }));
       setRealisationModalRouteId(null);
       setConfirmationMessage("Réalisation enregistrée.");
@@ -1858,6 +1909,7 @@ async function handleThemePreferenceChange(nextTheme) {
         route?.nomOuvreur ? `Ouvreur : ${route.nomOuvreur}` : "",
         route?.couleurPrises ? `Couleur : ${route.couleurPrises}` : "",
         realisation.cotationProposee ? `Cotation proposée : ${realisation.cotationProposee}` : "",
+        realisation.tags?.length ? `Tags : ${realisation.tags.map((tag) => REALISATION_TAGS.find((item) => item.value === tag)?.label || tag).join(", ")}` : "",
         realisation.commentaire || "",
       ].filter(Boolean).join(" · ");
       return [
@@ -3037,6 +3089,29 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                 </div>
               </div>
 
+              <div className="realisation-tags">
+                <label>Caractéristiques de la voie</label>
+                <div className="tag-selector" aria-label="Caractéristiques de la voie">
+                  {REALISATION_TAGS.map((tag) => {
+                    const selected = newRealisation.tags.includes(tag.value);
+                    return (
+                      <button
+                        type="button"
+                        className={selected ? "tag-option selected" : "tag-option"}
+                        aria-pressed={selected}
+                        key={tag.value}
+                        onClick={() => setNewRealisation((prev) => ({
+                          ...prev,
+                          tags: selected
+                            ? prev.tags.filter((value) => value !== tag.value)
+                            : [...prev.tags, tag.value],
+                        }))}
+                      >{tag.label}</button>
+                    );
+                  })}
+                </div>
+              </div>
+
             </div>
 
             <div style={{ marginTop: 12 }}>
@@ -3747,6 +3822,30 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
               <div className="stat"><div className="label">Voies actives</div><div className="value">{sessionStats.nombreVoiesActives}</div></div>
               <div className="stat"><div className="label">Réalisations</div><div className="value">{sessionStats.nombreRealisations}</div></div>
               <div className="stat"><div className="label">Réalisations en tête</div><div className="value">{leadRealisationStats.total}</div></div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <h2>Classement des voies</h2>
+                <span className="small">Cinq voies maximum par classement</span>
+              </div>
+              <div className="grid two route-rankings-grid">
+                {topRouteRankings.map((ranking) => (
+                  <div className="subcard" key={ranking.title}>
+                    <h3>{ranking.title}</h3>
+                    <div className="stack" style={{ marginTop: 8 }}>
+                      {ranking.entries.length === 0 ? (
+                        <div className="muted-box">Pas encore assez de données.</div>
+                      ) : ranking.entries.map((entry, index) => (
+                        <div className="participant-row route-ranking-row" key={entry.route.id}>
+                          <span>{index + 1}. {formatRouteName(entry.route)} · {entry.route.cotationAjustee}</span>
+                          <strong>{ranking.value(entry)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="card">
