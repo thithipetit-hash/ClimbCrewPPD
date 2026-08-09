@@ -505,6 +505,7 @@ function App() {
   });
   const [editingRouteId, setEditingRouteId] = useState("");
   const [routeEditDraft, setRouteEditDraft] = useState(null);
+  const [savingRouteId, setSavingRouteId] = useState("");
   // Le tableau peut être regroupé soit par numéro de corde, soit par niveau de cotation.
   const [routeSortMode, setRouteSortMode] = useState("corde");
   const [newRealisation, setNewRealisation] = useState({
@@ -1349,6 +1350,7 @@ function App() {
     };
     const updatedRoute = { ...route, ...routePatch };
 
+    setSavingRouteId(route.id);
     try {
       const savedRoute = USE_API
         ? await apiFetch(`/routes/${encodeURIComponent(route.id)}`, {
@@ -1365,6 +1367,8 @@ function App() {
       setConfirmationMessage("Voie modifiée.");
     } catch (error) {
       setRouteError(error.message || "Modification de la voie impossible.");
+    } finally {
+      setSavingRouteId("");
     }
   }
 
@@ -3166,20 +3170,29 @@ button:not(.danger):not(.secondary):not(.ghost),
                                     </div>
                                     {routeError && <div className="error" style={{ marginTop: 8 }}>{routeError}</div>}
                                     <div className="group" style={{ marginTop: 8 }}>
-                                      <button onClick={() => saveRouteEdition(route)}>Enregistrer</button>
+                                      <button
+                                        onClick={() => saveRouteEdition(route)}
+                                        disabled={savingRouteId === route.id}
+                                        aria-busy={savingRouteId === route.id}
+                                      >
+                                        {savingRouteId === route.id ? "Enregistrement…" : "Enregistrer"}
+                                      </button>
                                       <button className="secondary" onClick={cancelRouteEdition}>Annuler</button>
                                       <button className="danger" onClick={() => deleteRoute(route)}>Supprimer la voie</button>
                                     </div>
                                   </>
                                 ) : (
                                   <div className="card-header">
-                                    <strong className="route-summary">
-                                      <span>
-                                        Corde {normalizeRopeNumber(route.numeroCorde)} · {route.cotationAjustee} · {formatRouteName(route)}
-                                        {" · "}Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}
-                                      </span>
-                                      {route.moulinetteOnly && <span className="pill moulinette-badge" title="Moulinette uniquement">Moulinette</span>}
-                                    </strong>
+                                    <div className="route-summary">
+                                      <strong className="route-primary-line">
+                                        {routeSortMode !== "corde" && <>Corde {normalizeRopeNumber(route.numeroCorde)} · </>}
+                                        {route.cotationAjustee} · {formatRouteName(route)}
+                                      </strong>
+                                      <div className="route-secondary-line">
+                                        <span>Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}</span>
+                                        {route.moulinetteOnly && <span className="pill moulinette-badge" title="Moulinette uniquement">Moulinette</span>}
+                                      </div>
+                                    </div>
                                     <div className="group">
                                       <button className="secondary" onClick={() => openRealisationModal(route.id, state.selectedParticipantProgress)}>Réalisation</button>
                                       {adminUnlocked && <button className="secondary" onClick={() => startRouteEdition(route)}>Modifier</button>}
