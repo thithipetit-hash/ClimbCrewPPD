@@ -21,9 +21,12 @@ test("les lignes sombres des classements utilisent un texte clair", async () => 
   assert.match(styles, /\.route-ranking-row > strong[\s\S]*color:#ffffff!important/);
 });
 
-test("plusieurs caractéristiques peuvent être associées à une réalisation", async () => {
+test("les caractéristiques sont associées à la voie à sa création et à sa modification", async () => {
   const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  assert.match(source, /const REALISATION_TAGS =/);
+  assert.match(source, /const ROUTE_TAGS =/);
+  assert.match(source, /tags: newRoute\.tags/);
+  assert.match(source, /tags: routeEditDraft\.tags/);
+  assert.doesNotMatch(source, /newRealisation\.tags/);
   assert.match(source, /prev\.tags\.filter/);
   assert.match(source, /\.\.\.prev\.tags/);
   assert.match(source, /aria-pressed=\{selected\}/);
