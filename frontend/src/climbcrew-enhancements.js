@@ -386,6 +386,38 @@ function injectStyles() {
       line-height:1.1;
       opacity:.9;
     }
+    .route-rating {
+      display:flex;
+      align-items:center;
+      flex-wrap:wrap;
+      gap:3px 7px;
+      margin-top:1px;
+    }
+    .rating-average {
+      min-width:72px;
+      font-size:10px;
+      line-height:1.1;
+    }
+    .rating-stars {
+      display:inline-flex;
+      gap:1px;
+    }
+    .route-card .rating-star {
+      min-width:22px!important;
+      min-height:22px!important;
+      width:22px!important;
+      height:22px!important;
+      padding:0!important;
+      border-radius:50%!important;
+      background:rgba(255,255,255,.55)!important;
+      color:#64748b!important;
+      font-size:15px!important;
+      line-height:1!important;
+    }
+    .route-card .rating-star.selected {
+      background:#fef3c7!important;
+      color:#d97706!important;
+    }
     .route-card .moulinette-badge {
       background:#fee2e2!important;
       border-color:#ef4444!important;
