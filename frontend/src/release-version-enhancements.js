@@ -7,9 +7,9 @@
  * - jj : jour ;
  * - iii : index du commit sur trois chiffres, incrémenté à chaque commit.
  *
- * La version de ce commit est donc 260809.064.
+ * La version de ce commit est donc 260809.068.
  */
-const APP_VERSION = "260809.064";
+const APP_VERSION = "260809.068";
 const APP_VERSION_LABEL = `Version : ${APP_VERSION}`;
 let scheduled = false;
 
