@@ -8,6 +8,7 @@ test("la note de une à cinq étoiles est saisie avec la réalisation", async ()
   assert.match(source, /role="radiogroup"/);
   assert.match(source, /newRealisation\.rating/);
   assert.match(source, /rating <= newRealisation\.rating/);
+  assert.match(source, /\? "★" : "☆"/);
   assert.match(source, /routeRatingsById/);
   assert.match(source, /routeRating\.average\.toFixed\(1\)/);
   assert.match(source, /Pas encore notée \(0 réalisation\)/);
@@ -17,4 +18,5 @@ test("les étoiles sélectionnées sont affichées en jaune", async () => {
   const styles = await readFile(new URL("../src/climbcrew-enhancements.js", import.meta.url), "utf8");
   assert.match(styles, /\.rating-stars \.rating-star\.selected/);
   assert.match(styles, /color:#facc15!important/);
+  assert.match(styles, /not\(\.rating-star\)/);
 });
