@@ -2936,7 +2936,11 @@ button:not(.danger):not(.secondary):not(.ghost),
             <div className="toolbar">
               <div className="toolbar-row">
                 <div className="group date-nav">
-                  <button className="secondary nav-symbol" title={viewMode === "jour" ? "Jour précédent" : "Semaine précédente"} onClick={() => {
+                  <button
+                    className="secondary nav-symbol"
+                    title={viewMode === "jour" ? "Jour précédent" : "Semaine précédente"}
+                    aria-label={viewMode === "jour" ? "Afficher le jour précédent" : "Afficher la semaine précédente"}
+                    onClick={() => {
                     const d = viewMode === "jour" ? nextBusinessDay(selectedDate, -1) : nextBusinessDay(nextBusinessDay(nextBusinessDay(nextBusinessDay(nextBusinessDay(selectedDate,-1),-1),-1),-1),-1);
                     setSelectedDate(d); ensureSessionsForDate(d);
                   }}>
@@ -2951,7 +2955,11 @@ button:not(.danger):not(.secondary):not(.ghost),
                     aria-label="Date sélectionnée"
                   />
 
-                  <button className="secondary nav-symbol" title={viewMode === "jour" ? "Jour suivant" : "Semaine suivante"} onClick={() => {
+                  <button
+                    className="secondary nav-symbol"
+                    title={viewMode === "jour" ? "Jour suivant" : "Semaine suivante"}
+                    aria-label={viewMode === "jour" ? "Afficher le jour suivant" : "Afficher la semaine suivante"}
+                    onClick={() => {
                     const d = viewMode === "jour" ? nextBusinessDay(selectedDate, 1) : nextBusinessDay(nextBusinessDay(nextBusinessDay(nextBusinessDay(nextBusinessDay(selectedDate,1),1),1),1),1);
                     setSelectedDate(d); ensureSessionsForDate(d);
                   }}>
@@ -3592,6 +3600,7 @@ button:not(.danger):not(.secondary):not(.ghost),
                     className="secondary"
                     onClick={() => setStatsSortDirection((value) => (value === "asc" ? "desc" : "asc"))}
                     title="Inverser le tri"
+                    aria-label={statsSortDirection === "asc" ? "Trier par ordre décroissant" : "Trier par ordre croissant"}
                   >
                     {statsSortDirection === "asc" ? "↑" : "↓"}
                   </button>
