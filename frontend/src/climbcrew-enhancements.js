@@ -431,6 +431,36 @@ function injectStyles() {
       height:38px!important;
       font-size:24px!important;
     }
+    .tag-selector {
+      display:flex;
+      flex-wrap:wrap;
+      gap:5px;
+      margin-top:5px;
+    }
+    .tag-selector .tag-option {
+      min-height:34px!important;
+      padding:5px 9px!important;
+      border:1px solid var(--cc-hairline)!important;
+      background:var(--cc-surface-2)!important;
+      color:var(--cc-ink)!important;
+      font-size:12px!important;
+    }
+    .tag-selector .tag-option.selected {
+      border-color:var(--cc-accent)!important;
+      background:var(--cc-accent)!important;
+      color:var(--cc-accent-text)!important;
+    }
+    .route-ranking-row {
+      gap:8px!important;
+    }
+    .route-ranking-row > span {
+      min-width:0;
+      overflow-wrap:anywhere;
+    }
+    .route-ranking-row > strong {
+      flex:0 0 auto;
+      white-space:nowrap;
+    }
     .route-card .moulinette-badge {
       background:#fee2e2!important;
       border-color:#ef4444!important;
