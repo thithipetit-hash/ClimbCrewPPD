@@ -20,7 +20,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_
 const USE_API = Boolean(API_BASE);
 
 // La session est conservée uniquement dans un cookie HttpOnly côté backend.
-const APP_VERSION = "260809.063";
+const APP_VERSION = "260809.067";
 const PASSWORD_RULE_TEXT = "Minimum 12 caractères avec majuscule, minuscule, chiffre et caractère spécial.";
 
 const AUTH_LOGIN_INLINE_STYLE = `
@@ -2463,6 +2463,39 @@ async function handleThemePreferenceChange(nextTheme) {
             text-shadow: 0 1px 1px rgba(0, 0, 0, .35);
           }
 
+          /* Liste statistique : le nom et les détails occupent des lignes
+             distinctes afin d'éviter tout chevauchement sur écran étroit. */
+          .stats-participant-row {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) !important;
+            align-items: start !important;
+            justify-content: stretch !important;
+            gap: 4px !important;
+            min-height: 0 !important;
+            height: auto !important;
+            padding: 7px 10px !important;
+            border-radius: 18px !important;
+          }
+          .stats-participant-row .participant-identity {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+          .stats-participant-row .participant-name {
+            white-space: normal !important;
+            overflow-wrap: anywhere;
+            font-size: 14px !important;
+            line-height: 1.2 !important;
+          }
+          .stats-participant-row > .small {
+            display: block !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            white-space: normal !important;
+            overflow-wrap: anywhere;
+            font-size: 12px !important;
+            line-height: 1.3 !important;
+          }
+
           /* Le drawer devient plein écran et compact sur mobile.
              Il reste défilable pour que tous les onglets, l'ambiance et le compte
              soient accessibles quelle que soit la hauteur de l'écran. */
@@ -3798,7 +3831,7 @@ button:not(.danger):not(.secondary):not(.ghost),
               </div>
               <div className="stack">
                 {sortedStatsParticipants.map((participant) => (
-                  <div className="participant-row passport-row" key={participant.id} style={getPassportStyle(participant)} data-passport={normalizePassport(participant.passport)}>
+                  <div className="participant-row passport-row stats-participant-row" key={participant.id} style={getPassportStyle(participant)} data-passport={normalizePassport(participant.passport)}>
                     <span className="participant-identity">
                       <span className="passport-dot" style={getPassportDotStyle(participant)} aria-hidden="true" />
                       <span className="participant-name">{fullName(participant)}</span>
