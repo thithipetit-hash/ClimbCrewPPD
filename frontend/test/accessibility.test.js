@@ -28,6 +28,7 @@ test("la liste des inscrits devient multicolonne sans couper les noms sur plusie
   assert.match(styles, /@media \(min-width:1100px\)[\s\S]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
   assert.match(styles, /@media \(min-width:1500px\)[\s\S]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(styles, /\.session-participant-list \.participant-name[\s\S]*white-space:nowrap!important/);
+  assert.match(styles, /\.app \.session-card-compact \.session-participant-list[\s\S]*grid-template-columns:minmax\(0,1fr\)!important/);
 });
 
 test("les pages administratives sont placées après la FAQ", async () => {
