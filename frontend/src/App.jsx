@@ -528,9 +528,9 @@ function App() {
     canAdmin: false,
   });
   const [newRoute, setNewRoute] = useState({
-    numeroCorde: "1",
-    couleurPrises: "Blanc",
-    cotationReference: "5c",
+    numeroCorde: "",
+    couleurPrises: "",
+    cotationReference: "",
     nomVoie: "",
     nomOuvreur: "",
     moulinetteOnly: false,
@@ -1338,7 +1338,9 @@ function App() {
     const numeroVoieUnique = `voie-${Date.now()}`;
     const couleurPrises = newRoute.couleurPrises.trim();
     const nomOuvreur = newRoute.nomOuvreur.trim();
-    if (!couleurPrises || !nomOuvreur) return setRouteError("Renseigne au moins la couleur et l’ouvreur.");
+    if (!newRoute.numeroCorde || !couleurPrises || !newRoute.cotationReference || !nomOuvreur) {
+      return setRouteError("Renseigne la corde, la couleur, la cotation et l’ouvreur.");
+    }
 
     const route = {
       id: `route-${Date.now()}`,
@@ -1362,7 +1364,7 @@ function App() {
       setState((prev) => ({ ...prev, routes: [...prev.routes, savedRoute] }));
       setRouteError("");
       setNewRoute({
-        numeroCorde: "1", couleurPrises: "Blanc", cotationReference: "5c", nomVoie: "", nomOuvreur: "", moulinetteOnly: false, tags: [],
+        numeroCorde: "", couleurPrises: "", cotationReference: "", nomVoie: "", nomOuvreur: "", moulinetteOnly: false, tags: [],
       });
       setConfirmationMessage("Voie ajoutée.");
     } catch (error) {
@@ -3223,22 +3225,31 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
           <>
             {adminUnlocked && (
               <div className="card">
-                <div className="card-header"><h2>Ajouter une voie</h2></div>
+                <div className="card-header">
+                  <h2>Ajouter une voie</h2>
+                  <button onClick={addRoute}>Ajouter</button>
+                </div>
                 <div className="grid four">
-                  <div><label>Corde</label><select value={newRoute.numeroCorde} onChange={(e) => setNewRoute((p) => ({ ...p, numeroCorde: e.target.value }))}>{ROPE_NUMBERS.map((numero) => <option key={numero} value={String(numero)}>Corde {numero}</option>)}</select></div>
-                  <div><label>Couleur voie</label><select value={newRoute.couleurPrises} onChange={(e) => setNewRoute((p) => ({ ...p, couleurPrises: e.target.value }))}>{ROUTE_COLORS.map((couleur) => <option key={couleur} value={couleur}>{couleur}</option>)}</select></div>
-                  <div><label>Cotation</label><select value={newRoute.cotationReference} onChange={(e) => setNewRoute((p) => ({ ...p, cotationReference: e.target.value }))}>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
+                  <div><label>Corde</label><select value={newRoute.numeroCorde} onChange={(e) => setNewRoute((p) => ({ ...p, numeroCorde: e.target.value }))}><option value="" disabled>Choisir une corde</option>{ROPE_NUMBERS.map((numero) => <option key={numero} value={String(numero)}>Corde {numero}</option>)}</select></div>
+                  <div><label>Couleur voie</label><select value={newRoute.couleurPrises} onChange={(e) => setNewRoute((p) => ({ ...p, couleurPrises: e.target.value }))}><option value="" disabled>Choisir une couleur</option>{ROUTE_COLORS.map((couleur) => <option key={couleur} value={couleur}>{couleur}</option>)}</select></div>
+                  <div><label>Cotation</label><select value={newRoute.cotationReference} onChange={(e) => setNewRoute((p) => ({ ...p, cotationReference: e.target.value }))}><option value="" disabled>Choisir une cotation</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
                   <div><label>Nom de la voie</label><input value={newRoute.nomVoie} onChange={(e) => setNewRoute((p) => ({ ...p, nomVoie: e.target.value }))} /></div>
                   <div><label>Ouvreur</label><input value={newRoute.nomOuvreur} onChange={(e) => setNewRoute((p) => ({ ...p, nomOuvreur: e.target.value }))} /></div>
-                  <div><label>Moulinette uniquement</label><select value={newRoute.moulinetteOnly ? "oui" : "non"} onChange={(e) => setNewRoute((p) => ({ ...p, moulinetteOnly: e.target.value === "oui" }))}><option value="non">Non</option><option value="oui">Oui</option></select></div>
-                  <div style={{ display: "flex", alignItems: "end" }}><button onClick={addRoute}>Ajouter</button></div>
+                  <div>
+                    <label>Moulinette uniquement</label>
+                    <div className="binary-choice" role="group" aria-label="Moulinette uniquement">
+                      <button type="button" className={!newRoute.moulinetteOnly ? "selected" : ""} aria-pressed={!newRoute.moulinetteOnly} onClick={() => setNewRoute((p) => ({ ...p, moulinetteOnly: false }))}>Non</button>
+                      <button type="button" className={newRoute.moulinetteOnly ? "selected" : ""} aria-pressed={newRoute.moulinetteOnly} onClick={() => setNewRoute((p) => ({ ...p, moulinetteOnly: true }))}>Oui</button>
+                    </div>
+                  </div>
                 </div>
                 <div className="realisation-tags" style={{ marginTop: 10 }}>
-                  <label>Caractéristiques de la voie</label>
+                  <label>Caractéristiques de la voie <span className="small">(3 maximum)</span></label>
                   <div className="tag-selector" aria-label="Caractéristiques de la nouvelle voie">
                     {ROUTE_TAGS.map((tag) => {
                       const selected = newRoute.tags.includes(tag.value);
-                      return <button type="button" className={selected ? "tag-option selected" : "tag-option"} aria-pressed={selected} key={tag.value} onClick={() => setNewRoute((prev) => ({ ...prev, tags: selected ? prev.tags.filter((value) => value !== tag.value) : [...prev.tags, tag.value] }))}>{tag.label}</button>;
+                      const limitReached = newRoute.tags.length >= 3;
+                      return <button type="button" className={selected ? "tag-option selected" : "tag-option"} aria-pressed={selected} disabled={!selected && limitReached} key={tag.value} onClick={() => setNewRoute((prev) => ({ ...prev, tags: selected ? prev.tags.filter((value) => value !== tag.value) : [...prev.tags, tag.value] }))}>{tag.label}</button>;
                     })}
                   </div>
                 </div>
@@ -3309,21 +3320,19 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                                       </div>
                                       <div>
                                         <label>Moulinette uniquement</label>
-                                        <select
-                                          value={routeEditDraft.moulinetteOnly ? "oui" : "non"}
-                                          onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, moulinetteOnly: event.target.value === "oui" }))}
-                                        >
-                                          <option value="non">Non</option>
-                                          <option value="oui">Oui</option>
-                                        </select>
+                                        <div className="binary-choice" role="group" aria-label="Modifier moulinette uniquement">
+                                          <button type="button" className={!routeEditDraft.moulinetteOnly ? "selected" : ""} aria-pressed={!routeEditDraft.moulinetteOnly} onClick={() => setRouteEditDraft((draft) => ({ ...draft, moulinetteOnly: false }))}>Non</button>
+                                          <button type="button" className={routeEditDraft.moulinetteOnly ? "selected" : ""} aria-pressed={routeEditDraft.moulinetteOnly} onClick={() => setRouteEditDraft((draft) => ({ ...draft, moulinetteOnly: true }))}>Oui</button>
+                                        </div>
                                       </div>
                                     </div>
                                     <div className="realisation-tags" style={{ marginTop: 8 }}>
-                                      <label>Caractéristiques de la voie</label>
+                                      <label>Caractéristiques de la voie <span className="small">(3 maximum)</span></label>
                                       <div className="tag-selector" aria-label="Modifier les caractéristiques de la voie">
                                         {ROUTE_TAGS.map((tag) => {
                                           const selected = routeEditDraft.tags.includes(tag.value);
-                                          return <button type="button" className={selected ? "tag-option selected" : "tag-option"} aria-pressed={selected} key={tag.value} onClick={() => setRouteEditDraft((prev) => ({ ...prev, tags: selected ? prev.tags.filter((value) => value !== tag.value) : [...prev.tags, tag.value] }))}>{tag.label}</button>;
+                                          const limitReached = routeEditDraft.tags.length >= 3;
+                                          return <button type="button" className={selected ? "tag-option selected" : "tag-option"} aria-pressed={selected} disabled={!selected && limitReached} key={tag.value} onClick={() => setRouteEditDraft((prev) => ({ ...prev, tags: selected ? prev.tags.filter((value) => value !== tag.value) : [...prev.tags, tag.value] }))}>{tag.label}</button>;
                                         })}
                                       </div>
                                     </div>
