@@ -29,3 +29,12 @@ test("la liste des inscrits devient multicolonne sans couper les noms sur plusie
   assert.match(styles, /@media \(min-width:1500px\)[\s\S]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(styles, /\.session-participant-list \.participant-name[\s\S]*white-space:nowrap!important/);
 });
+
+test("les pages administratives sont placées après la FAQ", async () => {
+  const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const faq = source.indexOf('{ key: "faq", label: "FAQ" }');
+  const administration = source.indexOf('{ key: "administration", label: "Administration", adminOnly: true }');
+  const accounts = source.indexOf('{ key: "gestion_comptes", label: "Gestion des comptes", adminOnly: true }');
+  const logs = source.indexOf('{ key: "logs", label: "Log", adminOnly: true }');
+  assert.ok(faq < administration && administration < accounts && accounts < logs);
+});
