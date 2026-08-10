@@ -475,25 +475,26 @@ function injectStyles() {
       font-size:12px!important;
     }
     .tag-selector .tag-option.selected {
-      border-color:var(--cc-accent)!important;
-      background:var(--cc-accent)!important;
-      color:var(--cc-accent-text)!important;
+      border:2px solid #a16207!important;
+      background:#facc15!important;
+      color:#111827!important;
+      font-weight:800!important;
+      box-shadow:0 0 0 2px rgba(250,204,21,.28)!important;
     }
-    .binary-choice {
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:5px;
+    .checkbox-field {
+      display:flex!important;
+      align-items:center;
+      gap:8px;
+      min-height:44px;
+      margin:0!important;
+      cursor:pointer;
     }
-    .binary-choice button {
-      min-height:40px!important;
-      background:var(--cc-surface-2)!important;
-      color:var(--cc-ink)!important;
-      border:1px solid var(--cc-hairline)!important;
-    }
-    .binary-choice button.selected {
-      background:var(--cc-accent)!important;
-      color:var(--cc-accent-text)!important;
-      border-color:var(--cc-accent)!important;
+    .checkbox-field input[type="checkbox"] {
+      width:22px!important;
+      height:22px!important;
+      min-width:22px!important;
+      margin:0!important;
+      accent-color:var(--cc-accent);
     }
     .route-ranking-row {
       gap:8px!important;
