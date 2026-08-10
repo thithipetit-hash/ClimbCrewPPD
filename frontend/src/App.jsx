@@ -3468,7 +3468,7 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
               </div>
             )}
 
-            <div className="card" style={{ marginTop: 12 }}>
+            {(state.selectedParticipantProgress || selectedRouteProgress) && <div className="card" style={{ marginTop: 12 }}>
               <div className="card-header">
                 <h3>
                   {state.selectedParticipantProgress
@@ -3494,9 +3494,7 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
               </div>
 
               <div className="stack">
-                {!state.selectedParticipantProgress && !selectedRouteProgress ? (
-                  <div className="muted-box">Choisis un grimpeur ou une voie pour afficher les réalisations.</div>
-                ) : progressViewRealisations.length === 0 ? (
+                {progressViewRealisations.length === 0 ? (
                   <div className="muted-box">Aucune réalisation enregistrée pour cette sélection.</div>
                 ) : (
                   progressViewRealisations.map((realisation) => {
@@ -3617,7 +3615,7 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                   })
                 )}
               </div>
-            </div>
+            </div>}
           </div>
         )}
 
