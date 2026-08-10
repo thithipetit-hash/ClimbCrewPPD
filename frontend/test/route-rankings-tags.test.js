@@ -19,6 +19,7 @@ test("les lignes sombres des classements utilisent un texte clair", async () => 
   const styles = await readFile(new URL("../src/climbcrew-enhancements.js", import.meta.url), "utf8");
   assert.match(styles, /\.route-ranking-row > span[\s\S]*color:#f8fafc!important/);
   assert.match(styles, /\.route-ranking-row > strong[\s\S]*color:#ffffff!important/);
+  assert.match(styles, /\.app \.card \.lead-grade-row > span[\s\S]*-webkit-text-fill-color:#ffffff!important/);
 });
 
 test("les caractéristiques sont associées à la voie à sa création et à sa modification", async () => {
