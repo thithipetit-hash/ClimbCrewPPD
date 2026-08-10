@@ -33,4 +33,14 @@ test("les caractéristiques sont associées à la voie à sa création et à sa 
   assert.match(source, /prev\.tags\.filter/);
   assert.match(source, /\.\.\.prev\.tags/);
   assert.match(source, /aria-pressed=\{selected\}/);
+  assert.match(source, /newRoute\.tags\.length >= 3/);
+  assert.match(source, /disabled=\{!selected && limitReached\}/);
+});
+
+test("la création d'une voie démarre vide et utilise des boutons oui non", async () => {
+  const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.match(source, /numeroCorde: "",[\s\S]*couleurPrises: "",[\s\S]*cotationReference: ""/);
+  assert.match(source, /className="binary-choice"/);
+  assert.match(source, />Non<\/button>/);
+  assert.match(source, />Oui<\/button>/);
 });
