@@ -3236,20 +3236,19 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                   <div><label>Nom de la voie</label><input value={newRoute.nomVoie} onChange={(e) => setNewRoute((p) => ({ ...p, nomVoie: e.target.value }))} /></div>
                   <div><label>Ouvreur</label><input value={newRoute.nomOuvreur} onChange={(e) => setNewRoute((p) => ({ ...p, nomOuvreur: e.target.value }))} /></div>
                   <div>
-                    <label>Moulinette uniquement</label>
-                    <div className="binary-choice" role="group" aria-label="Moulinette uniquement">
-                      <button type="button" className={!newRoute.moulinetteOnly ? "selected" : ""} aria-pressed={!newRoute.moulinetteOnly} onClick={() => setNewRoute((p) => ({ ...p, moulinetteOnly: false }))}>Non</button>
-                      <button type="button" className={newRoute.moulinetteOnly ? "selected" : ""} aria-pressed={newRoute.moulinetteOnly} onClick={() => setNewRoute((p) => ({ ...p, moulinetteOnly: true }))}>Oui</button>
-                    </div>
+                    <label className="checkbox-field">
+                      <input type="checkbox" checked={newRoute.moulinetteOnly} onChange={(event) => setNewRoute((p) => ({ ...p, moulinetteOnly: event.target.checked }))} />
+                      <span>Moulinette uniquement</span>
+                    </label>
                   </div>
                 </div>
                 <div className="realisation-tags" style={{ marginTop: 10 }}>
-                  <label>Caractéristiques de la voie <span className="small">(3 maximum)</span></label>
+                  <label>Caractéristiques de la voie <span className="small">({newRoute.tags.length}/3 sélectionnées)</span></label>
                   <div className="tag-selector" aria-label="Caractéristiques de la nouvelle voie">
                     {ROUTE_TAGS.map((tag) => {
                       const selected = newRoute.tags.includes(tag.value);
                       const limitReached = newRoute.tags.length >= 3;
-                      return <button type="button" className={selected ? "tag-option selected" : "tag-option"} aria-pressed={selected} disabled={!selected && limitReached} key={tag.value} onClick={() => setNewRoute((prev) => ({ ...prev, tags: selected ? prev.tags.filter((value) => value !== tag.value) : [...prev.tags, tag.value] }))}>{tag.label}</button>;
+                      return <button type="button" className={selected ? "tag-option selected" : "tag-option"} aria-pressed={selected} disabled={!selected && limitReached} key={tag.value} onClick={() => setNewRoute((prev) => ({ ...prev, tags: selected ? prev.tags.filter((value) => value !== tag.value) : [...prev.tags, tag.value] }))}>{selected && <span aria-hidden="true">✓ </span>}{tag.label}</button>;
                     })}
                   </div>
                 </div>
@@ -3319,20 +3318,19 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                                         <input value={routeEditDraft.nomOuvreur} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, nomOuvreur: event.target.value }))} />
                                       </div>
                                       <div>
-                                        <label>Moulinette uniquement</label>
-                                        <div className="binary-choice" role="group" aria-label="Modifier moulinette uniquement">
-                                          <button type="button" className={!routeEditDraft.moulinetteOnly ? "selected" : ""} aria-pressed={!routeEditDraft.moulinetteOnly} onClick={() => setRouteEditDraft((draft) => ({ ...draft, moulinetteOnly: false }))}>Non</button>
-                                          <button type="button" className={routeEditDraft.moulinetteOnly ? "selected" : ""} aria-pressed={routeEditDraft.moulinetteOnly} onClick={() => setRouteEditDraft((draft) => ({ ...draft, moulinetteOnly: true }))}>Oui</button>
-                                        </div>
+                                        <label className="checkbox-field">
+                                          <input type="checkbox" checked={routeEditDraft.moulinetteOnly} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, moulinetteOnly: event.target.checked }))} />
+                                          <span>Moulinette uniquement</span>
+                                        </label>
                                       </div>
                                     </div>
                                     <div className="realisation-tags" style={{ marginTop: 8 }}>
-                                      <label>Caractéristiques de la voie <span className="small">(3 maximum)</span></label>
+                                      <label>Caractéristiques de la voie <span className="small">({routeEditDraft.tags.length}/3 sélectionnées)</span></label>
                                       <div className="tag-selector" aria-label="Modifier les caractéristiques de la voie">
                                         {ROUTE_TAGS.map((tag) => {
                                           const selected = routeEditDraft.tags.includes(tag.value);
                                           const limitReached = routeEditDraft.tags.length >= 3;
-                                          return <button type="button" className={selected ? "tag-option selected" : "tag-option"} aria-pressed={selected} disabled={!selected && limitReached} key={tag.value} onClick={() => setRouteEditDraft((prev) => ({ ...prev, tags: selected ? prev.tags.filter((value) => value !== tag.value) : [...prev.tags, tag.value] }))}>{tag.label}</button>;
+                                          return <button type="button" className={selected ? "tag-option selected" : "tag-option"} aria-pressed={selected} disabled={!selected && limitReached} key={tag.value} onClick={() => setRouteEditDraft((prev) => ({ ...prev, tags: selected ? prev.tags.filter((value) => value !== tag.value) : [...prev.tags, tag.value] }))}>{selected && <span aria-hidden="true">✓ </span>}{tag.label}</button>;
                                         })}
                                       </div>
                                     </div>
