@@ -353,6 +353,11 @@ function injectStyles() {
         grid-template-columns:repeat(4,minmax(0,1fr))!important;
       }
     }
+    /* En vue semaine, chaque séance reste étroite : les inscrits sont donc
+       toujours présentés verticalement sur une seule colonne. */
+    .app .session-card-compact .session-participant-list {
+      grid-template-columns:minmax(0,1fr)!important;
+    }
 
     /* Les flèches et la date forment un seul bloc insécable sur toutes les largeurs. */
     .date-nav {
