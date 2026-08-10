@@ -265,6 +265,16 @@ function formatRouteName(route) {
   return label || "Voie";
 }
 
+// Libellé uniforme utilisé dans les formulaires de réalisation :
+// corde, cotation, ouvreur puis nom de la voie.
+function formatRouteForRealisation(route) {
+  const rope = `Corde ${normalizeRopeNumber(route?.numeroCorde)}`;
+  const grade = String(route?.cotationAjustee || route?.cotationReference || "nc").trim();
+  const opener = String(route?.nomOuvreur || "").trim();
+  const name = String(route?.nomVoie || "").trim();
+  return [rope, grade, opener, name].filter(Boolean).join(" · ");
+}
+
 function toLocalIso(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -2990,7 +3000,7 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
               <div>
                 <h2 className="modal-title">Enregistrer une voie réalisée</h2>
                 <div className="small">
-                  {formatRouteName(realisationModalRoute)} · Corde {realisationModalRoute.numeroCorde} · {realisationModalRoute.cotationAjustee}
+                  {formatRouteForRealisation(realisationModalRoute)}
                 </div>
               </div>
               <button className="danger ghost modal-close" onClick={closeRealisationModal} aria-label="Fermer">×</button>
@@ -3049,7 +3059,7 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
 
               <div>
                 <label>Voie</label>
-                <input value={`${formatRouteName(realisationModalRoute)} · Corde ${realisationModalRoute.numeroCorde} · ${realisationModalRoute.cotationAjustee}`} readOnly />
+                <input value={formatRouteForRealisation(realisationModalRoute)} readOnly />
               </div>
 
               <div>
@@ -3409,7 +3419,7 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                   <option value="">Choisir une voie</option>
                   {state.routes.map((route) => (
                     <option key={route.id} value={route.id}>
-                      {formatRouteName(route)} · corde {route.numeroCorde} · {route.cotationAjustee}
+                      {formatRouteForRealisation(route)}
                     </option>
                   ))}
                 </select>
@@ -3428,7 +3438,7 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                   <option value="">Choisir une voie</option>
                   {state.routes.map((route) => (
                     <option key={route.id} value={route.id}>
-                      {formatRouteName(route)} · corde {route.numeroCorde} · {route.cotationAjustee}
+                      {formatRouteForRealisation(route)}
                     </option>
                   ))}
                 </select>
@@ -3495,7 +3505,7 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                       <div className="subcard editable-realisation-card" key={realisation.id}>
                         <div className="card-header">
                           <div>
-                            <strong>{fullName(participant)} — {route ? formatRouteName(route) : "Voie inconnue"}</strong>
+                            <strong>{fullName(participant)} — {route ? formatRouteForRealisation(route) : "Voie inconnue"}</strong>
                             <div className="small">
                               {formatDateShortFr(realisation.dateRealisation?.slice(0, 10))}
                               {" · "}
@@ -3553,7 +3563,7 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                             >
                               {state.routes.map((routeOption) => (
                                 <option key={routeOption.id} value={routeOption.id}>
-                                  {formatRouteName(routeOption)} · corde {routeOption.numeroCorde} · {routeOption.cotationAjustee}
+                                  {formatRouteForRealisation(routeOption)}
                                 </option>
                               ))}
                             </select>
