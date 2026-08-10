@@ -34,4 +34,6 @@ test("les réalisations sont repliables et la voie est choisie dans la fenêtre"
   assert.match(source, /openRealisationModal\("", state\.selectedParticipantProgress\)/);
   assert.doesNotMatch(source, /progressEntryRouteId/);
   assert.match(source, /!state\.selectedParticipantProgress && `\$\{fullName\(participant\)\} — `/);
+  assert.match(source, /\{\(state\.selectedParticipantProgress \|\| selectedRouteProgress\) && <div className="card"/);
+  assert.doesNotMatch(source, /Choisis un grimpeur ou une voie pour afficher les réalisations/);
 });
