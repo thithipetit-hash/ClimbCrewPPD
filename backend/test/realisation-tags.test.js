@@ -13,3 +13,10 @@ test("une caractéristique de voie inconnue est refusée", () => {
     ValidationError,
   );
 });
+
+test("une voie est limitée à trois caractéristiques", () => {
+  assert.throws(
+    () => validateRoutePayload({ tags: ["dalle", "technique", "physique", "continuite"] }, { partial: true }),
+    ValidationError,
+  );
+});
