@@ -6,5 +6,5 @@
  */
 const configuredVersion = String(import.meta.env?.VITE_APP_VERSION || "").trim();
 
-export const APP_VERSION = configuredVersion || "260810.130";
+export const APP_VERSION = configuredVersion || "260810.131";
 export const APP_VERSION_PATTERN = /^\d{6}\.\d{3}$/;
