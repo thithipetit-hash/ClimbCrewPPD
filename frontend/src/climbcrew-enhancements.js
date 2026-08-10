@@ -705,8 +705,35 @@ function injectStyles() {
        modifier l'apparence lors d'un appui tactile ou d'un clic classique. */
     :where(button, a, input, select, textarea, summary):focus-visible {
       outline:3px solid #f59e0b!important;
-      outline-offset:3px!important;
+      outline-offset:0!important;
       box-shadow:0 0 0 2px #ffffff!important;
+    }
+    .progression-filters > div > label {
+      display:block!important;
+      position:relative;
+      z-index:1;
+      margin-bottom:6px!important;
+    }
+    .editable-realisation-card {
+      padding:0!important;
+      overflow:hidden;
+    }
+    .editable-realisation-card > .realisation-summary {
+      padding:7px 10px!important;
+      margin:0!important;
+      cursor:pointer;
+      list-style-position:inside;
+    }
+    .editable-realisation-card[open] > .realisation-summary {
+      margin-bottom:7px!important;
+      border-bottom:1px solid var(--cc-hairline);
+    }
+    .editable-realisation-card > :not(summary) {
+      margin-left:10px!important;
+      margin-right:10px!important;
+    }
+    .editable-realisation-card > :last-child {
+      margin-bottom:10px!important;
     }
 
     /* Les commandes composées uniquement d'une icône disposent d'une zone
