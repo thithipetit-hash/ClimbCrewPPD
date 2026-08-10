@@ -26,3 +26,12 @@ test("les formulaires de réalisation présentent corde, cotation, ouvreur puis 
   assert.match(source, /formatRouteForRealisation\(realisationModalRoute\)/);
   assert.match(source, /formatRouteForRealisation\(routeOption\)/);
 });
+
+test("les réalisations sont repliables et la voie est choisie dans la fenêtre", async () => {
+  const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.match(source, /<details className="subcard editable-realisation-card"/);
+  assert.match(source, /<summary className="card-header realisation-summary">/);
+  assert.match(source, /openRealisationModal\("", state\.selectedParticipantProgress\)/);
+  assert.doesNotMatch(source, /progressEntryRouteId/);
+  assert.match(source, /!state\.selectedParticipantProgress && `\$\{fullName\(participant\)\} — `/);
+});
