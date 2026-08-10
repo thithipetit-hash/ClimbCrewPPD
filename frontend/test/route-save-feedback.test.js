@@ -19,3 +19,10 @@ test("la voie est présentée sur deux lignes sans répéter la corde", async ()
   assert.match(source, /className="route-secondary-line"/);
   assert.match(source, /routeSortMode !== "corde"/);
 });
+
+test("les formulaires de réalisation présentent corde, cotation, ouvreur puis nom", async () => {
+  const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.match(source, /return \[rope, grade, opener, name\]\.filter\(Boolean\)\.join\(" · "\)/);
+  assert.match(source, /formatRouteForRealisation\(realisationModalRoute\)/);
+  assert.match(source, /formatRouteForRealisation\(routeOption\)/);
+});
