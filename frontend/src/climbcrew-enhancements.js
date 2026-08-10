@@ -511,6 +511,28 @@ function injectStyles() {
       white-space:nowrap;
       color:#ffffff!important;
     }
+    /* Contraste explicite des statistiques par cotation sur ordinateur.
+       text-fill neutralise les styles de thème propres à certains navigateurs. */
+    .app .card .lead-grade-row {
+      background:#334155!important;
+      color:#ffffff!important;
+      opacity:1!important;
+    }
+    .app .card .lead-grade-row > strong,
+    .app .card .lead-grade-row > span,
+    .app .card .lead-grade-row .small {
+      color:#ffffff!important;
+      -webkit-text-fill-color:#ffffff!important;
+      opacity:1!important;
+      text-shadow:none!important;
+    }
+    .app .card .lead-grade-row > strong {
+      font-weight:800!important;
+    }
+    .app .card .lead-grade-row > span {
+      font-size:13px!important;
+      font-weight:600!important;
+    }
     .route-card .moulinette-badge {
       background:#fee2e2!important;
       border-color:#ef4444!important;
