@@ -479,6 +479,22 @@ function injectStyles() {
       background:var(--cc-accent)!important;
       color:var(--cc-accent-text)!important;
     }
+    .binary-choice {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:5px;
+    }
+    .binary-choice button {
+      min-height:40px!important;
+      background:var(--cc-surface-2)!important;
+      color:var(--cc-ink)!important;
+      border:1px solid var(--cc-hairline)!important;
+    }
+    .binary-choice button.selected {
+      background:var(--cc-accent)!important;
+      color:var(--cc-accent-text)!important;
+      border-color:var(--cc-accent)!important;
+    }
     .route-ranking-row {
       gap:8px!important;
       background:#334155!important;
