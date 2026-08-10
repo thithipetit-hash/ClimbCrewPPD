@@ -301,9 +301,20 @@ function injectStyles() {
     .participant-identity { display:inline-flex!important; align-items:center!important; gap:6px!important; min-width:0!important; }
     .passport-dot { width:14px!important; min-width:14px!important; height:14px!important; border-radius:999px!important; }
     .participant-name { display:block!important; margin:0!important; padding:0!important; line-height:1.05!important; }
-    .session-participant-list .participant-name { font-weight:400!important; }
+    .session-participant-list .participant-name {
+      min-width:0!important;
+      overflow:hidden!important;
+      text-overflow:ellipsis!important;
+      white-space:nowrap!important;
+      font-weight:400!important;
+    }
     .session-participant-list { display:grid!important; grid-template-columns:minmax(0,1fr)!important; gap:2px!important; }
     .session-participant-list .participant-row { min-height:28px!important; padding:2px 3px 2px 6px!important; }
+    .session-participant-list .participant-identity {
+      min-width:0!important;
+      overflow:hidden!important;
+      white-space:nowrap!important;
+    }
     .session-participant-list .remove-button {
       display:inline-flex!important; align-items:center!important; justify-content:center!important;
       width:24px!important; min-width:24px!important; height:24px!important; min-height:24px!important;
@@ -323,6 +334,25 @@ function injectStyles() {
       background:transparent!important; border-radius:999px!important;
     }
     .shell { touch-action:pan-y; overscroll-behavior-x:contain; }
+
+    /* La liste s'adapte à la largeur disponible tout en conservant chaque
+       inscrit sur une seule ligne. */
+    @media (min-width:720px) {
+      .session-participant-list {
+        grid-template-columns:repeat(2,minmax(0,1fr))!important;
+        gap:4px 6px!important;
+      }
+    }
+    @media (min-width:1100px) {
+      .session-participant-list {
+        grid-template-columns:repeat(3,minmax(0,1fr))!important;
+      }
+    }
+    @media (min-width:1500px) {
+      .session-participant-list {
+        grid-template-columns:repeat(4,minmax(0,1fr))!important;
+      }
+    }
 
     /* Les flèches et la date forment un seul bloc insécable sur toutes les largeurs. */
     .date-nav {
