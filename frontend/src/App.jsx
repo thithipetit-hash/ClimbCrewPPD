@@ -556,9 +556,8 @@ function App() {
   // depuis l'onglet Voies.
   const [realisationModalRouteId, setRealisationModalRouteId] = useState(null);
 
-  // Filtres de consultation et voie choisie pour une nouvelle réalisation depuis Progression.
+  // Filtres de consultation de la progression.
   const [selectedRouteProgress, setSelectedRouteProgress] = useState("");
-  const [progressEntryRouteId, setProgressEntryRouteId] = useState("");
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -1531,14 +1530,14 @@ function App() {
       sessionId: defaultParticipantId && latestRegisteredDay
         ? resolveSessionIdForRealisation(defaultParticipantId, latestRegisteredDay) || ""
         : "",
-      voieId: routeId,
+      voieId: routeId || "",
       styleRealisation: route?.moulinetteOnly ? "moulinette" : (prev.styleRealisation || "a_vue"),
       cotationProposee: route?.cotationAjustee || route?.cotationReference || "",
       commentaire: "",
       rating: 0,
     }));
 
-    setRealisationModalRouteId(routeId);
+    setRealisationModalRouteId(routeId || "");
   }
 
   function closeRealisationModal() {
@@ -2995,14 +2994,14 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
         )}
       </aside>
 
-      {realisationModalRoute && (
+      {realisationModalRouteId !== null && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Enregistrer une voie réalisée">
           <div className="modal-panel">
             <div className="card-header">
               <div>
                 <h2 className="modal-title">Enregistrer une voie réalisée</h2>
                 <div className="small">
-                  {formatRouteForRealisation(realisationModalRoute)}
+                  {realisationModalRoute ? formatRouteForRealisation(realisationModalRoute) : "Choisir une voie"}
                 </div>
               </div>
               <button className="danger ghost modal-close" onClick={closeRealisationModal} aria-label="Fermer">×</button>
@@ -3061,7 +3060,25 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
 
               <div>
                 <label>Voie</label>
-                <input value={formatRouteForRealisation(realisationModalRoute)} readOnly />
+                <select
+                  value={newRealisation.voieId}
+                  onChange={(event) => {
+                    const voieId = event.target.value;
+                    const route = routesById[voieId];
+                    setRealisationModalRouteId(voieId);
+                    setNewRealisation((prev) => ({
+                      ...prev,
+                      voieId,
+                      styleRealisation: route?.moulinetteOnly ? "moulinette" : prev.styleRealisation,
+                      cotationProposee: route?.cotationAjustee || route?.cotationReference || "",
+                    }));
+                  }}
+                >
+                  <option value="">Choisir une voie</option>
+                  {state.routes.map((route) => (
+                    <option key={route.id} value={route.id}>{formatRouteForRealisation(route)}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -3081,7 +3098,7 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
 
               <div>
                 <label>Cotation consensus</label>
-                <input value={routeAggregatesById[realisationModalRoute.id]?.consensusGrade || "Non calculée"} readOnly />
+                <input value={realisationModalRoute ? routeAggregatesById[realisationModalRoute.id]?.consensusGrade || "Non calculée" : "Choisir une voie"} readOnly />
               </div>
 
               <div className="realisation-rating">
@@ -3110,7 +3127,7 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
 
             <div className="modal-actions">
               <button className="secondary" onClick={closeRealisationModal}>Annuler</button>
-              <button onClick={addRealisation} disabled={!newRealisation.selectedDay || !newRealisation.participantId || !newRealisation.rating || modalEligibleParticipants.length === 0}>Enregistrer</button>
+              <button onClick={addRealisation} disabled={!newRealisation.selectedDay || !newRealisation.participantId || !newRealisation.voieId || !newRealisation.rating || modalEligibleParticipants.length === 0}>Enregistrer</button>
             </div>
           </div>
         </div>
@@ -3434,25 +3451,9 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
             </div>
 
             <div className="card" style={{ marginTop: 12 }}>
-              <div className="card-header"><h3>Saisir une réalisation</h3></div>
-              <div className="group">
-                <select
-                  aria-label="Choisir la voie à réaliser"
-                  value={progressEntryRouteId}
-                  onChange={(event) => setProgressEntryRouteId(event.target.value)}
-                  style={{ flex: "1 1 260px" }}
-                >
-                  <option value="">Choisir une voie</option>
-                  {state.routes.map((route) => (
-                    <option key={route.id} value={route.id}>
-                      {formatRouteForRealisation(route)}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  disabled={!progressEntryRouteId}
-                  onClick={() => openRealisationModal(progressEntryRouteId, state.selectedParticipantProgress)}
-                >
+              <div className="card-header">
+                <h3>Saisir une réalisation</h3>
+                <button onClick={() => openRealisationModal("", state.selectedParticipantProgress)}>
                   Nouvelle réalisation
                 </button>
               </div>
@@ -3509,10 +3510,10 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                     );
 
                     return (
-                      <div className="subcard editable-realisation-card" key={realisation.id}>
-                        <div className="card-header">
+                      <details className="subcard editable-realisation-card" key={realisation.id}>
+                        <summary className="card-header realisation-summary">
                           <div>
-                            <strong>{fullName(participant)} — {route ? formatRouteForRealisation(route) : "Voie inconnue"}</strong>
+                            <strong>{!state.selectedParticipantProgress && `${fullName(participant)} — `}{route ? formatRouteForRealisation(route) : "Voie inconnue"}</strong>
                             <div className="small">
                               {formatDateShortFr(realisation.dateRealisation?.slice(0, 10))}
                               {" · "}
@@ -3521,12 +3522,12 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                           </div>
                           <div className="group">
                             {isIncludedInCpr && <span className="pill">Prise en compte dans le CPR</span>}
-                            <button className="danger" onClick={() => deleteRealisation(realisation)}>Supprimer</button>
+                            <button className="danger" onClick={(event) => { event.preventDefault(); event.stopPropagation(); deleteRealisation(realisation); }}>Supprimer</button>
                           </div>
-                        </div>
+                        </summary>
 
                         <div className="grid three">
-                          <div>
+                          {!state.selectedParticipantProgress && <div>
                             <label>Participant</label>
                             <select
                               value={realisation.participantId}
@@ -3544,7 +3545,7 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                                 <option key={participantOption.id} value={participantOption.id}>{fullName(participantOption)}</option>
                               ))}
                             </select>
-                          </div>
+                          </div>}
 
                           <div>
                             <label>Séance</label>
@@ -3611,7 +3612,7 @@ button:not(.danger):not(.secondary):not(.ghost):not(.rating-star),
                             onChange={(event) => updateRealisation(realisation.id, { commentaire: event.target.value })}
                           />
                         </div>
-                      </div>
+                      </details>
                     );
                   })
                 )}
