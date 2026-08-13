@@ -23,7 +23,6 @@ export default function Progression({
   cprByParticipantId,
   deleteRealisation,
   updateRealisation,
-  routeAggregatesById,
   expandedRealisationIds,
   setRealisationExpanded,
   allProgressRealisationsExpanded,
@@ -151,6 +150,9 @@ export default function Progression({
                   (performance) => String(performance.id) === String(realisation.id)
                 )
               );
+              const rating = Number(realisation.rating);
+              const hasRating = Number.isInteger(rating) && rating >= 1 && rating <= 5;
+              const ratingStars = hasRating ? `${"★".repeat(rating)}${"☆".repeat(5 - rating)}` : "";
 
               return (
                 <details className="subcard editable-realisation-card"
@@ -165,6 +167,7 @@ export default function Progression({
                         {formatDateShortFr(realisation.dateRealisation?.slice(0, 10))}
                         {" · "}
                         {STYLE_LABELS[realisation.styleRealisation] || realisation.styleRealisation}
+                        {hasRating && <> · {ratingStars}</>}
                       </div>
                     </div>
                     <div className="group">
@@ -245,11 +248,12 @@ export default function Progression({
                       </select>
                     </div>
 
-                    <div>
-                      <label>Cotation consensus</label>
-                      <input value={routeAggregatesById[realisation.voieId]?.consensusGrade || "Non calculée"} readOnly />
-                    </div>
-
+                    {hasRating && (
+                      <div>
+                        <label>Évaluation</label>
+                        <input value={`${ratingStars} (${rating}/5)`} readOnly />
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ marginTop: 8 }}>
