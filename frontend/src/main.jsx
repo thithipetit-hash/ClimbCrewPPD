@@ -11,7 +11,9 @@ import "./session-status-display.js";
 import "./account-participant-priority.js";
 import "./realisation-mode-ui.js";
 import "./progression-ui.js";
+import "./badge-faq-ui.js";
 import "./styles/index.css";
+import "./styles/badges.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -20,5 +22,4 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     </ErrorBoundary>
   </React.StrictMode>
 );
-
 

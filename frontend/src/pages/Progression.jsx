@@ -1,5 +1,6 @@
 import React from "react";
 import Button from "../components/Button.jsx";
+import ParticipantBadges from "../components/ParticipantBadges.jsx";
 import { GRADES, fullName, formatRouteForRealisation, formatPoints, formatDateShortFr } from "../lib/domain.js";
 import { STYLE_LABELS } from "../lib/ui-config.js";
 import CprEvolutionChart from "../sections/CprEvolutionChart.jsx";
@@ -87,6 +88,14 @@ export default function Progression({
           <div className="stat"><div className="label">CPR actuel</div><div className="value">{participantProgressStats.cpr.currentGrade || "-"}</div></div>
           <div className="stat"><div className="label">Points</div><div className="value">{formatPoints(pointsByParticipantId[selectedParticipantProgress])}</div></div>
         </div>
+      )}
+
+      {selectedParticipantProgress && (
+        <ParticipantBadges
+          realisations={selectedParticipantRealisations}
+          routesById={routesById}
+          sessions={getParticipantSessions(selectedParticipantProgress)}
+        />
       )}
 
       {selectedParticipantProgress && (

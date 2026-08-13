@@ -1,0 +1,144 @@
+.participant-badges-card {
+  margin-top: 12px;
+}
+
+.participant-badges-header {
+  align-items: flex-start;
+}
+
+.participant-badges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 10px;
+}
+
+.participant-badge-tile {
+  --badge-accent: #38bdf8;
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 74px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--badge-accent) 44%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--badge-accent) 10%, rgba(2, 6, 23, .72));
+}
+
+.participant-badge-tile--achievement { --badge-accent: #22c55e; }
+.participant-badge-tile--level { --badge-accent: #3b82f6; }
+.participant-badge-tile--consistency { --badge-accent: #14b8a6; }
+.participant-badge-tile--exploration { --badge-accent: #8b5cf6; }
+.participant-badge-tile--contribution { --badge-accent: #f59e0b; }
+.participant-badge-tile--prestige { --badge-accent: #fbbf24; }
+
+.participant-badge-tile.is-earned {
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--badge-accent) 14%, transparent);
+}
+
+.participant-badge-tile.is-pending {
+  opacity: .58;
+  filter: grayscale(.72);
+}
+
+.participant-badge-emblem {
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 48px;
+  background: var(--badge-accent);
+  color: #06111d;
+  border: 2px solid rgba(255, 255, 255, .72);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .22);
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -.03em;
+}
+
+.participant-badge-emblem--medal {
+  border-radius: 999px;
+}
+
+.participant-badge-emblem--shield {
+  clip-path: polygon(12% 5%, 88% 5%, 96% 22%, 88% 72%, 50% 98%, 12% 72%, 4% 22%);
+}
+
+.participant-badge-emblem--ribbon {
+  border-radius: 50% 50% 38% 38%;
+  clip-path: polygon(10% 0, 90% 0, 92% 68%, 72% 68%, 66% 100%, 50% 78%, 34% 100%, 28% 68%, 8% 68%);
+}
+
+.participant-badge-emblem--patch {
+  clip-path: polygon(25% 4%, 75% 4%, 98% 50%, 75% 96%, 25% 96%, 2% 50%);
+}
+
+.participant-badge-emblem--rosette {
+  clip-path: polygon(50% 0, 61% 12%, 77% 7%, 82% 23%, 98% 28%, 90% 44%, 100% 58%, 84% 67%, 85% 84%, 67% 84%, 58% 100%, 44% 90%, 28% 98%, 22% 80%, 6% 75%, 14% 58%, 0 47%, 14% 36%, 6% 19%, 25% 17%, 33% 1%);
+}
+
+.participant-badge-emblem--crystal {
+  clip-path: polygon(50% 0, 90% 22%, 100% 62%, 50% 100%, 0 62%, 10% 22%);
+}
+
+.participant-badge-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.participant-badge-copy strong {
+  color: #f8fafc;
+  line-height: 1.15;
+}
+
+.participant-badge-copy span {
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.participant-badges-pending {
+  margin-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, .2);
+  padding-top: 10px;
+}
+
+.participant-badges-pending > summary {
+  cursor: pointer;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.participant-badges-grid--pending {
+  margin-top: 10px;
+}
+
+@media (max-width: 700px) {
+  .participant-badges-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .participant-badge-tile {
+    grid-template-columns: 42px minmax(0, 1fr);
+    min-height: 66px;
+    padding: 8px;
+  }
+
+  .participant-badge-emblem {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 390px) {
+  .participant-badges-grid {
+    grid-template-columns: 1fr;
+  }
+}
