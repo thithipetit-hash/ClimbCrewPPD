@@ -1,0 +1,76 @@
+name: Split Gecko Images
+
+on:
+  push:
+    branches:
+      - fix-individual-geckos-260814-010
+    paths:
+      - .github/workflows/split-gecko-images.yml
+
+permissions:
+  contents: write
+
+jobs:
+  split-geckos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix-individual-geckos-260814-010
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installer Pillow
+        run: python -m pip install --disable-pip-version-check pillow
+
+      - name: Découper les 16 Gecko en WebP individuels
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+
+          atlas = Path('frontend/public/media/geckos/gecko-atlas.webp')
+          out = Path('frontend/public/media/geckos')
+          image = Image.open(atlas).convert('RGB')
+
+          tile_w, tile_h = 260, 470
+          expected = (tile_w * 8, tile_h * 2)
+          if image.size != expected:
+              raise SystemExit(f'Atlas Gecko inattendu: {image.size}, attendu: {expected}')
+
+          for row, variant in enumerate(('neutral', 'feminine')):
+              for col in range(8):
+                  level = col + 1
+                  box = (col * tile_w, row * tile_h, (col + 1) * tile_w, (row + 1) * tile_h)
+                  tile = image.crop(box)
+                  target = out / f'gecko-{variant}-{level}.webp'
+                  tile.save(target, 'WEBP', quality=90, method=6)
+                  print(target, target.stat().st_size)
+          PY
+
+      - name: Vérifier les fichiers générés
+        shell: bash
+        run: |
+          test $(find frontend/public/media/geckos -maxdepth 1 -name 'gecko-neutral-*.webp' | wc -l) -eq 8
+          test $(find frontend/public/media/geckos -maxdepth 1 -name 'gecko-feminine-*.webp' | wc -l) -eq 8
+          file frontend/public/media/geckos/gecko-neutral-1.webp
+          file frontend/public/media/geckos/gecko-feminine-8.webp
+
+      - name: Committer les Gecko individuels
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/public/media/geckos/gecko-neutral-*.webp frontend/public/media/geckos/gecko-feminine-*.webp
+          if git diff --cached --quiet; then
+            echo 'Aucun changement à committer.'
+            exit 0
+          fi
+          git commit -m 'Découpe les 16 Gecko en fichiers individuels'
+          git push origin HEAD:fix-individual-geckos-260814-010
