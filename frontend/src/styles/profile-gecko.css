@@ -12,26 +12,20 @@
   place-items: center;
   margin-top: 12px;
   padding: 16px;
-  min-height: 350px;
+  min-height: 0;
   border: 1px solid color-mix(in srgb, var(--gecko-accent) 24%, transparent);
   border-radius: 18px;
   background:
-    radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--gecko-accent) 10%, transparent), transparent 52%),
-    rgba(255, 255, 255, 0.34);
+    radial-gradient(circle at 50% 28%, color-mix(in srgb, var(--gecko-accent) 12%, transparent), transparent 52%),
+    rgba(255, 255, 255, 0.42);
 }
 
 .profile-gecko-artwork {
-  width: min(260px, 76vw);
-  aspect-ratio: 180 / 330;
-  border: 3px solid var(--gecko-accent);
-  border-radius: 20px;
-  background-color: #fff;
-  background-image: url("/geckos/gecko-evolution.webp");
-  background-repeat: no-repeat;
-  background-size: 800% 200%;
-  box-shadow:
-    0 16px 38px rgba(15, 23, 42, 0.18),
-    0 0 0 1px rgba(255, 255, 255, 0.85) inset;
+  display: block;
+  width: min(340px, 82vw);
+  height: auto;
+  max-height: 520px;
+  filter: drop-shadow(0 16px 24px rgba(15, 23, 42, 0.13));
 }
 
 @media (max-width: 640px) {
@@ -40,12 +34,11 @@
   }
 
   .profile-gecko-stage {
-    min-height: 0;
-    padding: 12px;
+    padding: 10px;
   }
 
   .profile-gecko-artwork {
-    width: min(230px, 72vw);
-    border-radius: 16px;
+    width: min(292px, 88vw);
+    max-height: 460px;
   }
 }
