@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   serializeParticipant,
+  serializePublicParticipant,
   serializePrivateParticipant,
 } from "../admin-users/participant-privacy-service.js";
 
@@ -21,7 +22,7 @@ const participantRow = {
   can_admin: true,
   avatar_id: "lynx",
   crest_id: "flamme",
-  profile_public: false,
+  profile_public: true,
   custom_avatar_image: "data:image/webp;base64,SECRET",
 };
 
@@ -30,10 +31,28 @@ test("la vue complète utilise login_email comme adresse canonique", () => {
   assert.equal(participant.email, "alice@example.test");
   assert.equal(participant.avatarId, "lynx");
   assert.equal(participant.customAvatarImage, "data:image/webp;base64,SECRET");
+  assert.equal(participant.cotisation, true);
+  assert.equal(participant.ffme, true);
+  assert.equal(participant.canAdmin, true);
+});
+
+test("la vue publique conserve le profil d'escalade sans divulguer les données administratives", () => {
+  const participant = serializePublicParticipant(participantRow);
+
+  assert.equal(participant.id, "42");
+  assert.equal(participant.avatarId, "lynx");
+  assert.equal(participant.crestId, "flamme");
+  assert.equal(participant.customAvatarImage, "data:image/webp;base64,SECRET");
+  assert.equal(participant.profilePublic, true);
+
+  assert.equal(participant.email, "");
+  assert.equal(participant.cotisation, false);
+  assert.equal(participant.ffme, false);
+  assert.equal(participant.canAdmin, false);
 });
 
 test("la vue privée ne divulgue pas les données personnelles ou administratives", () => {
-  const participant = serializePrivateParticipant(participantRow);
+  const participant = serializePrivateParticipant({ ...participantRow, profile_public: false });
 
   assert.equal(participant.id, "42");
   assert.equal(participant.nom, "Martin");
@@ -79,6 +98,7 @@ test("les lectures participants et réalisations utilisent les contrôleurs de c
 
   assert.match(integration, /path === "\/participants"[\s\S]*listParticipantsWithPrivacy/);
   assert.match(integration, /path === "\/realisations"[\s\S]*listRealisationsWithPrivacy/);
+  assert.match(privacy, /serializePublicParticipant/);
   assert.match(privacy, /r\.participant_id = \$2/);
   assert.match(privacy, /coalesce\(p\.profile_public, false\) = true/);
 });
