@@ -1,9 +1,9 @@
 import { getPool } from "./database.js";
 
 /**
- * Sérialisation complète d'un grimpeur, réservée à son propre compte, aux
- * administrateurs et aux profils ayant explicitement choisi d'être publics.
- * `login_email` est prioritaire : `email` reste une colonne de compatibilité.
+ * Sérialisation complète d'un grimpeur, réservée à son propre compte et aux
+ * administrateurs. `login_email` est prioritaire : `email` reste une colonne
+ * de compatibilité pendant la transition du modèle de données.
  */
 export function serializeParticipant(row) {
   return {
@@ -21,6 +21,33 @@ export function serializeParticipant(row) {
     avatarId: row.avatar_id || "gecko",
     crestId: row.crest_id || "cristal",
     profilePublic: row.profile_public !== false,
+    customAvatarImage: row.custom_avatar_image || "",
+  };
+}
+
+/**
+ * Vue d'un profil public pour les autres membres.
+ *
+ * Le profil d'escalade peut être consulté, y compris son avatar et sa
+ * progression, mais les coordonnées et informations administratives restent
+ * privées même lorsque `profile_public` vaut true.
+ */
+export function serializePublicParticipant(row) {
+  return {
+    id: String(row.id),
+    nom: row.nom,
+    prenom: row.prenom,
+    email: "",
+    passport: row.passport,
+    sexe: row.sexe,
+    cotisation: false,
+    ffme: false,
+    canEncadrer: Boolean(row.can_encadrer),
+    canReferer: Boolean(row.can_referer),
+    canAdmin: false,
+    avatarId: row.avatar_id || "gecko",
+    crestId: row.crest_id || "cristal",
+    profilePublic: true,
     customAvatarImage: row.custom_avatar_image || "",
   };
 }
@@ -55,8 +82,10 @@ export function serializePrivateParticipant(row) {
 
 /**
  * Remplace GET /participants du serveur historique.
- * Un membre voit son propre profil complet ; un administrateur voit tout ; les
- * autres membres ne reçoivent qu'une vue minimale des profils privés.
+ *
+ * - administrateur ou propriétaire : vue complète ;
+ * - autre membre + profil public : profil d'escalade sans données admin ;
+ * - autre membre + profil privé : vue opérationnelle minimale.
  */
 export async function listParticipantsWithPrivacy(req, res) {
   try {
@@ -73,12 +102,10 @@ export async function listParticipantsWithPrivacy(req, res) {
     const isAdmin = req.auth?.user?.role === "admin";
 
     res.json(result.rows.map((row) => {
-      const canSeeFullProfile = isAdmin
-        || row.profile_public !== false
-        || String(row.id) === ownParticipantId;
-      return canSeeFullProfile
-        ? serializeParticipant(row)
-        : serializePrivateParticipant(row);
+      const isOwnProfile = String(row.id) === ownParticipantId;
+      if (isAdmin || isOwnProfile) return serializeParticipant(row);
+      if (row.profile_public !== false) return serializePublicParticipant(row);
+      return serializePrivateParticipant(row);
     }));
   } catch (error) {
     console.error("GET /participants privacy", error);
