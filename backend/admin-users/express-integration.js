@@ -16,6 +16,10 @@ import {
   verifyEmailRequest,
 } from "./account-service.js";
 import { exportAllData } from "./export-service.js";
+import {
+  listParticipantsWithPrivacy,
+  listRealisationsWithPrivacy,
+} from "./participant-privacy-service.js";
 import { requireAdmin, requireAuthUser } from "./security.js";
 import { createCrossOriginCsrfBridge } from "../deployment-compatibility.js";
 import { installBackupRoutes } from "../backup-routes.js";
@@ -86,11 +90,18 @@ export function installExpressIntegration() {
   };
 
   /**
-   * Remplace les contrôleurs GET de consultation des comptes et d'export des
-   * données par les services spécialisés du dossier admin-users.
+   * Remplace les contrôleurs GET sensibles par des services spécialisés.
+   * Les middlewares requireAuth/requireAdmin déjà présents dans server.js sont
+   * conservés : seul le contrôleur final est substitué.
    */
   const originalGet = express.application.get;
   express.application.get = function patchedGet(path, ...handlers) {
+    if (path === "/participants" && handlers.length) {
+      return replaceLastHandler(originalGet, this, path, handlers, listParticipantsWithPrivacy);
+    }
+    if (path === "/realisations" && handlers.length) {
+      return replaceLastHandler(originalGet, this, path, handlers, listRealisationsWithPrivacy);
+    }
     if (path === "/admin/auth/users" && handlers.length) {
       return replaceLastHandler(originalGet, this, path, handlers, listUsers);
     }
