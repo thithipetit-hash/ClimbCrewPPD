@@ -1,4 +1,4 @@
-/* ==========================================================================
+/* ========================================================================== 
    Navigation mobile basse
    Bandeau horizontal défilable : chaque onglet garde sa largeur propre afin
    que les libellés restent lisibles et ne se chevauchent jamais.
@@ -38,6 +38,33 @@
     overflow-wrap: normal;
     text-align: center;
     scroll-snap-align: start;
+  }
+
+  /*
+   * Le menu latéral administrateur contient davantage d'entrées que le menu
+   * standard. Il occupe donc toute la hauteur réellement disponible et peut
+   * défiler verticalement sans que ses derniers boutons passent sous la barre
+   * de navigation basse.
+   */
+  .sidebar {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .sidebar > * {
+    flex-shrink: 0;
+  }
+
+  /* La navigation basse est redondante quand le drawer est ouvert et ne doit
+     jamais recouvrir Log, Paramètres ou les réglages d'ambiance. */
+  .sidebar.open ~ .mobile-bottom-nav {
+    display: none !important;
   }
 
   .app {
