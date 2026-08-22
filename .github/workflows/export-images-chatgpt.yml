@@ -1,0 +1,43 @@
+name: Export application images
+
+on:
+  push:
+    branches:
+      - chatgpt-export-images-20260822
+    paths:
+      - '.github/workflows/export-images-chatgpt.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  export-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Collect application images
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p export
+          mapfile -d '' files < <(find . -type f \
+            \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.gif' -o -iname '*.webp' -o -iname '*.svg' -o -iname '*.ico' -o -iname '*.bmp' -o -iname '*.avif' -o -iname '*.tif' -o -iname '*.tiff' \) \
+            -not -path './.git/*' -print0 | sort -z)
+          printf '%s\n' "${#files[@]} images" > export/MANIFEST.txt
+          for file in "${files[@]}"; do
+            clean="${file#./}"
+            printf '%s\n' "$clean" >> export/MANIFEST.txt
+            mkdir -p "export/$(dirname "$clean")"
+            cp "$file" "export/$clean"
+          done
+
+      - name: Upload images archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClimbCrewPPD-images
+          path: export/
+          if-no-files-found: error
+          retention-days: 7
