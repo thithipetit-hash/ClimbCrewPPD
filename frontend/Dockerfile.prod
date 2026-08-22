@@ -16,10 +16,11 @@ WORKDIR /app
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=${VITE_API_URL}
 
-# Installation des dépendances depuis le registre public npm, sans dépendre
-# d'un lockfile éventuellement généré dans un contexte local d'entreprise.
-COPY package.json ./
-RUN npm install --no-audit --no-fund --registry=https://registry.npmjs.org/
+# Le build de production utilise exactement le même lockfile que la CI. npm ci
+# refuse toute divergence package.json/package-lock.json et garantit ainsi que
+# les dépendances validées sont celles réellement déployées.
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund --registry=https://registry.npmjs.org/
 COPY . .
 
 # Génère les fichiers HTML, CSS et JavaScript optimisés dans /app/dist.
