@@ -26,6 +26,8 @@ export const BADGE_IMAGE_PATH = Object.freeze({
   role_encadrant: `/media/avatars/split/role-encadrant.webp?v=260815008`,
   role_referent: `/media/avatars/split/role-referent.webp?v=260815008`,
   role_ouvreur: `/media/avatars/split/role-ouvreur.webp?v=260815008`,
+  role_initiateur_sae: `/media/badges/badge-initiateur-sae.svg?v=260822001`,
+  role_initiateur_sne: `/media/badges/badge-initiateur-sne.svg?v=260822001`,
   vol_1: `/media/badges/badge-vol.webp?v=260815012`,
   vol_5: `/media/badges/badge-vol.webp?v=260815012`,
   vol_10: `/media/badges/badge-vol.webp?v=260815012`,
@@ -149,6 +151,20 @@ function participantRoleBadges(participant, routesById) {
   );
 
   return [
+    participant.initiateurSae && {
+      id: "role_initiateur_sae",
+      name: "Initiateur SAE",
+      family: "contribution",
+      condition: "Qualification Initiateur SAE enregistrée par le club.",
+      earned: true,
+    },
+    participant.initiateurSne && {
+      id: "role_initiateur_sne",
+      name: "Initiateur SNE",
+      family: "contribution",
+      condition: "Qualification d’initiateur escalade en SNE enregistrée par le club.",
+      earned: true,
+    },
     participant.canEncadrer && {
       id: "role_encadrant",
       name: "Encadrant",
