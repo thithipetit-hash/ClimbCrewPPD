@@ -40,6 +40,7 @@ jobs:
           # Un déclenchement manuel peut demander une branche précise. Dans les
           # autres cas, le SHA de l'événement est validé sans ambiguïté.
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.branch || github.sha }}
+          fetch-depth: 2
 
       - name: Identifier le commit validé
         id: validated_commit
@@ -67,6 +68,13 @@ jobs:
           printf 'branch=%s\n' "$DEPLOY_BRANCH" >> "$GITHUB_OUTPUT"
           echo "Commit à valider : $VALIDATED_SHA"
           echo "Branche associée : $DEPLOY_BRANCH"
+
+      - name: Vérifier l'incrément de version
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: bash .github/scripts/verify-version.sh
 
       - name: Installer Node.js
         uses: actions/setup-node@v4
