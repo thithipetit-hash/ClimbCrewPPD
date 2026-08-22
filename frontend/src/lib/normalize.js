@@ -60,6 +60,8 @@ export function normalizeParticipant(participant = {}) {
     sexe: ["h", "f"].includes(normalizedWord(participant.sexe)) ? normalizedWord(participant.sexe) : "",
     cotisation: booleanValue(participant.cotisation),
     ffme: booleanValue(participant.ffme),
+    initiateurSae: booleanValue(participant.initiateurSae ?? participant.initiateur_sae),
+    initiateurSne: booleanValue(participant.initiateurSne ?? participant.initiateur_sne),
     canEncadrer: booleanValue(participant.canEncadrer ?? participant.can_encadrer),
     canReferer: booleanValue(participant.canReferer ?? participant.can_referer),
     canAdmin: booleanValue(participant.canAdmin ?? participant.can_admin),
