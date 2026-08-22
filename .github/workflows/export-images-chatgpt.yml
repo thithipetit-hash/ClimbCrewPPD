@@ -1,6 +1,9 @@
 name: Export application images
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - chatgpt-export-images-20260822
