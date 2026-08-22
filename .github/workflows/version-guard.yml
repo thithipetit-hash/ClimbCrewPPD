@@ -18,50 +18,10 @@ jobs:
       - name: Récupérer la branche proposée
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 2
 
       - name: Comparer la version avec main
         shell: bash
         env:
-          BASE_BRANCH: ${{ github.base_ref }}
-        run: |
-          set -euo pipefail
-
-          VERSION_FILE="frontend/src/lib/version.js"
-          VERSION_PATTERN='^[0-9]{8}\.[0-9]{3}$'
-
-          extract_version() {
-            sed -n 's/.*APP_VERSION = configuredVersion || "\([0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' "$1" | head -n 1
-          }
-
-          CURRENT_VERSION="$(extract_version "$VERSION_FILE")"
-
-          if [[ ! "$CURRENT_VERSION" =~ $VERSION_PATTERN ]]; then
-            echo "ERROR: version courante absente ou invalide dans $VERSION_FILE : '$CURRENT_VERSION'"
-            echo "Format attendu : AAAAMMJJ.NNN (ex. 20260821.001)."
-            exit 1
-          fi
-
-          git fetch --no-tags --depth=1 origin \
-            "refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"
-
-          BASE_CONTENT="$(mktemp)"
-          git show "refs/remotes/origin/${BASE_BRANCH}:${VERSION_FILE}" > "$BASE_CONTENT"
-          BASE_VERSION="$(extract_version "$BASE_CONTENT")"
-          rm -f "$BASE_CONTENT"
-
-          if [[ ! "$BASE_VERSION" =~ $VERSION_PATTERN ]]; then
-            echo "ERROR: version de référence invalide sur ${BASE_BRANCH} : '$BASE_VERSION'"
-            exit 1
-          fi
-
-          echo "Version de ${BASE_BRANCH} : $BASE_VERSION"
-          echo "Version proposée      : $CURRENT_VERSION"
-
-          if [[ "$CURRENT_VERSION" == "$BASE_VERSION" || "$CURRENT_VERSION" < "$BASE_VERSION" ]]; then
-            echo "ERROR: toute évolution doit incrémenter frontend/src/lib/version.js."
-            echo "La version proposée doit être strictement supérieure à $BASE_VERSION."
-            exit 1
-          fi
-
-          echo "Version correctement incrémentée : $BASE_VERSION -> $CURRENT_VERSION"
+          BASE_REF: ${{ github.base_ref }}
+        run: bash .github/scripts/verify-version.sh
