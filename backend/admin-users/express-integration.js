@@ -10,11 +10,15 @@ import {
   confirmEmailChange,
   forgotPassword,
   listUsers,
-  requestAccess,
   requestEmailChange,
   updateAdminRight,
   verifyEmailRequest,
 } from "./account-service.js";
+import {
+  associateExistingAccounts,
+  requestAccessWithAssociations,
+  setUserParticipantAssociation,
+} from "./association-service.js";
 import { exportAllData } from "./export-service.js";
 import {
   listParticipantsWithPrivacy,
@@ -81,7 +85,7 @@ export function installExpressIntegration() {
   const originalPost = express.application.post;
   express.application.post = function patchedPost(path, ...handlers) {
     if (path === "/auth/request-access" && handlers.length) {
-      return replaceLastHandler(originalPost, this, path, handlers, requestAccess);
+      return replaceLastHandler(originalPost, this, path, handlers, requestAccessWithAssociations);
     }
     if (path === "/auth/forgot-password" && handlers.length) {
       return replaceLastHandler(originalPost, this, path, handlers, forgotPassword);
@@ -128,6 +132,8 @@ export function installExpressIntegration() {
 
       if (!app[INSTALL_FLAG]) {
         app.post("/admin/auth/users/:id/admin", requireAdmin, updateAdminRight);
+        app.post("/admin/auth/associations/auto", requireAdmin, associateExistingAccounts);
+        app.put("/admin/auth/users/:id/participant", requireAdmin, setUserParticipantAssociation);
         app.get("/auth/verify-email", verifyEmailRequest);
         app.post("/auth/change-password", requireAuthUser, changePassword);
         app.post("/auth/change-email/request", requireAuthUser, requestEmailChange);
