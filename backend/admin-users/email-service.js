@@ -1,4 +1,12 @@
+import { randomBytes } from "node:crypto";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import nodemailer from "nodemailer";
+import {
+  encryptedBackupFileName,
+  encryptBackupFile,
+  parseBackupEmailEncryptionKey,
+} from "./backup-encryption.js";
 import {
   buildAccountApprovedEmail,
   buildAccountRequestConfirmation,
@@ -127,23 +135,51 @@ export async function sendEmailChangeConfirmation({ email, prenom, newEmail, con
 }
 
 export async function sendBackupEmail({ to, filePath, fileName, size }) {
-  const sizeMb = (Number(size || 0) / (1024 * 1024)).toFixed(2);
-  const now = new Date().toLocaleString("fr-FR", { timeZone: process.env.BACKUP_TIMEZONE || "Europe/Paris" });
-  return sendEmail({
-    to,
-    subject: `Sauvegarde ClimbClubCristal — ${fileName}`,
-    text: [
-      "Sauvegarde PostgreSQL complète de ClimbClubCristal.",
-      `Fichier : ${fileName}`,
-      `Taille : ${sizeMb} Mo`,
-      `Créée / envoyée : ${now}`,
-      "Conserver cette pièce jointe dans un emplacement protégé. Elle contient les données de l'application.",
-    ].join("\n"),
-    html: `<p><strong>Sauvegarde PostgreSQL complète de ClimbClubCristal.</strong></p><p>Fichier : ${fileName}<br>Taille : ${sizeMb} Mo<br>Créée / envoyée : ${now}</p><p>Conserver cette pièce jointe dans un emplacement protégé. Elle contient les données de l'application.</p>`,
-    attachments: [{
-      filename: fileName,
-      path: filePath,
-      contentType: "application/octet-stream",
-    }],
-  });
+  if (!EMAIL_ENABLED) {
+    return { sent: false, skipped: true, reason: "email_disabled" };
+  }
+
+  // Une sauvegarde complète ne doit jamais quitter le serveur en clair.
+  // La clé est fournie séparément par l'environnement et n'est jamais incluse
+  // dans le message ou dans le fichier chiffré.
+  const encryptionKey = parseBackupEmailEncryptionKey();
+  const encryptedFileName = encryptedBackupFileName(fileName);
+  const temporaryEncryptedPath = path.join(
+    path.dirname(filePath),
+    `.${encryptedFileName}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`,
+  );
+
+  try {
+    const encrypted = await encryptBackupFile({
+      inputPath: filePath,
+      outputPath: temporaryEncryptedPath,
+      key: encryptionKey,
+    });
+    const originalSizeMb = (Number(size || 0) / (1024 * 1024)).toFixed(2);
+    const encryptedSizeMb = (Number(encrypted.size || 0) / (1024 * 1024)).toFixed(2);
+    const now = new Date().toLocaleString("fr-FR", { timeZone: process.env.BACKUP_TIMEZONE || "Europe/Paris" });
+
+    return await sendEmail({
+      to,
+      subject: `Sauvegarde chiffrée ClimbClubCristal — ${encryptedFileName}`,
+      text: [
+        "Sauvegarde PostgreSQL complète de ClimbClubCristal, chiffrée avant envoi.",
+        `Fichier : ${encryptedFileName}`,
+        `Format : ${encrypted.format} — ${encrypted.algorithm}`,
+        `Taille du dump original : ${originalSizeMb} Mo`,
+        `Taille chiffrée : ${encryptedSizeMb} Mo`,
+        `Créée / envoyée : ${now}`,
+        "La clé de déchiffrement BACKUP_EMAIL_ENCRYPTION_KEY n'est jamais envoyée par e-mail.",
+        "Conserver cette clé dans un emplacement distinct et protégé.",
+      ].join("\n"),
+      html: `<p><strong>Sauvegarde PostgreSQL complète de ClimbClubCristal, chiffrée avant envoi.</strong></p><p>Fichier : ${encryptedFileName}<br>Format : ${encrypted.format} — ${encrypted.algorithm}<br>Taille du dump original : ${originalSizeMb} Mo<br>Taille chiffrée : ${encryptedSizeMb} Mo<br>Créée / envoyée : ${now}</p><p>La clé de déchiffrement <code>BACKUP_EMAIL_ENCRYPTION_KEY</code> n'est jamais envoyée par e-mail. Conserver cette clé dans un emplacement distinct et protégé.</p>`,
+      attachments: [{
+        filename: encryptedFileName,
+        path: temporaryEncryptedPath,
+        contentType: "application/octet-stream",
+      }],
+    });
+  } finally {
+    await fs.rm(temporaryEncryptedPath, { force: true }).catch(() => undefined);
+  }
 }
