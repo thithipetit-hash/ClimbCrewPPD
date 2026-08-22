@@ -1,9 +1,6 @@
 name: Export application images
 
 on:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - chatgpt-export-images-20260822
@@ -11,24 +8,27 @@ on:
       - '.github/workflows/export-images-chatgpt.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   export-images:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: chatgpt-export-images-20260822
 
-      - name: Collect application images
+      - name: Collect and archive application images
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p export
+          rm -rf export exports
+          mkdir -p export exports
           mapfile -d '' files < <(find . -type f \
             \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.gif' -o -iname '*.webp' -o -iname '*.svg' -o -iname '*.ico' -o -iname '*.bmp' -o -iname '*.avif' -o -iname '*.tif' -o -iname '*.tiff' \) \
-            -not -path './.git/*' -print0 | sort -z)
+            -not -path './.git/*' -not -path './export/*' -not -path './exports/*' -print0 | sort -z)
           printf '%s\n' "${#files[@]} images" > export/MANIFEST.txt
           for file in "${files[@]}"; do
             clean="${file#./}"
@@ -36,11 +36,29 @@ jobs:
             mkdir -p "export/$(dirname "$clean")"
             cp "$file" "export/$clean"
           done
+          cp export/MANIFEST.txt exports/MANIFEST.txt
+          (cd export && zip -q -r ../exports/ClimbCrewPPD-images.zip .)
+          ls -lh exports/ClimbCrewPPD-images.zip
+          head -n 5 exports/MANIFEST.txt
 
-      - name: Upload images archive
+      - name: Publish downloadable ZIP on temporary branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f exports/ClimbCrewPPD-images.zip exports/MANIFEST.txt
+          if git diff --cached --quiet; then
+            echo 'Archive already up to date.'
+            exit 0
+          fi
+          git commit -m 'chore: publish downloadable application images archive'
+          git push origin HEAD:chatgpt-export-images-20260822
+
+      - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: ClimbCrewPPD-images
-          path: export/
+          path: exports/ClimbCrewPPD-images.zip
           if-no-files-found: error
           retention-days: 7
