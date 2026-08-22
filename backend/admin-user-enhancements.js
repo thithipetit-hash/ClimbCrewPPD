@@ -3,6 +3,7 @@ import { installPoolCapture } from "./admin-users/database.js";
 import { installClientIpHardening } from "./admin-users/client-ip-hardening.js";
 import { installExpressIntegration } from "./admin-users/express-integration.js";
 import { installMigrationHook } from "./admin-users/migration-service.js";
+import { installInitiatorQualificationIntegration } from "./admin-users/initiator-qualification-integration.js";
 
 /**
  * Point d'entrée préchargé par Node avant server.js.
@@ -34,3 +35,7 @@ installExpressIntegration();
 // 5. Enveloppe le démarrage réseau afin d'appliquer les migrations PostgreSQL
 //    versionnées une fois le schéma historique créé mais avant la première requête.
 installMigrationHook();
+
+// 6. Ajoute la route d'administration dédiée aux qualifications Initiateur.
+//    Elle est installée avant l'écoute réseau et reste protégée par requireAdmin.
+installInitiatorQualificationIntegration();
