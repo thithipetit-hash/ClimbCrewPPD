@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-labelledby="title">
+  <title id="title">Badge Initiateur SNE</title>
+  <defs>
+    <linearGradient id="sne" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#115e59"/>
+    </linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset=".45" stop-color="#94a3b8"/>
+      <stop offset="1" stop-color="#e2e8f0"/>
+    </linearGradient>
+  </defs>
+  <path d="M41 28h158l18 31-16 112-81 51-81-51L23 59z" fill="url(#sne)" stroke="url(#metal)" stroke-width="12"/>
+  <path d="M46 149l39-55 24 27 39-65 48 93z" fill="#ccfbf1" opacity=".86"/>
+  <path d="M76 145c8-18 19-24 31-36 13-13 19-31 31-46" fill="none" stroke="#134e4a" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="103" cy="113" r="9" fill="#134e4a" stroke="#fff" stroke-width="4"/>
+  <text x="120" y="193" text-anchor="middle" font-family="system-ui,sans-serif" font-size="43" font-weight="900" fill="#fff">SNE</text>
+</svg>
