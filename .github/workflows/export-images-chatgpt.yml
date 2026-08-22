@@ -1,6 +1,9 @@
 name: Export application images
 
 on:
+  pull_request:
+    branches:
+      - chatgpt-export-images-20260822
   push:
     branches:
       - chatgpt-export-images-20260822
@@ -15,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout repository
+      - name: Checkout export branch
         uses: actions/checkout@v4
         with:
           ref: chatgpt-export-images-20260822
@@ -39,9 +42,8 @@ jobs:
           cp export/MANIFEST.txt exports/MANIFEST.txt
           (cd export && zip -q -r ../exports/ClimbCrewPPD-images.zip .)
           ls -lh exports/ClimbCrewPPD-images.zip
-          head -n 5 exports/MANIFEST.txt
 
-      - name: Publish downloadable ZIP on temporary branch
+      - name: Publish downloadable ZIP
         shell: bash
         run: |
           set -euo pipefail
