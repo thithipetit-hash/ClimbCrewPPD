@@ -24,6 +24,8 @@ import {
   listParticipantsWithPrivacy,
   listRealisationsWithPrivacy,
 } from "./participant-privacy-service.js";
+import { updateSessionWithAuthorization } from "./session-authorization-service.js";
+import { startAccessLogRetentionScheduler } from "./access-log-retention.js";
 import { requireAdmin, requireAuthUser } from "./security.js";
 import { createCrossOriginCsrfBridge } from "../deployment-compatibility.js";
 import { installBackupRoutes } from "../backup-routes.js";
@@ -94,6 +96,20 @@ export function installExpressIntegration() {
   };
 
   /**
+   * Sécurise la mise à jour des séances sans modifier le contrat API existant.
+   * Un membre standard ne peut toucher qu'à sa propre inscription ; un référent
+   * ou encadrant peut en plus changer le type/statut ; l'administration garde la
+   * gestion complète de la séance.
+   */
+  const originalPut = express.application.put;
+  express.application.put = function patchedPut(path, ...handlers) {
+    if (path === "/sessions/:id" && handlers.length) {
+      return replaceLastHandler(originalPut, this, path, handlers, updateSessionWithAuthorization);
+    }
+    return originalPut.call(this, path, ...handlers);
+  };
+
+  /**
    * Remplace les contrôleurs GET sensibles par des services spécialisés.
    * Les middlewares requireAuth/requireAdmin déjà présents dans server.js sont
    * conservés : seul le contrôleur final est substitué.
@@ -144,6 +160,7 @@ export function installExpressIntegration() {
 
       const server = originalListen.apply(app, args);
       startBackupScheduler();
+      await startAccessLogRetentionScheduler();
       return server;
     };
 
