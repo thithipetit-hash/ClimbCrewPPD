@@ -49,6 +49,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          cd /opt/climbcrew
           LOCAL_HOUR="$(TZ=Europe/Paris date +%H)"
           LOCAL_DATE="$(TZ=Europe/Paris date +%F)"
           LOCAL_WEEKDAY="$(TZ=Europe/Paris date +%u)"
@@ -81,10 +82,21 @@ jobs:
           SIZE="$(stat -c %s "$HOST_FILE")"
           echo "Sauvegarde journalière vérifiée : ${FILE_NAME} (${SIZE} octets)"
 
+          EMAIL_CONFIGURED=false
+          if grep -Eq '^BACKUP_RECIPIENT=.+$' .env.production; then
+            EMAIL_CONFIGURED=true
+          fi
+
+          EMAIL_STATUS="non applicable"
           if [ "$LOCAL_WEEKDAY" = "1" ]; then
-            if [ -f "${HOST_FILE}.mailed" ]; then
+            if [ "$EMAIL_CONFIGURED" != "true" ]; then
+              EMAIL_STATUS="désactivé (BACKUP_RECIPIENT absent)"
+              echo "Envoi du lundi : désactivé car aucun destinataire n'est configuré."
+            elif [ -f "${HOST_FILE}.mailed" ]; then
+              EMAIL_STATUS="OK"
               echo "Envoi du lundi : marqué comme envoyé avec succès."
             else
+              EMAIL_STATUS="en attente / à contrôler"
               echo "::warning::Le dump du lundi est présent mais aucun marqueur d'envoi e-mail réussi n'est encore visible."
             fi
           fi
@@ -95,10 +107,6 @@ jobs:
             echo "- Taille : ${SIZE} octets"
             echo "- Intégrité pg_restore : OK"
             if [ "$LOCAL_WEEKDAY" = "1" ]; then
-              if [ -f "${HOST_FILE}.mailed" ]; then
-                echo "- E-mail du lundi : OK"
-              else
-                echo "- E-mail du lundi : en attente / à contrôler"
-              fi
+              echo "- E-mail du lundi : ${EMAIL_STATUS}"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
