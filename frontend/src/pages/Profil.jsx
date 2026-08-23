@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import ClimberProfilePanel from "../components/ClimberProfilePanel.jsx";
 import ParticipantBadges from "../components/ParticipantBadges.jsx";
 import ProfileGecko from "../components/ProfileGecko.jsx";
 import CprEvolutionChart from "../sections/CprEvolutionChart.jsx";
 import { fullName, formatPoints } from "../lib/domain.js";
+import { apiFetch } from "../lib/api.js";
 
 export default function Profil({
   USE_API,
@@ -23,16 +24,83 @@ export default function Profil({
   normalizePassport,
   updateMyProfile,
 }) {
+  const [receiveAccountNotifications, setReceiveAccountNotifications] = useState(false);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationSaving, setNotificationSaving] = useState(false);
+  const [notificationError, setNotificationError] = useState("");
+
+  useEffect(() => {
+    if (!USE_API || authUser?.role !== "admin") return undefined;
+
+    let mounted = true;
+    setNotificationLoading(true);
+    setNotificationError("");
+
+    apiFetch("/auth/notification-preference")
+      .then((data) => {
+        if (mounted) setReceiveAccountNotifications(Boolean(data?.receiveAccountNotifications));
+      })
+      .catch((error) => {
+        if (mounted) setNotificationError(String(error.message || error));
+      })
+      .finally(() => {
+        if (mounted) setNotificationLoading(false);
+      });
+
+    return () => { mounted = false; };
+  }, [USE_API, authUser?.id, authUser?.role]);
+
+  async function saveAccountNotificationPreference(enabled) {
+    const previous = receiveAccountNotifications;
+    setReceiveAccountNotifications(enabled);
+    setNotificationSaving(true);
+    setNotificationError("");
+    try {
+      const result = await apiFetch("/auth/notification-preference", {
+        method: "PATCH",
+        body: JSON.stringify({ receiveAccountNotifications: enabled }),
+      });
+      setReceiveAccountNotifications(Boolean(result?.receiveAccountNotifications));
+    } catch (error) {
+      setReceiveAccountNotifications(previous);
+      setNotificationError(String(error.message || error));
+    } finally {
+      setNotificationSaving(false);
+    }
+  }
+
+  const adminNotificationCard = authUser?.role === "admin" ? (
+    <div className="card profile-privacy-card">
+      <div>
+        <strong>Notifications administrateur</strong>
+        <div className="small">Recevoir un e-mail lorsqu'une nouvelle demande de compte est confirmée.</div>
+      </div>
+      <label className="profile-privacy-toggle">
+        <input
+          type="checkbox"
+          checked={receiveAccountNotifications}
+          disabled={notificationLoading || notificationSaving}
+          onChange={(event) => saveAccountNotificationPreference(event.target.checked)}
+        />
+        <span>{receiveAccountNotifications ? "E-mails activés" : "E-mails désactivés"}</span>
+      </label>
+      {notificationError && <div className="error">{notificationError}</div>}
+    </div>
+  ) : null;
+
   if (!USE_API) {
     return <div className="card"><div className="muted-box">Mon Profil est disponible avec le backend API.</div></div>;
   }
 
   if (!myParticipant) {
     return (
-      <div className="card">
-        <div className="muted-box">
-          Votre compte n'est pas encore relié à une fiche grimpeur. Demandez à un administrateur de faire l'association pour retrouver vos statistiques et vos badges ici.
+      <div className="stack">
+        <div className="card">
+          <div className="muted-box">
+            Votre compte n'est pas encore relié à une fiche grimpeur. Demandez à un administrateur de faire l'association pour retrouver vos statistiques et vos badges ici.
+          </div>
         </div>
+        {adminNotificationCard}
       </div>
     );
   }
@@ -60,6 +128,8 @@ export default function Profil({
           <span className="pill">Sexe : {myParticipant.sexe ? String(myParticipant.sexe).toUpperCase() : "Non précisé"}</span>
         </div>
       </div>
+
+      {adminNotificationCard}
 
       <ProfileGecko
         grade={cpr.currentGrade || ""}

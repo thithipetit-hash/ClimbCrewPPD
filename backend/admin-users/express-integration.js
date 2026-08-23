@@ -12,8 +12,12 @@ import {
   listUsers,
   requestEmailChange,
   updateAdminRight,
-  verifyEmailRequest,
 } from "./account-service.js";
+import {
+  getAccountNotificationPreference,
+  updateAccountNotificationPreference,
+  verifyEmailRequestWithNotificationPreferences,
+} from "./account-notification-preference-service.js";
 import {
   associateExistingAccounts,
   requestAccessWithAssociations,
@@ -129,7 +133,7 @@ export function installExpressIntegration() {
       return replaceLastHandler(originalGet, this, path, handlers, exportAllData);
     }
     if (path === "/auth/verify-email" && handlers.length) {
-      return replaceLastHandler(originalGet, this, path, handlers, verifyEmailRequest);
+      return replaceLastHandler(originalGet, this, path, handlers, verifyEmailRequestWithNotificationPreferences);
     }
     return originalGet.call(this, path, ...handlers);
   };
@@ -150,10 +154,12 @@ export function installExpressIntegration() {
         app.post("/admin/auth/users/:id/admin", requireAdmin, updateAdminRight);
         app.post("/admin/auth/associations/auto", requireAdmin, associateExistingAccounts);
         app.put("/admin/auth/users/:id/participant", requireAdmin, setUserParticipantAssociation);
-        app.get("/auth/verify-email", verifyEmailRequest);
+        app.get("/auth/verify-email", verifyEmailRequestWithNotificationPreferences);
         app.post("/auth/change-password", requireAuthUser, changePassword);
         app.post("/auth/change-email/request", requireAuthUser, requestEmailChange);
         app.get("/auth/change-email/confirm", confirmEmailChange);
+        app.get("/auth/notification-preference", requireAuthUser, getAccountNotificationPreference);
+        app.patch("/auth/notification-preference", requireAuthUser, updateAccountNotificationPreference);
         installBackupRoutes(app);
         app[INSTALL_FLAG] = true;
       }

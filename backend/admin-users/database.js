@@ -47,6 +47,7 @@ export async function ensureAdminUserSchema() {
   await pool.query(`alter table users add column if not exists is_admin boolean not null default false`);
   await pool.query(`alter table users add column if not exists email_verified_at timestamptz`);
   await pool.query(`alter table users add column if not exists pending_email text`);
+  await pool.query(`alter table users add column if not exists receive_account_notifications boolean not null default false`);
   await pool.query(`alter table participants add column if not exists email text not null default ''`);
   await pool.query(`alter table participants add column if not exists login_email text`);
 
