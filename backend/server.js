@@ -17,6 +17,7 @@ import { installAdminAccessLogRoutes } from "./admin-access-log-routes.js";
 import { installAdminAccountDeleteRoute } from "./admin-account-delete-route.js";
 import { createAuthMiddleware } from "./auth-middleware.js";
 import { installDatabaseMaintenanceRoutes } from "./database-maintenance-routes.js";
+import { createDefaultAdminBootstrap } from "./default-admin-bootstrap.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -565,38 +566,16 @@ async function ensureSchema() {
   // Une donnée historique inattendue ne doit jamais empêcher le serveur de répondre.
 }
 
-async function ensureDefaultAdmin() {
-  const activeAdmins = await pool.query(`select id from users where role = 'admin' and status = 'active' limit 1`);
-  if (activeAdmins.rowCount > 0) return;
-
-  const email = cleanEmail(FIRST_ADMIN_EMAIL);
-  if (!email || !FIRST_ADMIN_PASSWORD) {
-    console.warn("Aucun administrateur actif et FIRST_ADMIN_EMAIL / FIRST_ADMIN_PASSWORD non configurés. Aucun compte admin par défaut n'a été créé.");
-    return;
-  }
-
-  if (!ALLOW_WEAK_FIRST_ADMIN_PASSWORD && !isStrongPassword(FIRST_ADMIN_PASSWORD)) {
-    throw new Error("FIRST_ADMIN_PASSWORD doit respecter la règle de mot de passe fort.");
-  }
-
-  const passwordHash = await bcrypt.hash(FIRST_ADMIN_PASSWORD, BCRYPT_ROUNDS);
-
-  await pool.query(
-    `
-      insert into users (email, prenom, nom, password_hash, role, status, approved_at, must_reset_password)
-      values ($1, $2, $3, $4, 'admin', 'active', now(), false)
-      on conflict (email) do update set
-        password_hash = excluded.password_hash,
-        role = 'admin',
-        status = 'active',
-        approved_at = coalesce(users.approved_at, now()),
-        must_reset_password = false
-    `,
-    [email, "ClimbCrew", "Admin", passwordHash]
-  );
-
-  console.log(`Compte administrateur initial créé : ${email}. Change le mot de passe à la première utilisation.`);
-}
+const ensureDefaultAdmin = createDefaultAdminBootstrap({
+  pool,
+  cleanEmail,
+  firstAdminEmail: FIRST_ADMIN_EMAIL,
+  firstAdminPassword: FIRST_ADMIN_PASSWORD,
+  allowWeakFirstAdminPassword: ALLOW_WEAK_FIRST_ADMIN_PASSWORD,
+  isStrongPassword,
+  bcrypt,
+  bcryptRounds: BCRYPT_ROUNDS,
+});
 
 const { requireAuth, requireAdmin } = createAuthMiddleware({
   pool,
