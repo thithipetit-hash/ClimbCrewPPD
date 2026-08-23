@@ -1,30 +1,35 @@
 name: Finaliser les avatars
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/finalize-avatars.yml'
-      - 'scripts/finalize-avatar-variants.sh'
-      - 'scripts/generate-sac-magnesie-series.py'
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: climbcrew-avatar-finalization-main
+  cancel-in-progress: false
+
 jobs:
   finalize:
     name: Produire et contrôler les variantes
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
       - name: Récupérer le dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: main
+          fetch-depth: 0
+
+      - name: Vérifier que main n'a pas avancé
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+          git reset --hard origin/main
 
       - name: Installer les outils graphiques
         run: |
@@ -37,29 +42,79 @@ jobs:
       - name: Produire et contrôler les autres séries homme et femme
         run: bash scripts/finalize-avatar-variants.sh
 
-      - name: Passer l'application en version 260817.010
+      - name: Détecter une vraie modification d'avatar
+        id: avatar_changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHANGES="$(git status --porcelain -- \
+            frontend/public/media/avatars/evolutions \
+            frontend/src/components/ProfileGecko.jsx)"
+          if [ -z "$CHANGES" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Aucun changement d'avatar à publier."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "$CHANGES"
+          fi
+
+      - name: Incrémenter la version de publication
+        id: bump_version
+        if: steps.avatar_changes.outputs.changed == 'true'
+        shell: bash
         run: |
           python3 - <<'PY'
+          from datetime import datetime
           from pathlib import Path
+          from zoneinfo import ZoneInfo
+          import os
           import re
 
           version_file = Path('frontend/src/lib/version.js')
           version_text = version_file.read_text(encoding='utf-8')
-          version_text = re.sub(
-              r'export const APP_VERSION = "[^"]+";',
-              'export const APP_VERSION = "260817.010";',
+          match = re.search(
+              r'(configuredVersion\s*\|\|\s*")(\d{8})\.(\d{3})(")',
               version_text,
+          )
+          if not match:
+              raise SystemExit('Version applicative courante introuvable dans frontend/src/lib/version.js')
+
+          current_date = match.group(2)
+          current_sequence = int(match.group(3))
+          today = datetime.now(ZoneInfo('Europe/Paris')).strftime('%Y%m%d')
+
+          if current_date < today:
+              next_date, next_sequence = today, 1
+          else:
+              # Même si l'horloge locale est momentanément en retard par rapport
+              # au fichier, la version reste strictement croissante.
+              next_date, next_sequence = current_date, current_sequence + 1
+
+          next_version = f'{next_date}.{next_sequence:03d}'
+          version_text = re.sub(
+              r'(configuredVersion\s*\|\|\s*")\d{8}\.\d{3}(")',
+              rf'\g<1>{next_version}\2',
+              version_text,
+              count=1,
           )
           version_file.write_text(version_text, encoding='utf-8')
 
           profile_file = Path('frontend/src/components/ProfileGecko.jsx')
           profile_text = profile_file.read_text(encoding='utf-8')
-          profile_text = re.sub(
+          asset_version = next_version.replace('.', '')
+          profile_text, replacements = re.subn(
               r'const ASSET_VERSION = "[^"]+";',
-              'const ASSET_VERSION = "260817010";',
+              f'const ASSET_VERSION = "{asset_version}";',
               profile_text,
+              count=1,
           )
+          if replacements != 1:
+              raise SystemExit('ASSET_VERSION introuvable dans ProfileGecko.jsx')
           profile_file.write_text(profile_text, encoding='utf-8')
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'version={next_version}\n')
+          print(f'Version avatars : {next_version}')
           PY
 
       - name: Résumer la production
@@ -72,7 +127,11 @@ jobs:
           find frontend/public/media/avatars/evolutions -type f -size 0 -print
 
       - name: Committer la production et le câblage
+        if: steps.avatar_changes.outputs.changed == 'true'
+        env:
+          APP_VERSION: ${{ steps.bump_version.outputs.version }}
         run: |
+          set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add frontend/public/media/avatars/evolutions frontend/src/components/ProfileGecko.jsx frontend/src/lib/version.js
@@ -80,5 +139,5 @@ jobs:
             echo 'Aucun changement à committer.'
             exit 0
           fi
-          git commit -m 'feat(avatars): publish distinct chalk bag series v260817.010'
+          git commit -m "feat(avatars): publish generated series ${APP_VERSION}"
           git push origin HEAD:main
