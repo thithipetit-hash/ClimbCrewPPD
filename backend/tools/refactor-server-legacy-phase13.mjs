@@ -1,4 +1,5 @@
 // Script temporaire : extrait le bootstrap du premier administrateur hors de server.js.
+// Ce fichier sert uniquement à appliquer de façon déterministe la phase 13.
 import { readFile, writeFile } from "node:fs/promises";
 
 const serverUrl = new URL("../server.js", import.meta.url);
