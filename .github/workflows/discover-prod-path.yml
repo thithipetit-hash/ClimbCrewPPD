@@ -1,77 +1,34 @@
-name: Discover production deployment path
+name: Inspecter les logs du backend pre-prod
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      lines:
+        description: 'Nombre de lignes de log à afficher'
+        required: false
+        default: '200'
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  discover:
-    name: Rechercher le dossier de déploiement de climbcrew.dip-tcs.com
+  logs:
+    name: Récupérer les logs du conteneur backend (lecture seule)
     runs-on: self-hosted
     timeout-minutes: 5
 
     steps:
-      - name: Inspecter le serveur (lecture seule, aucune modification)
+      - name: Afficher les logs récents de climbcrew-backend
         shell: bash
+        env:
+          LOG_LINES: ${{ inputs.lines }}
         run: |
           set +e
           {
-            echo "### Recherche du dossier de déploiement de climbcrew.dip-tcs.com"
+            echo "### Logs récents de climbcrew-backend"
             echo
-            echo "#### 1. Projets Docker Compose actifs"
             echo '```'
-            docker compose ls -a 2>&1
-            echo '```'
-            echo
-            echo "#### 2. Tous les conteneurs (actifs et arrêtés), avec leurs ports"
-            echo '```'
-            sudo docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}\t{{.Label "com.docker.compose.project.working_dir"}}' 2>&1
-            echo '```'
-            echo
-            echo "#### 3. Tous les ports en écoute sur la machine"
-            echo '```'
-            sudo ss -tlnp 2>&1
-            echo '```'
-            echo
-            echo "#### 4. Configuration nginx : bloc(s) pour climbcrew.dip-tcs.com et pre-climbcrew.dip-tcs.com"
-            echo '```'
-            sudo grep -rl "climbcrew.dip-tcs.com" /etc/nginx/ 2>/dev/null | while read -r f; do
-              echo "--- $f ---"
-              cat "$f"
-              echo
-            done
-            echo '```'
-            echo
-            echo "#### 5. Service systemd historique (s'il existe encore)"
-            echo '```'
-            systemctl show climbcrew-backend.service --property=WorkingDirectory,ActiveState,FragmentPath 2>&1
-            echo '```'
-            echo
-            echo "#### 6. Recherche générique de dossiers climbcrew sur le disque"
-            echo '```'
-            sudo find / -maxdepth 4 -iname "*climbcrew*" -type d 2>/dev/null
-            echo '```'
-            echo
-            echo "#### 7. Le site nginx climbcrew est-il activé (sites-enabled) ?"
-            echo '```'
-            ls -la /etc/nginx/sites-enabled/ 2>&1
-            echo '```'
-            echo
-            echo "#### 8. IP publique de ce serveur"
-            echo '```'
-            curl -s --max-time 5 https://ifconfig.me 2>&1; echo
-            echo '```'
-            echo
-            echo "#### 9. À quelle IP résout climbcrew.dip-tcs.com et pre-climbcrew.dip-tcs.com (DNS)"
-            echo '```'
-            echo -n "climbcrew.dip-tcs.com -> "; getent hosts climbcrew.dip-tcs.com 2>&1 || echo "non résolu"
-            echo -n "pre-climbcrew.dip-tcs.com -> "; getent hosts pre-climbcrew.dip-tcs.com 2>&1 || echo "non résolu"
-            echo '```'
-            echo
-            echo "#### 10. Certificat HTTPS existant pour climbcrew.dip-tcs.com"
-            echo '```'
-            sudo ls -la /etc/letsencrypt/live/ 2>&1 || echo "aucun répertoire letsencrypt trouvé"
+            docker logs --tail "${LOG_LINES:-200}" climbcrew-backend 2>&1
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
