@@ -12,8 +12,12 @@ FROM node:24-alpine
 ENV NODE_ENV=production
 
 # pg_dump, pg_restore et psql servent aux sauvegardes PostgreSQL complètes et à
-# leur restauration depuis l'administration.
-RUN apk add --no-cache postgresql-client
+# leur restauration depuis l'administration. La version est explicitement fixée
+# à 16 pour correspondre à l'image postgres:16-alpine du service "db" : un
+# pg_dump/pg_restore plus récent (17+) émet des réglages de session (ex.
+# "transaction_timeout") que le serveur 16 ne reconnaît pas, ce qui fait
+# échouer toute restauration, y compris le filet de sécurité pre-restore.
+RUN apk add --no-cache postgresql16-client
 
 # Tous les chemins suivants sont relatifs au répertoire applicatif du conteneur.
 WORKDIR /app
