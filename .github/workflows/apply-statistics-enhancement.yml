@@ -7,4 +7,7 @@ jobs:
   disabled:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Workflow temporaire neutralisé : les statistiques sont appliquées directement."
+      - name: Neutralisé
+        shell: bash
+        run: |
+          echo "Workflow temporaire neutralisé : les statistiques sont appliquées directement."
