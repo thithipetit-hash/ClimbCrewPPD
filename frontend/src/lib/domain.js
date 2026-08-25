@@ -136,12 +136,12 @@ export function indexToGrade(index) {
 export function getRouteBackgroundColor(color) {
   const normalized = String(color || "").trim().toLowerCase();
   const map = {
-    bleu: "#60a5fa", blue: "#60a5fa", rouge: "#f87171", red: "#f87171",
-    vert: "#4ade80", green: "#4ade80", jaune: "#facc15", yellow: "#facc15",
-    orange: "#fb923c", violet: "#a78bfa", purple: "#a78bfa", rose: "#f472b6",
-    pink: "#f472b6", noir: "#94a3b8", black: "#94a3b8", blanc: "#f8fafc",
-    white: "#f8fafc", ocre: "#8b5a2b", ochre: "#8b5a2b", marron: "#8b5a2b", brown: "#8b5a2b",
-    gris: "#cbd5e1", gray: "#cbd5e1", grey: "#cbd5e1",
+    bleu: "#60a5fa", bleue: "#60a5fa", blue: "#60a5fa", rouge: "#f87171", red: "#f87171",
+    vert: "#4ade80", verte: "#4ade80", green: "#4ade80", jaune: "#facc15", yellow: "#facc15",
+    orange: "#fb923c", violet: "#a78bfa", violette: "#a78bfa", purple: "#a78bfa", rose: "#f472b6",
+    pink: "#f472b6", noir: "#94a3b8", noire: "#94a3b8", black: "#94a3b8", blanc: "#f8fafc",
+    blanche: "#f8fafc", white: "#f8fafc", ocre: "#8b5a2b", ochre: "#8b5a2b", marron: "#8b5a2b", brown: "#8b5a2b",
+    gris: "#cbd5e1", grise: "#cbd5e1", gray: "#cbd5e1", grey: "#cbd5e1",
   };
   return map[normalized] || "#f8fafc";
 }
