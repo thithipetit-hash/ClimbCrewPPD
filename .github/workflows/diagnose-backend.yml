@@ -1,0 +1,60 @@
+name: Diagnostiquer le backend pre-prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      lines:
+        description: 'Nombre de lignes de log à afficher'
+        required: false
+        default: '200'
+        type: string
+      sql_query:
+        description: 'Requête SQL en lecture seule à exécuter (doit commencer par select)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Logs backend et requête SQL en lecture seule
+    runs-on: self-hosted
+    timeout-minutes: 5
+
+    steps:
+      - name: Afficher les logs récents de climbcrew-backend
+        shell: bash
+        env:
+          LOG_LINES: ${{ inputs.lines }}
+        run: |
+          set +e
+          {
+            echo "### Logs récents de climbcrew-backend"
+            echo
+            echo '```'
+            docker logs --tail "${LOG_LINES:-200}" climbcrew-backend 2>&1
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Exécuter la requête SQL fournie (lecture seule)
+        if: inputs.sql_query != ''
+        shell: bash
+        env:
+          SQL_QUERY: ${{ inputs.sql_query }}
+        run: |
+          set +e
+          {
+            echo
+            echo "### Résultat de la requête SQL"
+            echo
+            NORMALIZED="$(echo "$SQL_QUERY" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//')"
+            if [[ "$NORMALIZED" != select* ]]; then
+              echo "**Refusée : seules les requêtes commençant par SELECT sont autorisées.**"
+            else
+              echo '```'
+              docker exec climbcrew-db sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -c \"${SQL_QUERY//\"/\\\"}\"" 2>&1
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
