@@ -33,10 +33,21 @@ test("l'approbation administrateur est désactivée par défaut et reste configu
 
 test("une nouvelle fiche participant n'est créée qu'après vérification de l'adresse", () => {
   assert.doesNotMatch(emailAssociationSource, /insert into participants/i);
-  assert.match(emailAssociationSource, /participantCreationDeferred/);
-  assert.match(approvalSource, /ensureParticipantForAutomaticActivation/);
+  assert.match(emailAssociationSource, /associationDeferredUntilEmailVerified/);
+  assert.match(approvalSource, /ensureParticipantAfterEmailVerification/);
   assert.match(approvalSource, /insert into participants/i);
   assert.match(approvalSource, /can_encadrer, can_referer, can_admin/);
+});
+
+test("l'association à une fiche est tentée à la vérification même si l'approbation manuelle est requise", () => {
+  assert.doesNotMatch(
+    approvalSource,
+    /if \(!REQUIRE_ADMIN_ACCOUNT_APPROVAL && tokenRow\.status === "pending"\) \{\s*participant = await ensureParticipantAfterEmailVerification/,
+  );
+  assert.match(
+    approvalSource,
+    /if \(tokenRow\.status === "pending"\) \{\s*participant = await ensureParticipantAfterEmailVerification/,
+  );
 });
 
 test("la vérification de l'e-mail active automatiquement un compte pending associé", () => {

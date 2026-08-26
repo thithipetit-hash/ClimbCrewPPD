@@ -146,9 +146,11 @@ export async function requestAccessByEmailOnly(req, res) {
       return publicRequestResponse(res);
     }
 
-    const match = await findParticipantByEmailOnly(client, { email });
-    const participantId = match.participantId || null;
-
+    // L'association à une fiche grimpeur est volontairement différée jusqu'à
+    // la confirmation de l'adresse e-mail (voir verifyEmailPendingAdminApproval) :
+    // associer dès l'inscription permettait à un compte jamais vérifié de
+    // verrouiller indéfiniment une fiche, sans qu'un administrateur ne puisse
+    // même le voir pour le corriger.
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const verificationToken = crypto.randomBytes(24).toString("hex");
     const verificationTokenHash = hashToken(verificationToken);
@@ -161,19 +163,12 @@ export async function requestAccessByEmailOnly(req, res) {
         insert into users (
           participant_id, email, prenom, nom, password_hash,
           role, is_admin, status
-        ) values ($1, $2, $3, $4, $5, 'user', false, 'pending')
+        ) values (null, $1, $2, $3, $4, 'user', false, 'pending')
         returning *
       `,
-      [participantId, email, prenom, nom, passwordHash],
+      [email, prenom, nom, passwordHash],
     );
     const user = userResult.rows[0];
-
-    if (participantId) {
-      await client.query(
-        `update participants set login_email = $2 where id = $1`,
-        [participantId, email],
-      );
-    }
 
     await client.query(
       `
@@ -191,11 +186,8 @@ export async function requestAccessByEmailOnly(req, res) {
       req,
       details: {
         email,
-        participantId: participantId ? String(participantId) : null,
-        participantCreated: false,
-        participantCreationDeferred: !participantId && match.issue === "email_not_found",
-        matchingKey: match.matchingKey,
-        associationIssue: match.issue,
+        participantId: null,
+        associationDeferredUntilEmailVerified: true,
         requiresAdminApproval: REQUIRE_ADMIN_ACCOUNT_APPROVAL,
       },
     });
