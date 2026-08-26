@@ -82,10 +82,9 @@ export default function GestionComptes({
     try {
       const result = await apiFetch("/admin/auth/associations/auto", { method: "POST" });
       setAssociationMessage(
-        `${result.associatedCount || 0} association(s) créée(s) : `
-        + `${result.byEmail || 0} par e-mail, ${result.byName || 0} par nom/prénom. `
+        `${result.associatedCount || 0} association(s) créée(s) par e-mail identique. `
         + `${result.ambiguousCount || 0} ambiguë(s), ${result.unavailableCount || 0} déjà utilisée(s), `
-        + `${result.unmatchedCount || 0} sans correspondance.`
+        + `${result.unmatchedCount || 0} sans correspondance à associer manuellement.`
       );
       await refreshAccountData();
       if ((result.associatedUserIds || []).map(String).includes(String(authUser?.id || ""))) {
@@ -235,7 +234,7 @@ export default function GestionComptes({
         </div>
       </div>
       <div className="small" style={{ marginBottom: 10 }}>
-        Le bouton Associations rattache les comptes encore non associés : d’abord par adresse e-mail identique, puis par prénom et nom identiques. Les associations existantes ne sont jamais remplacées automatiquement. Les autres cas peuvent être associés manuellement ci-dessous.
+        Le bouton Associations rattache les comptes encore non associés uniquement par adresse e-mail strictement identique — jamais par prénom/nom, trop ambigu en cas d’homonymes. Les associations existantes ne sont jamais remplacées automatiquement. Les comptes sans e-mail correspondant doivent être associés manuellement ci-dessous.
       </div>
       {associationMessage && <div className="success" style={{ marginBottom: 12 }}>{associationMessage}</div>}
       {associationError && <div className="error" style={{ marginBottom: 12 }}>{associationError}</div>}
