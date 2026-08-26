@@ -415,6 +415,32 @@ jobs:
 
           echo "Réglages de sécurité des comptes verrouillés dans .env.production"
 
+      - name: Synchroniser la clé de chiffrement des sauvegardes dans .env.production
+        shell: bash
+        env:
+          BACKUP_EMAIL_ENCRYPTION_KEY: ${{ secrets.BACKUP_EMAIL_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BACKUP_EMAIL_ENCRYPTION_KEY:-}" ]; then
+            echo "BACKUP_EMAIL_ENCRYPTION_KEY secret not set, leaving .env.production untouched."
+            exit 0
+          fi
+
+          ENV_FILE="${DEPLOY_ROOT}/.env.production"
+
+          set_env_var() {
+            local key="$1"
+            local value="$2"
+            if grep -q "^${key}=" "$ENV_FILE"; then
+              sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+            else
+              echo "${key}=${value}" >> "$ENV_FILE"
+            fi
+          }
+
+          set_env_var "BACKUP_EMAIL_ENCRYPTION_KEY" "${BACKUP_EMAIL_ENCRYPTION_KEY}"
+          echo "Clé de chiffrement des sauvegardes synchronisée dans .env.production"
+
       - name: Désactiver un éventuel service historique non-Docker (cible production)
         if: needs.validate.outputs.deploy_branch == 'production'
         shell: bash
