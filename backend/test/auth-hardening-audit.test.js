@@ -23,12 +23,14 @@ test("les routes historiques utilisent les contrôleurs d'authentification durci
 });
 
 test("un e-mail inconnu et un mauvais mot de passe suivent la même comparaison bcrypt", () => {
-  const comparisonIndex = hardeningSource.indexOf("const comparisonHash = user?.password_hash || await dummyPasswordHashPromise");
+  // Un e-mail sans candidat compare tout de même un hash factice, afin que
+  // l'absence de compte ne se distingue pas d'un mauvais mot de passe.
+  const dummyCompareIndex = hardeningSource.indexOf("await bcrypt.compare(password, await dummyPasswordHashPromise)");
   const invalidIndex = hardeningSource.indexOf("if (!user || !passwordMatches)");
   const statusIndex = hardeningSource.indexOf('if (user.status !== "active")');
 
-  assert.ok(comparisonIndex >= 0);
-  assert.ok(invalidIndex > comparisonIndex);
+  assert.ok(dummyCompareIndex >= 0);
+  assert.ok(invalidIndex > dummyCompareIndex);
   assert.ok(statusIndex > invalidIndex);
   assert.match(hardeningSource, /details: \{ reason: "invalid_credentials" \}/);
 });

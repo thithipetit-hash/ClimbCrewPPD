@@ -71,13 +71,29 @@ export async function secureLogin(req, res) {
   const password = String(req.body?.password || "");
 
   try {
+    // climbcrew_normalize_email traite "prenom.nom@gmail.com" et
+    // "prenomnom@gmail.com" comme la même boîte (Gmail ignore les points et
+    // tout ce qui suit un "+"). La détection de doublon à l'inscription
+    // empêche désormais de créer un second compte pour la même adresse
+    // réelle, mais un compte dupliqué avant ce correctif peut encore exister :
+    // on essaie donc chaque candidat plutôt que d'en tirer un seul au hasard.
     const result = await getPool().query(
-      `select * from users where lower(email) = $1 limit 1`,
+      `select * from users where climbcrew_normalize_email(email) = climbcrew_normalize_email($1)`,
       [email],
     );
-    const user = result.rows[0] || null;
-    const comparisonHash = user?.password_hash || await dummyPasswordHashPromise;
-    const passwordMatches = await bcrypt.compare(password, comparisonHash);
+
+    let user = null;
+    if (result.rows.length) {
+      for (const candidate of result.rows) {
+        if (await bcrypt.compare(password, candidate.password_hash)) {
+          user = candidate;
+          break;
+        }
+      }
+    } else {
+      await bcrypt.compare(password, await dummyPasswordHashPromise);
+    }
+    const passwordMatches = Boolean(user);
 
     if (!user || !passwordMatches) {
       await writeAccessLog({
