@@ -73,7 +73,8 @@ export async function findParticipantByEmailOnly(client, { email, userId = null 
                  and ($2::bigint is null or u.id <> $2::bigint)
              ) as already_linked
       from participants p
-      where lower(trim(coalesce(nullif(trim(p.login_email), ''), nullif(trim(p.email), ''), ''))) = $1
+      where climbcrew_normalize_email(coalesce(nullif(trim(p.login_email), ''), nullif(trim(p.email), ''), ''))
+            = climbcrew_normalize_email($1)
       order by p.id asc
       limit 3
     `,
@@ -130,7 +131,7 @@ export async function requestAccessByEmailOnly(req, res) {
     await client.query("begin");
 
     const existing = await client.query(
-      `select id from users where lower(email) = $1 limit 1`,
+      `select id from users where climbcrew_normalize_email(email) = climbcrew_normalize_email($1) limit 1`,
       [email],
     );
     if (existing.rowCount) {

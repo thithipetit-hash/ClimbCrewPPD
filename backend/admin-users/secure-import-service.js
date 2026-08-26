@@ -1,6 +1,6 @@
 import { getPool } from "./database.js";
 import { writeAccessLog } from "./access-log-service.js";
-import { cleanEmail } from "./security.js";
+import { cleanEmail, emailMatchKey } from "./security.js";
 import { validateLegacyImportPayload, ValidationError } from "../validation.js";
 
 function actorId(req) {
@@ -14,7 +14,7 @@ function actorEmail(req) {
 function normalizedParticipantEmails(participants = []) {
   const counts = new Map();
   for (const participant of participants) {
-    const email = cleanEmail(participant.email);
+    const email = emailMatchKey(participant.email);
     if (!email) continue;
     counts.set(email, (counts.get(email) || 0) + 1);
   }
@@ -53,7 +53,7 @@ async function preflightAccountAssociations(client, payload) {
   `);
 
   const missingAdminEmails = adminsResult.rows
-    .map((user) => cleanEmail(user.email))
+    .map((user) => emailMatchKey(user.email))
     .filter((email) => !email || emailCounts.get(email) !== 1);
 
   if (missingAdminEmails.length) {
@@ -79,7 +79,7 @@ async function rebuildAccountAssociationsByEmail(client) {
       from users u
       join participants p
         on trim(coalesce(p.login_email, p.email, '')) <> ''
-       and lower(trim(coalesce(p.login_email, p.email, ''))) = lower(trim(u.email))
+       and climbcrew_normalize_email(coalesce(p.login_email, p.email, '')) = climbcrew_normalize_email(u.email)
     ), unique_matches as (
       select user_id, min(participant_id) as participant_id
       from candidate_matches

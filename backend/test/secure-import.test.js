@@ -15,7 +15,7 @@ test("l'import administrateur utilise le contrôleur sécurisé", () => {
 });
 
 test("le rapprochement après import repose uniquement sur l'e-mail", () => {
-  assert.match(importSource, /lower\(trim\(coalesce\(p\.login_email, p\.email, ''\)\)\) = lower\(trim\(u\.email\)\)/);
+  assert.match(importSource, /climbcrew_normalize_email\(coalesce\(p\.login_email, p\.email, ''\)\) = climbcrew_normalize_email\(u\.email\)/);
   assert.doesNotMatch(importSource, /lower\(trim\(p\.nom\)\)/);
   assert.doesNotMatch(importSource, /lower\(trim\(p\.prenom\)\)/);
 });
