@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Button from "../components/Button.jsx";
-import { apiFetch } from "../lib/api.js";
+import { apiFetch, downloadFile } from "../lib/api.js";
 import { formatDateFr, fullName } from "../lib/domain.js";
 
 export default function GestionComptes({
@@ -58,6 +58,14 @@ export default function GestionComptes({
     [adminAuthUsers]
   );
 
+  const approvedLinkedEmails = useMemo(
+    () => adminAuthUsers
+      .filter((user) => user.status === "active" && user.participantId && user.email)
+      .map((user) => user.email)
+      .sort((a, b) => a.localeCompare(b, "fr")),
+    [adminAuthUsers]
+  );
+
   if (!USE_API) {
     return <div className="card"><div className="muted-box">La gestion des comptes est disponible avec le backend API.</div></div>;
   }
@@ -83,6 +91,17 @@ export default function GestionComptes({
       return associationDrafts[user.id];
     }
     return String(user.participantId || "");
+  }
+
+  function exportApprovedLinkedEmailsOutlook() {
+    if (!approvedLinkedEmails.length) return;
+    downloadFile(
+      "emails-comptes-approuves.txt",
+      approvedLinkedEmails.join("; "),
+      "text/plain;charset=utf-8;"
+    );
+    setAssociationError("");
+    setAssociationMessage(`${approvedLinkedEmails.length} adresse(s) e-mail exportée(s) au format Outlook.`);
   }
 
   async function runAutomaticAssociations() {
@@ -245,10 +264,18 @@ export default function GestionComptes({
         <div className="group">
           <Button onClick={runAutomaticAssociations} disabled={associationBusy}>Associations</Button>
           <Button variant="secondary" onClick={refreshAccountData} disabled={associationBusy}>Actualiser</Button>
+          <Button
+            variant="secondary"
+            onClick={exportApprovedLinkedEmailsOutlook}
+            disabled={approvedLinkedEmails.length === 0}
+          >
+            Exporter les e-mails (Outlook)
+          </Button>
         </div>
       </div>
       <div className="small" style={{ marginBottom: 10 }}>
         Le bouton Associations rattache les comptes encore non associés uniquement par adresse e-mail strictement identique — jamais par prénom/nom, trop ambigu en cas d’homonymes. Les associations existantes ne sont jamais remplacées automatiquement. Les comptes sans e-mail correspondant doivent être associés manuellement ci-dessous.
+        Le bouton Exporter les e-mails ne reprend que les comptes approuvés et reliés à une fiche grimpeur, séparés par « ; » pour un collage direct dans le champ destinataires d’Outlook.
       </div>
       {associationMessage && <div className="success" style={{ marginBottom: 12 }}>{associationMessage}</div>}
       {associationError && <div className="error" style={{ marginBottom: 12 }}>{associationError}</div>}
