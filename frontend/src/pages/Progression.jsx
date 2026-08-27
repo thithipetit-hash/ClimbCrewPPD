@@ -36,7 +36,6 @@ export default function Progression({
   setRealisationExpanded,
   allProgressRealisationsExpanded,
   toggleAllProgressRealisations,
-  exportSelectedParticipantRealisationsCsv,
   allRealisations,
   myParticipantId,
 }) {
@@ -148,15 +147,6 @@ export default function Progression({
                 : "Réalisations"}
           </h3>
           <div className="group">
-            {selectedParticipantProgress && String(selectedParticipantProgress) === String(myParticipantId) && (
-              <Button
-                variant="secondary"
-                onClick={exportSelectedParticipantRealisationsCsv}
-                disabled={selectedParticipantRealisations.length === 0}
-              >
-                Exporter pour theCrag
-              </Button>
-            )}
             {progressViewRealisations.length > 1 && (
               <Button
                 variant="secondary"

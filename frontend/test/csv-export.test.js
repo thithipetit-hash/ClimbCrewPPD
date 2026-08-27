@@ -18,11 +18,11 @@ test("le nom du fichier est normalisé", () => {
 
 test("l'export des réalisations utilise les colonnes attendues par theCrag", async () => {
   const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  // Le bouton d'export lui-même a été extrait dans pages/Progression.jsx.
-  const progression = await readFile(new URL("../src/pages/Progression.jsx", import.meta.url), "utf8");
+  // Le bouton d'export lui-même vit dans pages/Profil.jsx (Mon profil).
+  const profil = await readFile(new URL("../src/pages/Profil.jsx", import.meta.url), "utf8");
 
   assert.match(source, /\["country", "crag", "sector", "route", "grade", "date", "style", "comment"\]/);
   assert.match(source, /"France"/);
   assert.match(source, /"ASTC"/);
-  assert.match(progression, /Exporter pour theCrag/);
+  assert.match(profil, /Exporter pour theCrag/);
 });

@@ -1682,34 +1682,35 @@ async function handleThemePreferenceChange(nextTheme) {
     setImportMessage(`Export local version ${APP_VERSION} réussi.`);
   }
 
-  function exportSelectedParticipantRealisationsCsv() {
-    const participant = participantsById[state.selectedParticipantProgress];
-    if (!participant) return;
+  function exportMyRealisationsCsv() {
+    if (!myParticipant) return;
 
     const headers = ["country", "crag", "sector", "route", "grade", "date", "style", "comment"];
-    const rows = selectedParticipantRealisations.map((realisation) => {
-      const route = routesById[realisation.voieId];
-      const ropeNumber = route ? normalizeRopeNumber(route.numeroCorde) : 0;
-      const routeName = route?.nomVoie?.trim() || `Voie corde ${ropeNumber}`;
-      const details = [
-        route?.nomOuvreur ? `Ouvreur : ${route.nomOuvreur}` : "",
-        route?.couleurPrises ? `Couleur : ${route.couleurPrises}` : "",
-        realisation.cotationProposee ? `Cotation proposée : ${realisation.cotationProposee}` : "",
-        route?.tags?.length ? `Caractéristiques : ${route.tags.map((tag) => ROUTE_TAGS.find((item) => item.value === tag)?.label || tag).join(", ")}` : "",
-        realisation.commentaire || "",
-      ].filter(Boolean).join(" · ");
-      return [
-        "France",
-        "ASTC",
-        `Corde ${ropeNumber}`,
-        routeName,
-        route?.cotationAjustee || route?.cotationReference || "",
-        realisation.dateRealisation?.slice(0, 10) || "",
-        THECRAG_STYLE_BY_CLIMBCREW[realisation.styleRealisation] || "Attempt",
-        details,
-      ];
-    });
-    const filename = `thecrag-${csvFileSlug(fullName(participant))}.csv`;
+    const rows = [...myRealisations]
+      .sort((a, b) => a.dateRealisation.localeCompare(b.dateRealisation))
+      .map((realisation) => {
+        const route = routesById[realisation.voieId];
+        const ropeNumber = route ? normalizeRopeNumber(route.numeroCorde) : 0;
+        const routeName = route?.nomVoie?.trim() || `Voie corde ${ropeNumber}`;
+        const details = [
+          route?.nomOuvreur ? `Ouvreur : ${route.nomOuvreur}` : "",
+          route?.couleurPrises ? `Couleur : ${route.couleurPrises}` : "",
+          realisation.cotationProposee ? `Cotation proposée : ${realisation.cotationProposee}` : "",
+          route?.tags?.length ? `Caractéristiques : ${route.tags.map((tag) => ROUTE_TAGS.find((item) => item.value === tag)?.label || tag).join(", ")}` : "",
+          realisation.commentaire || "",
+        ].filter(Boolean).join(" · ");
+        return [
+          "France",
+          "ASTC",
+          `Corde ${ropeNumber}`,
+          routeName,
+          route?.cotationAjustee || route?.cotationReference || "",
+          realisation.dateRealisation?.slice(0, 10) || "",
+          THECRAG_STYLE_BY_CLIMBCREW[realisation.styleRealisation] || "Attempt",
+          details,
+        ];
+      });
+    const filename = `thecrag-${csvFileSlug(fullName(myParticipant))}.csv`;
     downloadFile(filename, buildCsv(headers, rows), "text/csv;charset=utf-8;");
     setConfirmationMessage("Export theCrag téléchargé.");
   }
@@ -2363,7 +2364,6 @@ async function handleThemePreferenceChange(nextTheme) {
             setRealisationExpanded={setRealisationExpanded}
             allProgressRealisationsExpanded={allProgressRealisationsExpanded}
             toggleAllProgressRealisations={toggleAllProgressRealisations}
-            exportSelectedParticipantRealisationsCsv={exportSelectedParticipantRealisationsCsv}
             allRealisations={state.realisations}
             myParticipantId={myParticipantId}
           />
@@ -2387,6 +2387,7 @@ async function handleThemePreferenceChange(nextTheme) {
             getPassportDotStyle={getPassportDotStyle}
             normalizePassport={normalizePassport}
             updateMyProfile={updateMyProfile}
+            exportMyRealisationsCsv={exportMyRealisationsCsv}
           />
         )}
 

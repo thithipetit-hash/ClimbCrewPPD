@@ -1,4 +1,5 @@
 import React from "react";
+import Button from "../components/Button.jsx";
 import ClimberProfilePanel from "../components/ClimberProfilePanel.jsx";
 import ParticipantBadges from "../components/ParticipantBadges.jsx";
 import ProfileGecko from "../components/ProfileGecko.jsx";
@@ -22,6 +23,7 @@ export default function Profil({
   getPassportDotStyle,
   normalizePassport,
   updateMyProfile,
+  exportMyRealisationsCsv,
 }) {
   if (!USE_API) {
     return <div className="card"><div className="muted-box">Mon Profil est disponible avec le backend API.</div></div>;
@@ -77,6 +79,19 @@ export default function Profil({
           <div className="stat"><div className="label">CPR actuel</div><div className="value">{cpr.currentGrade || "-"}</div></div>
           <div className="stat"><div className="label">Points</div><div className="value">{formatPoints(points)}</div></div>
           <div className="stat"><div className="label">Séances</div><div className="value">{participations}</div></div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h3>Export</h3>
+          <Button
+            variant="secondary"
+            onClick={exportMyRealisationsCsv}
+            disabled={myRealisations.length === 0}
+          >
+            Exporter pour theCrag
+          </Button>
         </div>
       </div>
 
