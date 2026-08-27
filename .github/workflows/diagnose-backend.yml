@@ -36,7 +36,7 @@ jobs:
             echo '```'
             docker logs --tail "${LOG_LINES:-200}" climbcrew-backend 2>&1
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Exécuter la requête SQL fournie (lecture seule)
         if: inputs.sql_query != ''
@@ -57,4 +57,4 @@ jobs:
               docker exec climbcrew-db sh -lc "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -c \"${SQL_QUERY//\"/\\\"}\"" 2>&1
               echo '```'
             fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
