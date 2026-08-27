@@ -1585,6 +1585,7 @@ async function handleThemePreferenceChange(nextTheme) {
     try {
       await authApiFetch(`/admin/auth/users/${userId}/approve`, authToken, { method: "POST" });
       await loadAdminAccessData();
+      setConfirmationMessage("Compte approuvé.");
     } catch (error) {
       setAuthError(String(error.message || error));
     }

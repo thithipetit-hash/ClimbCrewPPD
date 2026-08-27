@@ -21,6 +21,16 @@ export default function GestionComptes({
   const [associationMessage, setAssociationMessage] = useState("");
   const [associationError, setAssociationError] = useState("");
   const [associationBusy, setAssociationBusy] = useState(false);
+  const [approvingUserId, setApprovingUserId] = useState(null);
+
+  async function handleApprove(userId) {
+    setApprovingUserId(userId);
+    try {
+      await approveAccessRequest(userId);
+    } finally {
+      setApprovingUserId(null);
+    }
+  }
 
   async function loadParticipants() {
     if (!USE_API || !canManageAccountsAndLogs) return;
@@ -149,7 +159,11 @@ export default function GestionComptes({
 
   const renderAccountActions = (user) => (
     <div className="group">
-      {user.status === "pending" && <Button onClick={() => approveAccessRequest(user.id)}>Approuver</Button>}
+      {user.status === "pending" && (
+        <Button onClick={() => handleApprove(user.id)} disabled={approvingUserId === user.id}>
+          {approvingUserId === user.id ? "Approbation…" : "Approuver"}
+        </Button>
+      )}
       {user.status !== "revoked" ? (
         <Button variant="danger" onClick={() => revokeUserAccess(user.id)}>Répudier</Button>
       ) : (
