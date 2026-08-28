@@ -70,6 +70,13 @@ function enhanceConsent(card) {
   }
 }
 
+function isRequestFormVisible(card) {
+  // Le formulaire de réinitialisation affiche lui aussi les règles du mot de
+  // passe : seul le champ Prénom, propre à la création de compte, permet de
+  // distinguer les deux formulaires sans se tromper de bouton.
+  return Boolean(findLabel(card, (text) => text === "prénom"));
+}
+
 function findForgotPasswordHelper(card) {
   return [...card.querySelectorAll(".small")].find((element) => {
     const text = normalizedText(element.textContent);
@@ -163,7 +170,8 @@ function enhanceAccessPage() {
   const card = document.querySelector(".auth-card");
   if (!card) return;
 
-  const requestFormVisible = enhancePasswordPolicy(card);
+  enhancePasswordPolicy(card);
+  const requestFormVisible = isRequestFormVisible(card);
   const forgotPasswordFormVisible = enhanceForgotPasswordCopy(card);
   card.classList.toggle("issue13-request-form", requestFormVisible);
   if (requestFormVisible) enhanceConsent(card);
