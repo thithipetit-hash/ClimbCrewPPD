@@ -164,6 +164,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
         try { fileName = decodeURIComponent(String(req.headers["x-file-name"] || "video")); } catch { fileName = "video"; }
         fileName = fileName.replace(/[\r\n]/g, "").slice(0, 180) || "video";
         const url = `/routes/${encodeURIComponent(req.params.id)}/videos/${videoId}`;
+        const sizeBytes = req.body.length;
 
         const client = await pool.connect();
         try {
@@ -175,6 +176,25 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
           const updated = await client.query(
             `update routes set video_urls = array_append(video_urls, $2), updated_at = now() where id = $1 returning *`,
             [req.params.id, url],
+          );
+          await client.query(
+            `
+              insert into access_logs (user_id, event_type, success, ip_address, user_agent, details)
+              values ($1, 'route_video_upload', true, $2, $3, $4::jsonb)
+            `,
+            [
+              req.auth?.user?.id || null,
+              req.ip || null,
+              req.headers["user-agent"] || null,
+              JSON.stringify({
+                route_id: req.params.id,
+                video_id: videoId,
+                file_name: fileName,
+                size_bytes: sizeBytes,
+                size_mb: Number((sizeBytes / (1024 * 1024)).toFixed(2)),
+                mime_type: mimeType,
+              }),
+            ],
           );
           await client.query("commit");
           return res.status(201).json({ url, route: routeDbToApi(updated.rows[0]) });
