@@ -41,18 +41,19 @@ const enhancements = fs.readFileSync("frontend/src/climbcrew-enhancements.js", "
 if (enhancements.includes("l’ocre apparaît sur fond marron")) fail("mention ocre sur fond marron encore présente dans la FAQ");
 
 const backend = fs.readFileSync("backend/server.js", "utf8");
-const expressIntegration = fs.readFileSync("backend/admin-users/express-integration.js", "utf8");
+const explicitRoutes = fs.readFileSync("backend/admin-users/explicit-routes.js", "utf8");
 const sessionAuthorization = fs.readFileSync("backend/admin-users/session-authorization-service.js", "utf8");
 const realisationManagement = fs.readFileSync("backend/realisation-management-routes.js", "utf8");
 
-// PUT /sessions/:id est désormais un simple point d'ancrage dans server.js.
-// Les règles métier doivent être contrôlées dans le contrôleur réellement injecté.
-if (!backend.includes('app.put("/sessions/:id", requireAuth, legacyReplacedRoute);')) {
-  fail("point d’ancrage de mise à jour des séances absent du backend");
+// PUT /sessions/:id est désormais déclaré explicitement avec son contrôleur sécurisé.
+if (!backend.includes("installExplicitAdminUserRoutes(app")) {
+  fail("module de routes utilisateurs explicites non installé");
 }
-if (!expressIntegration.includes('path === "/sessions/:id"')
-    || !expressIntegration.includes("updateSessionWithAuthorization")) {
-  fail("contrôleur sécurisé des séances non branché");
+if (!explicitRoutes.includes('app.put("/sessions/:id", requireAuth, updateSessionWithAuthorization);')) {
+  fail("contrôleur sécurisé des séances non branché explicitement");
+}
+if (backend.includes("legacyReplacedRoute") || fs.existsSync("backend/admin-users/express-integration.js")) {
+  fail("ancien câblage Express legacy encore présent");
 }
 if (!sessionAuthorization.includes("function defaultSessionStatus(date, slot)")) {
   fail("règle de statut par défaut absente du contrôleur de séances");

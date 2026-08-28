@@ -40,7 +40,6 @@ test("la vue complète utilise login_email et remplace le Base64 par un marqueur
 
 test("la vue publique signale l avatar sans divulguer son Base64", () => {
   const participant = serializePublicParticipant(participantRow);
-
   assert.equal(participant.id, "42");
   assert.equal(participant.passport, "vert");
   assert.equal(participant.cotisation, true);
@@ -50,14 +49,12 @@ test("la vue publique signale l avatar sans divulguer son Base64", () => {
   assert.equal(participant.hasCustomAvatar, true);
   assert.equal(participant.customAvatarImage, "remote");
   assert.equal(participant.profilePublic, true);
-
   assert.equal(participant.email, "");
   assert.equal(participant.canAdmin, false);
 });
 
 test("la vue privée conserve les données club mais masque aussi l avatar personnalisé", () => {
   const participant = serializePrivateParticipant({ ...participantRow, profile_public: false });
-
   assert.equal(participant.id, "42");
   assert.equal(participant.nom, "Martin");
   assert.equal(participant.prenom, "Alice");
@@ -66,7 +63,6 @@ test("la vue privée conserve les données club mais masque aussi l avatar perso
   assert.equal(participant.ffme, true);
   assert.equal(participant.canEncadrer, true);
   assert.equal(participant.canReferer, true);
-
   assert.equal(participant.email, "");
   assert.equal(participant.sexe, "");
   assert.equal(participant.canAdmin, false);
@@ -78,11 +74,7 @@ test("la vue privée conserve les données club mais masque aussi l avatar perso
 });
 
 test("la migration reprend l'ancien email et synchronise les deux colonnes", async () => {
-  const source = await readFile(
-    new URL("../admin-users/database.js", import.meta.url),
-    "utf8",
-  );
-
+  const source = await readFile(new URL("../admin-users/database.js", import.meta.url), "utf8");
   assert.match(source, /drop index if exists uq_participants_login_email_normalized/);
   assert.match(source, /set login_email = nullif\(email, ''\)/);
   assert.match(source, /create or replace function climbcrew_sync_participant_email\(\)/);
@@ -92,18 +84,11 @@ test("la migration reprend l'ancien email et synchronise les deux colonnes", asy
 });
 
 test("les lectures participants et réalisations utilisent les contrôleurs de confidentialité", async () => {
-  const integration = await readFile(
-    new URL("../admin-users/express-integration.js", import.meta.url),
-    "utf8",
-  );
-  const privacy = await readFile(
-    new URL("../admin-users/participant-privacy-service.js", import.meta.url),
-    "utf8",
-  );
-
-  assert.match(integration, /path === "\/participants"[\s\S]*listParticipantsWithPrivacy/);
-  assert.match(integration, /\/participants\/:id\/avatar/);
-  assert.match(integration, /path === "\/realisations"[\s\S]*listRealisationsWithPrivacy/);
+  const routes = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
+  const privacy = await readFile(new URL("../admin-users/participant-privacy-service.js", import.meta.url), "utf8");
+  assert.match(routes, /app\.get\("\/participants", requireAuth, listParticipantsWithPrivacy\)/);
+  assert.match(routes, /app\.get\("\/participants\/:id\/avatar", requireAuthUser, getParticipantCustomAvatar\)/);
+  assert.match(routes, /app\.get\("\/realisations", requireAuth, listRealisationsWithPrivacy\)/);
   assert.match(privacy, /serializePublicParticipant/);
   assert.match(privacy, /cotisation: Boolean\(row\.cotisation\)/);
   assert.match(privacy, /ffme: Boolean\(row\.ffme\)/);

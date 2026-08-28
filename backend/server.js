@@ -17,18 +17,21 @@ import { installAdminAccessLogRoutes } from "./admin-access-log-routes.js";
 import { installAdminAccountDeleteRoute } from "./admin-account-delete-route.js";
 import { createAuthMiddleware } from "./auth-middleware.js";
 import { installDatabaseMaintenanceRoutes } from "./database-maintenance-routes.js";
+import { createCrossOriginCsrfBridge } from "./deployment-compatibility.js";
+import {
+  installExplicitAdminUserRoutes,
+  initializeAdminUserEnhancements,
+  startAdminUserSchedulers,
+} from "./admin-users/explicit-routes.js";
+import { blockLegacyFileImportInProduction } from "./admin-users/maintenance-hardening.js";
 
 const app = express();
 app.disable("x-powered-by");
 
-/**
- * Point d'ancrage temporaire pour les routes dont le contrôleur historique a
- * déjà été remplacé par admin-user-enhancements.js au démarrage normal.
- * Cette fonction ne doit jamais être atteinte avec `npm start`.
- */
-function legacyReplacedRoute(_req, res) {
-  return res.status(503).json({ error: "Contrôleur moderne non initialisé" });
-}
+// Le pont CSRF est désormais un middleware Express explicite. Il était auparavant
+// injecté implicitement en surchargeant express.application.use.
+app.use(createCrossOriginCsrfBridge());
+
 const { Pool } = pg;
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -220,7 +223,14 @@ function clearSessionCookie(res) {
 }
 
 function requireSetupAccess(req, res, next) {
-  const providedToken = req.headers["x-setup-token"] || req.query.setupToken || req.query.token;
+  if (req.query.setupToken || req.query.token) {
+    return res.status(400).json({
+      ok: false,
+      error: "Le jeton de maintenance doit être transmis uniquement dans l’en-tête X-Setup-Token.",
+    });
+  }
+
+  const providedToken = req.headers["x-setup-token"];
   if (!SETUP_TOKEN) {
     return res.status(503).json({
       ok: false,
@@ -609,20 +619,23 @@ const { requireAuth, requireAdmin } = createAuthMiddleware({
   serializeUser,
 });
 
+// Les remplacements historiques sont maintenant de vraies routes Express.
+installExplicitAdminUserRoutes(app, {
+  requireAuth,
+  requireAdmin,
+  authRateLimit,
+  resetRateLimit,
+});
+
 installBroadcastMessageRoutes(app, { requireAuth, requireAdmin, pool });
-
 installEvolutionRequestRoutes(app, { requireAuth, requireAdmin, pool });
-
-app.get("/realisations", requireAuth, legacyReplacedRoute);
 installRealisationManagementRoutes(app, { requireAuth, pool });
-
 installRouteManagementRoutes(app, { requireAuth, requireAdmin, pool });
 
 app.get("/", (_req, res) => {
   res.send("ClimbCrew API running");
 });
 
-app.get("/health", legacyReplacedRoute);
 installDatabaseMaintenanceRoutes(app, {
   requireSetupAccess,
   ensureSchema,
@@ -631,10 +644,6 @@ installDatabaseMaintenanceRoutes(app, {
   firstAdminEmail: FIRST_ADMIN_EMAIL,
 });
 
-/**
- * Auth
- */
-app.post("/auth/login", authRateLimit, legacyReplacedRoute);
 installAuthSessionRoutes(app, {
   requireAuth,
   pool,
@@ -647,25 +656,11 @@ installAuthSessionRoutes(app, {
   clearSessionCookie,
 });
 
-app.post("/auth/request-access", authRateLimit, legacyReplacedRoute);
-app.post("/auth/forgot-password", resetRateLimit, legacyReplacedRoute);
-app.post("/auth/reset-password", resetRateLimit, legacyReplacedRoute);
-app.get("/admin/auth/users", requireAuth, requireAdmin, legacyReplacedRoute);
 installAdminAccessLogRoutes(app, { requireAuth, requireAdmin, pool });
-
-app.post("/admin/auth/users/:id/approve", requireAuth, requireAdmin, legacyReplacedRoute);
-app.post("/admin/auth/users/:id/revoke", requireAuth, requireAdmin, legacyReplacedRoute);
 installAdminAccountDeleteRoute(app, { requireAuth, requireAdmin, pool, logAccess });
-
-app.post("/admin/auth/users/:id/reactivate", requireAuth, requireAdmin, legacyReplacedRoute);
-app.post("/admin/auth/users/:id/reset-token", requireAuth, requireAdmin, legacyReplacedRoute);
-app.get("/participants", requireAuth, legacyReplacedRoute);
 installParticipantCreationRoute(app, { requireAuth, requireAdmin, pool });
-app.put("/participants/:id", requireAuth, requireAdmin, legacyReplacedRoute);
-app.patch("/participants/me/profile", requireAuth, legacyReplacedRoute);
-app.delete("/participants/:id", requireAuth, requireAdmin, legacyReplacedRoute);
 installSessionReadRoutes(app, { requireAuth, requireAdmin, pool });
-app.put("/sessions/:id", requireAuth, legacyReplacedRoute);
+
 /**
  * Importe un export JSON legacy dans la base PostgreSQL.
  *
@@ -677,9 +672,7 @@ app.put("/sessions/:id", requireAuth, legacyReplacedRoute);
  * Les identifiants historiques de participants (p1, p2...) sont convertis vers les id
  * PostgreSQL tout en conservant les liens sessions/réalisations.
  */
-app.post("/admin/import-data", requireAuth, requireAdmin, legacyReplacedRoute);
-app.get("/admin/export-data", requireAuth, requireAdmin, legacyReplacedRoute);
-app.post("/import-data", requireSetupAccess, async (req, res) => {
+app.post("/import-data", blockLegacyFileImportInProduction, requireSetupAccess, async (req, res) => {
   const importFilePath = new URL("./import-data.json", import.meta.url);
   if (!fs.existsSync(importFilePath)) {
     return res.status(404).json({ error: "import-data.json introuvable dans backend/" });
@@ -844,11 +837,17 @@ async function cleanupExpiredSecurityData() {
 
 async function start() {
   await ensureSchema();
+  await initializeAdminUserEnhancements();
   await ensureDefaultAdmin();
   await cleanupExpiredSecurityData();
 
   app.listen(PORT, () => {
     console.log(`ClimbCrew API listening on port ${PORT}`);
+  });
+
+  startAdminUserSchedulers().catch((error) => {
+    console.error("Erreur de démarrage des services utilisateurs :", error);
+    process.exitCode = 1;
   });
 }
 
