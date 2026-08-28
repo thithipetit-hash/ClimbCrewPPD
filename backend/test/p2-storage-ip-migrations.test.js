@@ -18,20 +18,19 @@ test("l'adresse IP fiable remplace une chaîne X-Forwarded-For potentiellement f
     },
   };
   let nextCalled = false;
-
   trustedClientIpMiddleware(req, {}, () => { nextCalled = true; });
-
   assert.equal(req.headers["x-forwarded-for"], "198.51.100.24");
   assert.equal(req.headers["x-real-ip"], "198.51.100.24");
   assert.equal(nextCalled, true);
 });
 
-test("le durcissement IP est installé avant l'intégration Express historique", () => {
+test("le durcissement IP est installé avant l'intégration des logs", () => {
   const hardeningIndex = enhancementsSource.indexOf("installClientIpHardening();");
-  const expressIndex = enhancementsSource.indexOf("installExpressIntegration();");
+  const logIndex = enhancementsSource.indexOf("installRateLimitLogIntegration();");
   assert.ok(hardeningIndex >= 0);
-  assert.ok(expressIndex >= 0);
-  assert.ok(hardeningIndex < expressIndex);
+  assert.ok(logIndex >= 0);
+  assert.ok(hardeningIndex < logIndex);
+  assert.doesNotMatch(enhancementsSource, /installExpressIntegration/);
 });
 
 test("les migrations versionnées sont appliquées avant l'écoute réseau", () => {
