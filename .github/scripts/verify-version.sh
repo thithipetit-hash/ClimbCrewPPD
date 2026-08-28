@@ -2,7 +2,7 @@
 set -euo pipefail
 
 VERSION_FILE="VERSION"
-FRONTEND_VERSION_FILE="frontend/src/lib/version.js"
+LEGACY_FRONTEND_VERSION_FILE="frontend/src/lib/version.js"
 VERSION_PATTERN='^[0-9]{8}\.[0-9]{3}$'
 BASE_REF="${BASE_REF:-}"
 BEFORE_SHA="${BEFORE_SHA:-}"
@@ -12,17 +12,12 @@ extract_canonical_version() {
   tr -d '[:space:]' < "$1"
 }
 
-extract_frontend_version() {
-  sed -n 's/.*APP_VERSION = configuredVersion || "\([0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' "$1" | head -n 1
-}
-
 extract_version_from_ref() {
   local ref="$1"
   git show "${ref}:${VERSION_FILE}" 2>/dev/null | tr -d '[:space:]'
 }
 
 CURRENT_VERSION="$(extract_canonical_version "$VERSION_FILE")"
-FRONTEND_VERSION="$(extract_frontend_version "$FRONTEND_VERSION_FILE")"
 
 if [[ ! "$CURRENT_VERSION" =~ $VERSION_PATTERN ]]; then
   echo "ERROR: VERSION absente ou invalide : '$CURRENT_VERSION'"
@@ -30,14 +25,7 @@ if [[ ! "$CURRENT_VERSION" =~ $VERSION_PATTERN ]]; then
   exit 1
 fi
 
-if [[ "$FRONTEND_VERSION" != "$CURRENT_VERSION" ]]; then
-  echo "ERROR: version frontend désynchronisée."
-  echo "VERSION                    : $CURRENT_VERSION"
-  echo "frontend/src/lib/version.js: $FRONTEND_VERSION"
-  exit 1
-fi
-
-echo "Version canonique synchronisée : $CURRENT_VERSION"
+echo "Version canonique valide : $CURRENT_VERSION"
 if [ "$VERSION_CONSISTENCY_ONLY" = "1" ]; then
   exit 0
 fi
@@ -62,9 +50,10 @@ elif git rev-parse HEAD^ >/dev/null 2>&1; then
 fi
 
 # Transition : les anciennes révisions peuvent ne pas encore avoir VERSION.
-# Dans ce cas, on récupère leur fallback frontend pour comparer l'incrément.
+# Dans ce cas uniquement, on récupère leur ancien fallback frontend pour comparer
+# l'incrément. La révision courante n'a plus aucun doublon de version.
 if [ -z "$BASE_VERSION" ] && [ -n "$BASE_LABEL" ]; then
-  BASE_VERSION="$(git show "${BASE_LABEL}:${FRONTEND_VERSION_FILE}" 2>/dev/null \
+  BASE_VERSION="$(git show "${BASE_LABEL}:${LEGACY_FRONTEND_VERSION_FILE}" 2>/dev/null \
     | sed -n 's/.*APP_VERSION = configuredVersion || "\([0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' \
     | head -n 1 || true)"
 fi
@@ -88,4 +77,4 @@ if [[ "$CURRENT_VERSION" == "$BASE_VERSION" || "$CURRENT_VERSION" < "$BASE_VERSI
   exit 1
 fi
 
-echo "Version correctement incrémentée et synchronisée : $BASE_VERSION -> $CURRENT_VERSION"
+echo "Version correctement incrémentée : $BASE_VERSION -> $CURRENT_VERSION"
