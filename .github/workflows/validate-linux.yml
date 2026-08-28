@@ -1,10 +1,6 @@
 name: Validate ClimbCrew Linux
 
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
   workflow_call:
     inputs:
       ref:
@@ -150,4 +146,10 @@ jobs:
 
       - name: Stop validation stack
         if: always()
-        run: docker compose --env-file .env.production -f docker-compose.prod.yml down -v
+        shell: bash
+        run: |
+          if [ -f .env.production ]; then
+            docker compose --env-file .env.production -f docker-compose.prod.yml down -v
+          else
+            echo "Validation arrêtée avant démarrage de la pile ; aucun nettoyage Docker nécessaire."
+          fi
