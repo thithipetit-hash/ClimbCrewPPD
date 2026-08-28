@@ -145,12 +145,23 @@ export default function Voies({
                 <div className="card-header">
                   <div><strong>Vidéo {index + 1}</strong><div className="small" style={{ overflowWrap: "anywhere" }}>{url}</div></div>
                   <div className="group">
-                    <a className="pill" href={playableVideoUrl(url)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>Voir la vidéo</a>
+                    <a className="pill" href={playableVideoUrl(url)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>Ouvrir</a>
                     {isLocalVideoUrl(url) && (
                       <a className="pill" href={downloadableVideoUrl(url)} download style={{ textDecoration: "none" }}>Télécharger</a>
                     )}
                   </div>
                 </div>
+                {isLocalVideoUrl(url) && (
+                  <video
+                    controls
+                    playsInline
+                    preload="metadata"
+                    src={playableVideoUrl(url)}
+                    style={{ width: "100%", maxHeight: "70vh", marginTop: 10, borderRadius: 12, background: "#000" }}
+                  >
+                    Votre navigateur ne permet pas la lecture de cette vidéo.
+                  </video>
+                )}
               </div>
             ))}
           </div>
