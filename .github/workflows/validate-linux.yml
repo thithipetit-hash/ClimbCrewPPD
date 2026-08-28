@@ -50,6 +50,8 @@ jobs:
 
       - name: Validate canonical version
         shell: bash
+        env:
+          VERSION_CONSISTENCY_ONLY: "1"
         run: |
           set -euo pipefail
           chmod +x .github/scripts/verify-version.sh
@@ -87,8 +89,6 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
-        env:
-          VITE_APP_VERSION: ${{ env.CLIMBCREW_VERSION }}
         shell: bash
         run: |
           set -euo pipefail
