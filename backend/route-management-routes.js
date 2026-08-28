@@ -1,4 +1,9 @@
+import express from "express";
+import crypto from "node:crypto";
 import { validateRoutePayload } from "./validation.js";
+
+const LOCAL_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+const LOCAL_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/ogg", "video/quicktime"]);
 
 function ropeDbToApi(row) {
   return {
@@ -29,6 +34,7 @@ function normalizeVideoUrls(value) {
       error.status = 400;
       throw error;
     }
+    if (/^\/routes\/[^/]+\/videos\/[^/]+$/.test(url)) continue;
     let parsed;
     try {
       parsed = new URL(url);
@@ -67,16 +73,7 @@ function routeDbToApi(row) {
   };
 }
 
-/**
- * Installe les routes de consultation des cordes et de gestion des voies.
- *
- * Ce module est volontairement autonome : server.js ne garde que l'assemblage
- * Express tandis que les règles SQL et la conversion API restent regroupées ici.
- */
 export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, pool }) {
-  // La migration doit être déclenchée après ensureSchema(), pas au moment où
-  // les routes Express sont enregistrées. Lors d'une base neuve, la table
-  // routes n'existe pas encore à cet instant.
   let videoSchemaReady = false;
   async function ensureVideoSchema() {
     if (videoSchemaReady) return;
@@ -84,16 +81,23 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
       alter table routes
       add column if not exists video_urls text[] not null default '{}'
     `);
+    await pool.query(`
+      create table if not exists route_videos (
+        id text primary key,
+        route_id text not null references routes(id) on delete cascade,
+        file_name text not null default 'video',
+        mime_type text not null,
+        content bytea not null,
+        created_at timestamptz not null default now()
+      )
+    `);
+    await pool.query(`create index if not exists idx_route_videos_route on route_videos(route_id)`);
     videoSchemaReady = true;
   }
 
   app.get("/ropes", requireAuth, async (_req, res) => {
     try {
-      const result = await pool.query(`
-        select numero_corde, actif, couleur_corde
-        from ropes
-        order by numero_corde asc
-      `);
+      const result = await pool.query(`select numero_corde, actif, couleur_corde from ropes order by numero_corde asc`);
       res.json(result.rows.map(ropeDbToApi));
     } catch (error) {
       console.error("GET /ropes", error);
@@ -104,18 +108,13 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
   app.get("/routes", requireAuth, async (_req, res) => {
     try {
       await ensureVideoSchema();
-      const result = await pool.query(
-        `
-          select
-            r.*,
-            coalesce(avg(re.rating), 0)::float as rating_average,
-            count(re.rating)::integer as rating_count
-          from routes r
-          left join realisations re on re.voie_id = r.id
-          group by r.id
-          order by r.numero_corde asc nulls last, r.numero_voie_unique asc
-        `,
-      );
+      const result = await pool.query(`
+        select r.*, coalesce(avg(re.rating), 0)::float as rating_average, count(re.rating)::integer as rating_count
+        from routes r
+        left join realisations re on re.voie_id = r.id
+        group by r.id
+        order by r.numero_corde asc nulls last, r.numero_voie_unique asc
+      `);
       res.json(result.rows.map(routeDbToApi));
     } catch (error) {
       console.error("GET /routes", error);
@@ -123,50 +122,106 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
     }
   });
 
+  app.get("/routes/:id/videos/:videoId", requireAuth, async (req, res) => {
+    try {
+      await ensureVideoSchema();
+      const result = await pool.query(
+        `select file_name, mime_type, content from route_videos where id = $1 and route_id = $2`,
+        [req.params.videoId, req.params.id],
+      );
+      if (!result.rowCount) return res.status(404).json({ error: "Vidéo introuvable" });
+      const video = result.rows[0];
+      res.setHeader("Content-Type", video.mime_type);
+      res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(video.file_name)}`);
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      return res.send(video.content);
+    } catch (error) {
+      console.error("GET /routes/:id/videos/:videoId", error);
+      return res.status(500).json({ error: "Lecture de la vidéo impossible" });
+    }
+  });
+
+  app.post(
+    "/routes/:id/videos",
+    requireAuth,
+    requireAdmin,
+    express.raw({ type: ["video/*", "application/octet-stream"], limit: LOCAL_VIDEO_MAX_BYTES }),
+    async (req, res) => {
+      try {
+        await ensureVideoSchema();
+        const mimeType = String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+        if (!LOCAL_VIDEO_TYPES.has(mimeType)) return res.status(400).json({ error: "Format vidéo refusé. Utilisez MP4, WebM, OGG ou MOV." });
+        if (!Buffer.isBuffer(req.body) || req.body.length === 0) return res.status(400).json({ error: "Fichier vidéo vide." });
+        if (req.body.length > LOCAL_VIDEO_MAX_BYTES) return res.status(413).json({ error: "Vidéo trop volumineuse. Maximum 50 Mo." });
+
+        const routeResult = await pool.query(`select video_urls from routes where id = $1`, [req.params.id]);
+        if (!routeResult.rowCount) return res.status(404).json({ error: "Voie introuvable" });
+        const currentUrls = Array.isArray(routeResult.rows[0].video_urls) ? routeResult.rows[0].video_urls : [];
+        if (currentUrls.length >= 10) return res.status(400).json({ error: "10 vidéos maximum par voie." });
+
+        const videoId = crypto.randomUUID();
+        let fileName = "video";
+        try { fileName = decodeURIComponent(String(req.headers["x-file-name"] || "video")); } catch { fileName = "video"; }
+        fileName = fileName.replace(/[\r\n]/g, "").slice(0, 180) || "video";
+        const url = `/routes/${encodeURIComponent(req.params.id)}/videos/${videoId}`;
+
+        const client = await pool.connect();
+        try {
+          await client.query("begin");
+          await client.query(
+            `insert into route_videos (id, route_id, file_name, mime_type, content) values ($1,$2,$3,$4,$5)`,
+            [videoId, req.params.id, fileName, mimeType, req.body],
+          );
+          const updated = await client.query(
+            `update routes set video_urls = array_append(video_urls, $2), updated_at = now() where id = $1 returning *`,
+            [req.params.id, url],
+          );
+          await client.query("commit");
+          return res.status(201).json({ url, route: routeDbToApi(updated.rows[0]) });
+        } catch (error) {
+          await client.query("rollback");
+          throw error;
+        } finally {
+          client.release();
+        }
+      } catch (error) {
+        console.error("POST /routes/:id/videos", error);
+        return res.status(error.type === "entity.too.large" ? 413 : 500).json({ error: error.message || "Chargement de la vidéo impossible" });
+      }
+    },
+  );
+
   app.post("/routes", requireAuth, requireAdmin, async (req, res) => {
     try {
       await ensureVideoSchema();
       const requestedRoute = req.body || {};
       const id = requestedRoute.id || `route-${Date.now()}`;
-      const route = validateRoutePayload({
-        ...requestedRoute,
-        id,
-        numeroVoieUnique: requestedRoute.numeroVoieUnique || id,
-      });
+      const route = validateRoutePayload({ ...requestedRoute, id, numeroVoieUnique: requestedRoute.numeroVoieUnique || id });
       route.videoUrls = normalizeVideoUrls(requestedRoute.videoUrls) || [];
-      const result = await pool.query(
-        `
-          insert into routes (
-            id, numero_voie_unique, numero_corde, couleur_prises, cotation_reference,
-            cotation_ajustee, nom_voie, nom_ouvreur, moulinette_only, active, date_creation, tags, video_urls
-          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-          returning *
-        `,
-        [
-          id,
-          String(route.numeroVoieUnique || "").trim(),
-          route.numeroCorde === undefined || route.numeroCorde === null || route.numeroCorde === ""
-            ? null
-            : Number(route.numeroCorde),
-          String(route.couleurPrises || "").trim(),
-          String(route.cotationReference || "").trim(),
-          String(route.cotationAjustee || route.cotationReference || "").trim(),
-          String(route.nomVoie || "").trim(),
-          String(route.nomOuvreur || "").trim(),
-          Boolean(route.moulinetteOnly),
-          route.active !== false,
-          String(route.dateCreation || "").trim(),
-          route.tags || [],
-          route.videoUrls,
-        ]
-      );
+      const result = await pool.query(`
+        insert into routes (
+          id, numero_voie_unique, numero_corde, couleur_prises, cotation_reference,
+          cotation_ajustee, nom_voie, nom_ouvreur, moulinette_only, active, date_creation, tags, video_urls
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *
+      `, [
+        id,
+        String(route.numeroVoieUnique || "").trim(),
+        route.numeroCorde === undefined || route.numeroCorde === null || route.numeroCorde === "" ? null : Number(route.numeroCorde),
+        String(route.couleurPrises || "").trim(),
+        String(route.cotationReference || "").trim(),
+        String(route.cotationAjustee || route.cotationReference || "").trim(),
+        String(route.nomVoie || "").trim(),
+        String(route.nomOuvreur || "").trim(),
+        Boolean(route.moulinetteOnly),
+        route.active !== false,
+        String(route.dateCreation || "").trim(),
+        route.tags || [],
+        route.videoUrls,
+      ]);
       res.status(201).json(routeDbToApi(result.rows[0]));
     } catch (error) {
       console.error("POST /routes", error);
-      res.status(error.status || 500).json({
-        error: error.message || "Erreur création voie",
-        fields: error.fields || undefined,
-      });
+      res.status(error.status || 500).json({ error: error.message || "Erreur création voie", fields: error.fields || undefined });
     }
   });
 
@@ -175,50 +230,42 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
       await ensureVideoSchema();
       const route = validateRoutePayload(req.body || {}, { partial: true });
       route.videoUrls = normalizeVideoUrls(req.body?.videoUrls);
-      const result = await pool.query(
-        `
-          update routes
-          set
-            numero_voie_unique = coalesce($2, numero_voie_unique),
-            numero_corde = coalesce($3, numero_corde),
-            couleur_prises = coalesce($4, couleur_prises),
-            cotation_reference = coalesce($5, cotation_reference),
-            cotation_ajustee = coalesce($6, cotation_ajustee),
-            nom_voie = coalesce($7, nom_voie),
-            nom_ouvreur = coalesce($8, nom_ouvreur),
-            moulinette_only = coalesce($9, moulinette_only),
-            active = coalesce($10, active),
-            date_creation = coalesce($11, date_creation),
-            tags = coalesce($12, tags),
-            video_urls = coalesce($13, video_urls),
-            updated_at = now()
-          where id = $1
-          returning *
-        `,
-        [
-          req.params.id,
-          route.numeroVoieUnique ?? null,
-          route.numeroCorde === undefined ? null : Number(route.numeroCorde),
-          route.couleurPrises ?? null,
-          route.cotationReference ?? null,
-          route.cotationAjustee ?? null,
-          route.nomVoie ?? null,
-          route.nomOuvreur ?? null,
-          route.moulinetteOnly ?? null,
-          route.active ?? null,
-          route.dateCreation ?? null,
-          route.tags ?? null,
-          route.videoUrls ?? null,
-        ]
-      );
+      const result = await pool.query(`
+        update routes set
+          numero_voie_unique = coalesce($2, numero_voie_unique),
+          numero_corde = coalesce($3, numero_corde),
+          couleur_prises = coalesce($4, couleur_prises),
+          cotation_reference = coalesce($5, cotation_reference),
+          cotation_ajustee = coalesce($6, cotation_ajustee),
+          nom_voie = coalesce($7, nom_voie),
+          nom_ouvreur = coalesce($8, nom_ouvreur),
+          moulinette_only = coalesce($9, moulinette_only),
+          active = coalesce($10, active),
+          date_creation = coalesce($11, date_creation),
+          tags = coalesce($12, tags),
+          video_urls = coalesce($13, video_urls),
+          updated_at = now()
+        where id = $1 returning *
+      `, [
+        req.params.id,
+        route.numeroVoieUnique ?? null,
+        route.numeroCorde === undefined ? null : Number(route.numeroCorde),
+        route.couleurPrises ?? null,
+        route.cotationReference ?? null,
+        route.cotationAjustee ?? null,
+        route.nomVoie ?? null,
+        route.nomOuvreur ?? null,
+        route.moulinetteOnly ?? null,
+        route.active ?? null,
+        route.dateCreation ?? null,
+        route.tags ?? null,
+        route.videoUrls ?? null,
+      ]);
       if (result.rowCount === 0) return res.status(404).json({ error: "Voie introuvable" });
       res.json(routeDbToApi(result.rows[0]));
     } catch (error) {
       console.error("PUT /routes/:id", error);
-      res.status(error.status || 500).json({
-        error: error.message || "Erreur mise à jour voie",
-        fields: error.fields || undefined,
-      });
+      res.status(error.status || 500).json({ error: error.message || "Erreur mise à jour voie", fields: error.fields || undefined });
     }
   });
 
@@ -226,22 +273,14 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
     const client = await pool.connect();
     try {
       await client.query("begin");
-      const routeResult = await client.query(
-        "select id from routes where id = $1 for update",
-        [req.params.id],
-      );
+      const routeResult = await client.query("select id from routes where id = $1 for update", [req.params.id]);
       if (!routeResult.rowCount) {
         await client.query("rollback");
         return res.status(404).json({ error: "Voie introuvable" });
       }
-
-      const realisationsResult = await client.query(
-        "delete from realisations where voie_id = $1",
-        [req.params.id],
-      );
+      const realisationsResult = await client.query("delete from realisations where voie_id = $1", [req.params.id]);
       await client.query("delete from routes where id = $1", [req.params.id]);
       await client.query("commit");
-
       res.json({ ok: true, deletedRealisations: realisationsResult.rowCount });
     } catch (error) {
       await client.query("rollback");
