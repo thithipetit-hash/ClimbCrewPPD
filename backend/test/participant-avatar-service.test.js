@@ -1,9 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   decodeCustomAvatarDataUrl,
   resolveCustomAvatarUpdate,
 } from "../admin-users/participant-avatar-service.js";
+
+const source = await readFile(
+  new URL("../admin-users/participant-avatar-service.js", import.meta.url),
+  "utf8",
+);
 
 function minimalWebpDataUrl() {
   const buffer = Buffer.concat([
@@ -45,4 +51,23 @@ test("un nouveau WebP valide remplace l image", () => {
     keepExisting: false,
     value: dataUrl,
   });
+});
+
+test("PATCH profil préserve sexe et confidentialité lorsqu'ils sont absents", () => {
+  assert.match(source, /const hasField = \(field\) => Object\.prototype\.hasOwnProperty\.call\(body, field\)/);
+  assert.match(source, /profilePublic = hasField\("profilePublic"\) \? body\.profilePublic !== false : null/);
+  assert.match(source, /sexe = hasField\("sexe"\) \? cleanSexe\(body\.sexe\) : null/);
+  assert.match(source, /profile_public = coalesce\(\$4::boolean, profile_public\)/);
+  assert.match(source, /sexe = coalesce\(\$7, sexe\)/);
+});
+
+test("PATCH profil est limité à la fiche liée au compte connecté", () => {
+  assert.match(source, /const participantId = Number\(participantIdForUser\(user\)\)/);
+  assert.match(source, /where id = \$1/);
+  assert.equal(source.includes("req.params?.id"), true, "la lecture d'avatar peut utiliser un id de route");
+  const patchSection = source.slice(
+    source.indexOf("export async function updateOwnParticipantProfile"),
+    source.indexOf("export async function getParticipantCustomAvatar"),
+  );
+  assert.equal(patchSection.includes("req.params"), false);
 });
