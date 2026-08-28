@@ -20,6 +20,7 @@ function routeDbToApi(row) {
     nomOuvreur: row.nom_ouvreur || "",
     moulinetteOnly: Boolean(row.moulinette_only),
     tags: Array.isArray(row.tags) ? row.tags : [],
+    videoUrls: Array.isArray(row.video_urls) ? row.video_urls : [],
     active: Boolean(row.active),
     dateCreation: row.date_creation || "",
     ratingAverage: Number(row.rating_average || 0),
@@ -34,6 +35,17 @@ function routeDbToApi(row) {
  * Express tandis que les règles SQL et la conversion API restent regroupées ici.
  */
 export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, pool }) {
+  // Migration légère et idempotente : les vidéos sont stockées directement sur
+  // la voie sous forme de liste d'URL. Elle permet un déploiement sans opération
+  // SQL manuelle sur les bases déjà existantes.
+  const videoSchemaReady = pool.query(`
+    alter table routes
+    add column if not exists video_urls text[] not null default '{}'
+  `).catch((error) => {
+    console.error("Initialisation routes.video_urls impossible", error);
+    throw error;
+  });
+
   app.get("/ropes", requireAuth, async (_req, res) => {
     try {
       const result = await pool.query(`
@@ -50,6 +62,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
 
   app.get("/routes", requireAuth, async (_req, res) => {
     try {
+      await videoSchemaReady;
       const result = await pool.query(
         `
           select
@@ -71,6 +84,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
 
   app.post("/routes", requireAuth, requireAdmin, async (req, res) => {
     try {
+      await videoSchemaReady;
       const requestedRoute = req.body || {};
       const id = requestedRoute.id || `route-${Date.now()}`;
       const route = validateRoutePayload({
@@ -82,8 +96,8 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
         `
           insert into routes (
             id, numero_voie_unique, numero_corde, couleur_prises, cotation_reference,
-            cotation_ajustee, nom_voie, nom_ouvreur, moulinette_only, active, date_creation, tags
-          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+            cotation_ajustee, nom_voie, nom_ouvreur, moulinette_only, active, date_creation, tags, video_urls
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
           returning *
         `,
         [
@@ -101,6 +115,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
           route.active !== false,
           String(route.dateCreation || "").trim(),
           route.tags || [],
+          route.videoUrls || [],
         ]
       );
       res.status(201).json(routeDbToApi(result.rows[0]));
@@ -115,6 +130,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
 
   app.put("/routes/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
+      await videoSchemaReady;
       const route = validateRoutePayload(req.body || {}, { partial: true });
       const result = await pool.query(
         `
@@ -131,6 +147,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
             active = coalesce($10, active),
             date_creation = coalesce($11, date_creation),
             tags = coalesce($12, tags),
+            video_urls = coalesce($13, video_urls),
             updated_at = now()
           where id = $1
           returning *
@@ -148,6 +165,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
           route.active ?? null,
           route.dateCreation ?? null,
           route.tags ?? null,
+          route.videoUrls ?? null,
         ]
       );
       if (result.rowCount === 0) return res.status(404).json({ error: "Voie introuvable" });
