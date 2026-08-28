@@ -3,14 +3,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { findParticipantByEmailOnly } from "../admin-users/email-association-service.js";
 
-const associationSource = await readFile(
-  new URL("../admin-users/email-association-service.js", import.meta.url),
-  "utf8",
-);
-const integrationSource = await readFile(
-  new URL("../admin-users/express-integration.js", import.meta.url),
-  "utf8",
-);
+const associationSource = await readFile(new URL("../admin-users/email-association-service.js", import.meta.url), "utf8");
+const routesSource = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
 
 test("le rapprochement automatique recherche uniquement l'adresse e-mail", async () => {
   const queries = [];
@@ -20,11 +14,7 @@ test("le rapprochement automatique recherche uniquement l'adresse e-mail", async
       return { rowCount: 0, rows: [] };
     },
   };
-
-  const result = await findParticipantByEmailOnly(client, {
-    email: "  Test@Example.COM ",
-  });
-
+  const result = await findParticipantByEmailOnly(client, { email: "  Test@Example.COM " });
   assert.equal(result.participantId, null);
   assert.equal(result.issue, "email_not_found");
   assert.equal(queries.length, 1);
@@ -36,8 +26,8 @@ test("le rapprochement automatique recherche uniquement l'adresse e-mail", async
 test("aucun rapprochement automatique par prénom et nom n'est branché", () => {
   assert.doesNotMatch(associationSource, /lower\(trim\(p\.prenom\)\)/);
   assert.doesNotMatch(associationSource, /lower\(trim\(p\.nom\)\)/);
-  assert.match(integrationSource, /requestAccessByEmailOnly/);
-  assert.match(integrationSource, /associateExistingAccountsByEmail/);
+  assert.match(routesSource, /app\.post\("\/auth\/request-access", authRateLimit, requestAccessByEmailOnly\)/);
+  assert.match(routesSource, /app\.post\("\/admin\/auth\/associations\/auto", requireEnhancementAdmin, associateExistingAccountsByEmail\)/);
 });
 
 test("une association automatique ne modifie pas le droit Administrateur de la fiche", () => {
