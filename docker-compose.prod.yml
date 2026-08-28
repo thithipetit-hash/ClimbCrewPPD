@@ -81,15 +81,15 @@ services:
       start_period: 20s
 
   # ---------------------------------------------------------------------------
-  # Frontend React compilé puis servi par Nginx.
+  # Frontend React compilé puis servi par Nginx. Son contexte est la racine du
+  # dépôt afin de fournir le fichier VERSION canonique au Dockerfile.
   # ---------------------------------------------------------------------------
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile.prod
+      context: .
+      dockerfile: frontend/Dockerfile.prod
       args:
         VITE_API_URL: ${VITE_API_URL:-/api}
-        VITE_APP_VERSION: ${VITE_APP_VERSION:?VITE_APP_VERSION manquant}
     image: climbcrew-frontend:prod
     container_name: climbcrew-frontend
     restart: unless-stopped
