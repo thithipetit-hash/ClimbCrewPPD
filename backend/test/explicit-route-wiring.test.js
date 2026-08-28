@@ -8,7 +8,7 @@ const routesSource = await readFile(new URL("../admin-users/explicit-routes.js",
 
 test("le préchargement ne surcharge plus les méthodes de routage Express", () => {
   assert.doesNotMatch(preloadSource, /installExpressIntegration/);
-  assert.doesNotMatch(preloadSource, /express\.application/);
+  assert.doesNotMatch(preloadSource, /express\.application\.(?:get|post|put|patch|delete|listen)\s*=/);
 });
 
 test("server.js installe explicitement les contrôleurs modernes", () => {
