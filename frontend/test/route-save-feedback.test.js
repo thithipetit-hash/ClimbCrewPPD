@@ -21,7 +21,8 @@ test("les vidéos d'une voie sont gérées depuis Modifier et accessibles par le
   assert.match(voies, /Une URL par ligne/);
   assert.match(voies, /videoUrls/);
   assert.match(voies, /Voir les vidéos de cette voie/);
-  assert.match(voies, /Voir la vidéo/);
+  assert.match(voies, /Ouvrir/);
+  assert.match(voies, /<video/);
   assert.match(voies, /videoUploadingRouteId/);
   assert.match(voies, /apiUpload/);
 });
