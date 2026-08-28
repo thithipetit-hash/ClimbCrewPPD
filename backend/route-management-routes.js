@@ -8,6 +8,45 @@ function ropeDbToApi(row) {
   };
 }
 
+function normalizeVideoUrls(value) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    const error = new Error("videoUrls doit être un tableau.");
+    error.status = 400;
+    throw error;
+  }
+
+  const urls = [...new Set(value.map((item) => String(item || "").trim()).filter(Boolean))];
+  if (urls.length > 10) {
+    const error = new Error("Une voie ne peut avoir que 10 vidéos maximum.");
+    error.status = 400;
+    throw error;
+  }
+
+  for (const url of urls) {
+    if (url.length > 1000) {
+      const error = new Error("Une URL de vidéo est trop longue.");
+      error.status = 400;
+      throw error;
+    }
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      const error = new Error(`URL de vidéo invalide : ${url}`);
+      error.status = 400;
+      throw error;
+    }
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      const error = new Error("Les liens vidéo doivent utiliser http ou https.");
+      error.status = 400;
+      throw error;
+    }
+  }
+
+  return urls;
+}
+
 function routeDbToApi(row) {
   return {
     id: row.id,
@@ -92,6 +131,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
         id,
         numeroVoieUnique: requestedRoute.numeroVoieUnique || id,
       });
+      route.videoUrls = normalizeVideoUrls(requestedRoute.videoUrls) || [];
       const result = await pool.query(
         `
           insert into routes (
@@ -115,7 +155,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
           route.active !== false,
           String(route.dateCreation || "").trim(),
           route.tags || [],
-          route.videoUrls || [],
+          route.videoUrls,
         ]
       );
       res.status(201).json(routeDbToApi(result.rows[0]));
@@ -132,6 +172,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
     try {
       await videoSchemaReady;
       const route = validateRoutePayload(req.body || {}, { partial: true });
+      route.videoUrls = normalizeVideoUrls(req.body?.videoUrls);
       const result = await pool.query(
         `
           update routes
