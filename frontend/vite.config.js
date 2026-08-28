@@ -1,9 +1,15 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { applyAppSourceAdjustments } from "./scripts/app-source-adjustments.mjs";
 
-const appVersion = readFileSync(new URL("../VERSION", import.meta.url), "utf8").trim();
+const rootVersionUrl = new URL("../VERSION", import.meta.url);
+const appVersion = String(process.env.VITE_APP_VERSION || "").trim()
+  || (existsSync(rootVersionUrl) ? readFileSync(rootVersionUrl, "utf8").trim() : "");
+
+if (!/^\d{8}\.\d{3}$/.test(appVersion)) {
+  throw new Error("VITE_APP_VERSION ou VERSION racine doit fournir une version AAAAMMJJ.NNN valide.");
+}
 
 function appSourceAdjustmentsPlugin() {
   return {
