@@ -64,6 +64,14 @@ function cleanChoice(value, fallback) {
   return /^[a-z0-9_]{2,40}$/.test(normalized) ? normalized : fallback;
 }
 
+function cleanSexe(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["", "h", "m", "f"].includes(normalized)) {
+    return normalized === "m" ? "h" : normalized;
+  }
+  throw new Error("Le sexe doit être Homme, Femme ou Non précisé.");
+}
+
 /** Remplace PATCH /participants/me/profile sans renvoyer l'image Base64. */
 export async function updateOwnParticipantProfile(req, res) {
   const user = currentUser(req);
@@ -77,6 +85,7 @@ export async function updateOwnParticipantProfile(req, res) {
     const crestId = cleanChoice(req.body?.crestId, "cristal");
     const profilePublic = req.body?.profilePublic !== false;
     const customAvatar = resolveCustomAvatarUpdate(req.body?.customAvatarImage);
+    const sexe = cleanSexe(req.body?.sexe);
 
     const result = await getPool().query(
       `
@@ -84,7 +93,8 @@ export async function updateOwnParticipantProfile(req, res) {
         set avatar_id = $2,
             crest_id = $3,
             profile_public = $4,
-            custom_avatar_image = case when $5::boolean then custom_avatar_image else $6 end
+            custom_avatar_image = case when $5::boolean then custom_avatar_image else $6 end,
+            sexe = $7
         where id = $1
         returning
           id, nom, prenom, email, login_email, passport, sexe, cotisation, ffme,
@@ -99,13 +109,14 @@ export async function updateOwnParticipantProfile(req, res) {
         profilePublic,
         customAvatar.keepExisting,
         customAvatar.value,
+        sexe,
       ],
     );
 
     if (!result.rowCount) return res.status(404).json({ error: "Grimpeur introuvable" });
     return res.json(serializeParticipant(result.rows[0]));
   } catch (error) {
-    if (/image personnalisée|WebP/i.test(String(error.message || ""))) {
+    if (/image personnalisée|WebP|sexe/i.test(String(error.message || ""))) {
       return res.status(400).json({ error: error.message });
     }
     console.error("PATCH /participants/me/profile", error);
