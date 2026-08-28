@@ -46,35 +46,10 @@ import { USE_API, apiFetch, authApiFetch, downloadFile } from "./lib/api.js";
 import { normalizeAppData } from "./lib/normalize.js";
 import { APP_VERSION } from "./lib/version.js";
 import { buildCsv, csvFileSlug } from "./lib/csv.js";
+import { EMPTY_APP_DATA, useAppBusinessState } from "./hooks/useAppBusinessState.js";
+import { PASSWORD_RULE_TEXT, isStrongPassword } from "./lib/password-policy.js";
 
-// Données de repli volontairement vides : les données legacy sont importées côté backend/PostgreSQL.
-// Cela évite d'exposer les participants dans le bundle JavaScript public.
-const IMPORTED_DATA = {
-  exportedAt: null,
-  version: "secure-empty-fallback",
-  participants: [],
-  sessions: [],
-  ropes: [],
-  routes: [],
-  realisations: [],
-  selectedDate: "",
-  selectedParticipantProgress: ""
-};
-const STORAGE_KEY = "climbcrew_local_data_v2";
 const ADMIN_CODE = import.meta.env.VITE_LEGACY_ADMIN_CODE || "";
-
-// La session est conservée uniquement dans un cookie HttpOnly côté backend.
-const PASSWORD_RULE_TEXT = "8 caractères minimum, dont 1 majuscule, 1 minuscule, 1 chiffre et 1 caractère spécial.";
-
-function isStrongPassword(value) {
-  return typeof value === "string"
-    && value.length >= 8
-    && /[a-z]/.test(value)
-    && /[A-Z]/.test(value)
-    && /\d/.test(value)
-    && /[^A-Za-z0-9]/.test(value);
-}
-
 
 function App() {
   const [tab, setTab] = useState("inscriptions");
@@ -84,23 +59,7 @@ function App() {
   const [statsSortDirection, setStatsSortDirection] = useState("asc");
   const [wallOfFameSexFilter, setWallOfFameSexFilter] = useState("all");
   const [recentlyAddedParticipantIds, setRecentlyAddedParticipantIds] = useState([]);
-  const [state, setState] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      const base = saved ? JSON.parse(saved) : IMPORTED_DATA;
-      return normalizeAppData({
-        ...base,
-        selectedDate: todayIso(),
-        selectedParticipantProgress: "",
-      }, IMPORTED_DATA);
-    } catch {
-      return normalizeAppData({
-        ...IMPORTED_DATA,
-        selectedDate: todayIso(),
-        selectedParticipantProgress: "",
-      }, IMPORTED_DATA);
-    }
-  });
+  const [state, setState] = useAppBusinessState();
   const [adminInput, setAdminInput] = useState("");
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [adminError, setAdminError] = useState("");
@@ -174,7 +133,7 @@ function App() {
     participantId: "",
     selectedDay: "",
     sessionId: "",
-    voieId: IMPORTED_DATA.routes?.[0]?.id || "",
+    voieId: EMPTY_APP_DATA.routes?.[0]?.id || "",
     styleRealisation: "a_vue",
     commentaire: "",
     cotationProposee: "",
@@ -190,10 +149,6 @@ function App() {
   // Filtres de consultation de la progression.
   const [selectedRouteProgress, setSelectedRouteProgress] = useState("");
   const [expandedRealisationIds, setExpandedRealisationIds] = useState([]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state]);
 
   useEffect(() => {
     if (!confirmationMessage) return undefined;
@@ -969,12 +924,10 @@ function App() {
     try {
       const updated = await apiFetch("/participants/me/profile", {
         method: "PATCH",
-        body: JSON.stringify({
-          avatarId: optimistic.avatarId || "gecko",
-          crestId: optimistic.crestId || "cristal",
-          profilePublic: optimistic.profilePublic !== false,
-          customAvatarImage: optimistic.customAvatarImage || "",
-        }),
+        // Le backend traite désormais PATCH comme une vraie mise à jour partielle.
+        // Ne renvoyer que le patch évite de réécrire involontairement le sexe,
+        // l'avatar ou la confidentialité avec une valeur locale obsolète.
+        body: JSON.stringify(patch),
       });
       setState((prev) => ({
         ...prev,
@@ -2077,7 +2030,6 @@ async function handleThemePreferenceChange(nextTheme) {
           </div>
         )}
       </aside>
-
       {pendingBroadcastMessages.length > 0 && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="broadcast-message-title">
           <div className="modal-panel" style={{ maxWidth: 560 }}>
@@ -2397,8 +2349,6 @@ async function handleThemePreferenceChange(nextTheme) {
             authUser={authUser}
             changePassword={changePassword}
             requestEmailChange={requestEmailChange}
-            myParticipant={myParticipant}
-            updateMyProfile={updateMyProfile}
           />
         )}
 
