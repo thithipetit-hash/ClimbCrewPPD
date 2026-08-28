@@ -35,8 +35,27 @@ export async function apiFetch(path, options = {}) {
   return response.json();
 }
 
+export async function apiUpload(path, file, options = {}) {
+  const method = options.method || "POST";
+  const response = await fetch(`${API_BASE}${path}`, {
+    method,
+    credentials: "include",
+    headers: {
+      "Content-Type": file?.type || "application/octet-stream",
+      "X-File-Name": encodeURIComponent(file?.name || "video"),
+      ...csrfHeaders(method),
+      ...(options.headers || {}),
+    },
+    body: file,
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Erreur API ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function authApiFetch(path, _token, options = {}) {
-  // Authentification par cookie HttpOnly uniquement : aucun jeton n'est stocké dans localStorage.
   return apiFetch(path, options);
 }
 
