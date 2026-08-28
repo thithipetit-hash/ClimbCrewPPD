@@ -89,6 +89,7 @@ services:
       dockerfile: Dockerfile.prod
       args:
         VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_APP_VERSION: ${VITE_APP_VERSION:?VITE_APP_VERSION manquant}
     image: climbcrew-frontend:prod
     container_name: climbcrew-frontend
     restart: unless-stopped
