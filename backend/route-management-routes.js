@@ -131,8 +131,9 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
       );
       if (!result.rowCount) return res.status(404).json({ error: "Vidéo introuvable" });
       const video = result.rows[0];
+      const disposition = req.query.download === "1" ? "attachment" : "inline";
       res.setHeader("Content-Type", video.mime_type);
-      res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(video.file_name)}`);
+      res.setHeader("Content-Disposition", `${disposition}; filename*=UTF-8''${encodeURIComponent(video.file_name)}`);
       res.setHeader("Cache-Control", "private, max-age=3600");
       return res.send(video.content);
     } catch (error) {
