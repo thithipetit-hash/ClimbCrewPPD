@@ -114,6 +114,7 @@ function imageForLevel(avatar, level, variant) {
 export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate, editable = true, compact = false }) {
   const { level, variant } = getGeckoLevelInfo(grade, sexe);
   const [showEvolutionHistory, setShowEvolutionHistory] = useState(false);
+  const [showAvatarEditor, setShowAvatarEditor] = useState(false);
   const [customImageError, setCustomImageError] = useState("");
   const fileInputRef = useRef(null);
   const accent = variant === "feminine" ? "#db2777" : LEVEL_ACCENTS[level - 1];
@@ -146,7 +147,7 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
 
   function handleAvatarImageClick() {
     if (editable) {
-      fileInputRef.current?.click();
+      setShowAvatarEditor((visible) => !visible);
       return;
     }
     if (!customImage) setShowEvolutionHistory((visible) => !visible);
@@ -160,19 +161,47 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
         </div>
       )}
 
-      {editable && (
-        <div className="profile-visual-controls">
-          <label>
-            <span>Avatar</span>
-            <select value={avatar.id} onChange={(event) => onProfileUpdate?.({ avatarId: event.target.value })}>
-              {AVATAR_GROUPS.map((group) => (
-                <optgroup key={group} label={group}>
-                  {AVATAR_OPTIONS.filter((option) => option.group === group).map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-                </optgroup>
-              ))}
-            </select>
-          </label>
-          <div className="profile-custom-image-control">
+      <div className="profile-gecko-stage" style={{ "--gecko-accent": accent }} data-level={level}>
+        <button
+          type="button"
+          className="profile-gecko-real-image"
+          aria-label={editable ? "Choisir l’avatar, l’image ou le sexe" : customImage ? "Image de profil personnalisée" : "Afficher les évolutions passées de l’avatar"}
+          aria-expanded={editable ? showAvatarEditor : showEvolutionHistory}
+          aria-controls={editable ? "profile-avatar-editor" : "profile-avatar-evolution-history"}
+          onClick={handleAvatarImageClick}
+          title={editable ? "Cliquer pour modifier l’avatar, l’image ou le sexe" : undefined}
+        >
+          <img className={`profile-animal-image${customImage ? " profile-custom-image" : ""}`} src={customImage || imageForLevel(avatar, level, variant)} alt="" draggable="false" />
+        </button>
+
+        {editable && showAvatarEditor && (
+          <div id="profile-avatar-editor" className="profile-avatar-evolution-history profile-avatar-editor">
+            <strong>Personnaliser mon profil</strong>
+
+            <div className="grid two" style={{ marginTop: 8 }}>
+              <label>
+                <span>Avatar</span>
+                <select value={avatar.id} onChange={(event) => onProfileUpdate?.({ avatarId: event.target.value })}>
+                  {AVATAR_GROUPS.map((group) => (
+                    <optgroup key={group} label={group}>
+                      {AVATAR_OPTIONS.filter((option) => option.group === group).map((option) => (
+                        <option key={option.id} value={option.id}>{option.label}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                <span>Sexe</span>
+                <select value={String(participant?.sexe || "").toUpperCase()} onChange={(event) => onProfileUpdate?.({ sexe: event.target.value })}>
+                  <option value="">Non précisé</option>
+                  <option value="M">Homme</option>
+                  <option value="F">Femme</option>
+                </select>
+              </label>
+            </div>
+
             <input
               ref={fileInputRef}
               type="file"
@@ -180,32 +209,25 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
               onChange={onCustomImageChange}
               style={{ display: "none" }}
             />
-            <div className="small profile-custom-image-help">
-              Cliquez directement sur l’image de l’avatar pour charger ou remplacer votre photo.
-              PNG, JPEG ou WebP · 5 Mo maximum · format carré 512×512 recommandé.
-            </div>
-            {customImage && (
-              <button type="button" className="secondary" onClick={removeCustomImage}>
-                Revenir à l’avatar
+
+            <div className="group" style={{ marginTop: 10 }}>
+              <button type="button" className="secondary" onClick={() => fileInputRef.current?.click()}>
+                Charger une image personnelle
               </button>
-            )}
+              {customImage && (
+                <button type="button" className="secondary" onClick={removeCustomImage}>
+                  Revenir à l’avatar
+                </button>
+              )}
+            </div>
+
+            <div className="small profile-custom-image-help" style={{ marginTop: 8 }}>
+              Image personnelle : PNG, JPEG ou WebP · 5 Mo maximum · format carré 512×512 recommandé.
+              L’image est recadrée au centre et convertie automatiquement en WebP 512×512.
+            </div>
             {customImageError && <div className="profile-custom-image-error" role="alert">{customImageError}</div>}
           </div>
-        </div>
-      )}
-
-      <div className="profile-gecko-stage" style={{ "--gecko-accent": accent }} data-level={level}>
-        <button
-          type="button"
-          className="profile-gecko-real-image"
-          aria-label={editable ? "Changer l’image de profil" : customImage ? "Image de profil personnalisée" : "Afficher les évolutions passées de l’avatar"}
-          aria-expanded={!editable ? showEvolutionHistory : undefined}
-          aria-controls={!editable ? "profile-avatar-evolution-history" : undefined}
-          onClick={handleAvatarImageClick}
-          title={editable ? "Cliquer pour changer l’image de profil" : undefined}
-        >
-          <img className={`profile-animal-image${customImage ? " profile-custom-image" : ""}`} src={customImage || imageForLevel(avatar, level, variant)} alt="" draggable="false" />
-        </button>
+        )}
 
         {!editable && !customImage && showEvolutionHistory && (
           <div id="profile-avatar-evolution-history" className="profile-avatar-evolution-history">
