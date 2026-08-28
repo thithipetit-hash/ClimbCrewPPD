@@ -16,6 +16,11 @@ WORKDIR /app
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=${VITE_API_URL}
 
+# La version applicative est fournie par le fichier VERSION racine via Compose.
+# Aucun numéro n'est dupliqué dans l'image ou dans le code frontend.
+ARG VITE_APP_VERSION
+ENV VITE_APP_VERSION=${VITE_APP_VERSION}
+
 # Le build de production utilise exactement le même lockfile que la CI. npm ci
 # refuse toute divergence package.json/package-lock.json et garantit ainsi que
 # les dépendances validées sont celles réellement déployées.
