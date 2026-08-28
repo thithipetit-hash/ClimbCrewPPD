@@ -13,6 +13,16 @@ function playableVideoUrl(url) {
   return url;
 }
 
+function isLocalVideoUrl(url) {
+  return /^\/routes\/[^/]+\/videos\/[^/]+$/.test(String(url || ""));
+}
+
+function downloadableVideoUrl(url) {
+  const videoUrl = playableVideoUrl(url);
+  if (!isLocalVideoUrl(url)) return videoUrl;
+  return `${videoUrl}${videoUrl.includes("?") ? "&" : "?"}download=1`;
+}
+
 export default function Voies({
   adminUnlocked,
   newRoute,
@@ -134,7 +144,12 @@ export default function Voies({
               <div className="subcard" key={`${url}-${index}`}>
                 <div className="card-header">
                   <div><strong>Vidéo {index + 1}</strong><div className="small" style={{ overflowWrap: "anywhere" }}>{url}</div></div>
-                  <a className="pill" href={playableVideoUrl(url)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>Voir la vidéo</a>
+                  <div className="group">
+                    <a className="pill" href={playableVideoUrl(url)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>Voir la vidéo</a>
+                    {isLocalVideoUrl(url) && (
+                      <a className="pill" href={downloadableVideoUrl(url)} download style={{ textDecoration: "none" }}>Télécharger</a>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
