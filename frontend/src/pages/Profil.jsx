@@ -5,6 +5,7 @@ import ParticipantBadges from "../components/ParticipantBadges.jsx";
 import ProfileGecko from "../components/ProfileGecko.jsx";
 import CprEvolutionChart from "../sections/CprEvolutionChart.jsx";
 import { fullName, formatPoints } from "../lib/domain.js";
+import { apiFetch } from "../lib/api.js";
 
 export default function Profil({
   USE_API,
@@ -35,6 +36,31 @@ export default function Profil({
   const points = pointsByParticipantId[myParticipantId] || 0;
   const participations = sessionStats.participationCount[myParticipantId] || 0;
 
+  async function handleProfileUpdate(patch) {
+    if (!Object.prototype.hasOwnProperty.call(patch || {}, "sexe")) {
+      return updateMyProfile(patch);
+    }
+
+    const normalizedSexe = String(patch.sexe || "").trim().toLowerCase() === "m"
+      ? "h"
+      : String(patch.sexe || "").trim().toLowerCase();
+
+    await apiFetch("/participants/me/profile", {
+      method: "PATCH",
+      body: JSON.stringify({
+        avatarId: myParticipant.avatarId || "gecko",
+        crestId: myParticipant.crestId || "cristal",
+        profilePublic: myParticipant.profilePublic !== false,
+        customAvatarImage: myParticipant.customAvatarImage || "",
+        sexe: normalizedSexe,
+      }),
+    });
+
+    // Recharge l'état global pour que le sexe, l'avatar évolutif et les filtres
+    // utilisent immédiatement la valeur réellement persistée en base.
+    window.location.reload();
+  }
+
   return (
     <div className="stack">
       <div className="card" style={getPassportStyle(myParticipant)} data-passport={normalizePassport(myParticipant.passport)}>
@@ -52,7 +78,7 @@ export default function Profil({
         </div>
       </div>
 
-      <ProfileGecko grade={cpr.currentGrade || ""} sexe={myParticipant.sexe} participant={myParticipant} onProfileUpdate={updateMyProfile} />
+      <ProfileGecko grade={cpr.currentGrade || ""} sexe={myParticipant.sexe} participant={myParticipant} onProfileUpdate={handleProfileUpdate} />
 
       <div className="card profile-stats-card" aria-label="Mes statistiques">
         <div className="stats-grid profile-stats-grid">
