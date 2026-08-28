@@ -2,32 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const lifecycleSource = await readFile(
-  new URL("../admin-users/account-lifecycle-service.js", import.meta.url),
-  "utf8",
-);
-const participantLifecycleSource = await readFile(
-  new URL("../admin-users/participant-lifecycle-service.js", import.meta.url),
-  "utf8",
-);
-const integrationSource = await readFile(
-  new URL("../admin-users/express-integration.js", import.meta.url),
-  "utf8",
-);
-const deploymentSource = await readFile(
-  new URL("../deployment-compatibility.js", import.meta.url),
-  "utf8",
-);
-const productionEnvExample = await readFile(
-  new URL("../../.env.production.example", import.meta.url),
-  "utf8",
-);
+const lifecycleSource = await readFile(new URL("../admin-users/account-lifecycle-service.js", import.meta.url), "utf8");
+const participantLifecycleSource = await readFile(new URL("../admin-users/participant-lifecycle-service.js", import.meta.url), "utf8");
+const routesSource = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
+const deploymentSource = await readFile(new URL("../deployment-compatibility.js", import.meta.url), "utf8");
+const productionEnvExample = await readFile(new URL("../../.env.production.example", import.meta.url), "utf8");
 
-test("la révocation historique utilise le contrôleur avec garde-fous", () => {
-  assert.match(
-    integrationSource,
-    /path === "\/admin\/auth\/users\/:id\/revoke"[\s\S]*revokeAccountSafely/,
-  );
+test("la révocation utilise explicitement le contrôleur avec garde-fous", () => {
+  assert.match(routesSource, /app\.post\("\/admin\/auth\/users\/:id\/revoke", requireAuth, requireAdmin, revokeAccountSafely\)/);
 });
 
 test("un administrateur ne peut pas révoquer son propre compte", () => {
@@ -48,10 +30,7 @@ test("la révocation coupe les sessions et les notifications du compte", () => {
 });
 
 test("la réactivation recalcule le rôle depuis la fiche participant", () => {
-  assert.match(
-    integrationSource,
-    /path === "\/admin\/auth\/users\/:id\/reactivate"[\s\S]*reactivateAccountSafely/,
-  );
+  assert.match(routesSource, /app\.post\("\/admin\/auth\/users\/:id\/reactivate", requireAuth, requireAdmin, reactivateAccountSafely\)/);
   assert.match(lifecycleSource, /select id, can_admin from participants where id = \$1 for update/);
   assert.match(lifecycleSource, /role = case when \$2 then 'admin' else 'user' end/);
   assert.match(lifecycleSource, /receive_account_notifications = false/);
@@ -61,26 +40,17 @@ test("un compte sans fiche ne peut pas être promu administrateur", () => {
   assert.match(lifecycleSource, /typeof isAdmin !== "boolean"/);
   assert.match(lifecycleSource, /isAdmin && !target\.participant_id/);
   assert.match(lifecycleSource, /Associez d’abord ce compte à une fiche participant/);
-  assert.match(
-    integrationSource,
-    /app\.post\("\/admin\/auth\/users\/:id\/admin", requireAdmin, updateAdminRightSafely\)/,
-  );
+  assert.match(routesSource, /app\.post\("\/admin\/auth\/users\/:id\/admin", requireEnhancementAdmin, updateAdminRightSafely\)/);
 });
 
 test("supprimer une fiche liée à un compte est refusé", () => {
-  assert.match(
-    integrationSource,
-    /path === "\/participants\/:id"[\s\S]*deleteParticipantSafely/,
-  );
+  assert.match(routesSource, /app\.delete\("\/participants\/:id", requireAuth, requireAdmin, deleteParticipantSafely\)/);
   assert.match(participantLifecycleSource, /from users where participant_id = \$1/);
   assert.match(participantLifecycleSource, /Dissociez ou supprimez d’abord le compte/);
 });
 
 test("la suppression nettoie les références d'assureur orphelines", () => {
-  assert.match(
-    participantLifecycleSource,
-    /update realisations set assureur_id = null where assureur_id = \$1/,
-  );
+  assert.match(participantLifecycleSource, /update realisations set assureur_id = null where assureur_id = \$1/);
   assert.match(participantLifecycleSource, /clearedAssurerReferences/);
 });
 
