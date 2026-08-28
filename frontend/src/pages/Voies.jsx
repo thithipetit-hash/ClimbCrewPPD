@@ -1,7 +1,17 @@
 import React from "react";
 import Button from "../components/Button.jsx";
+import { apiFetch } from "../lib/api.js";
 import { GRADES, formatRouteName, getRouteCardStyle, normalizeRopeNumber } from "../lib/domain.js";
 import { ROPE_NUMBERS, ROUTE_COLORS, ROUTE_TAGS } from "../lib/ui-config.js";
+
+function parseVideoUrls(text) {
+  return [...new Set(
+    String(text || "")
+      .split(/\r?\n/)
+      .map((value) => value.trim())
+      .filter(Boolean),
+  )];
+}
 
 export default function Voies({
   adminUnlocked,
@@ -25,6 +35,120 @@ export default function Voies({
   deleteRoute,
   savingRouteId,
 }) {
+  const [videoRouteId, setVideoRouteId] = React.useState("");
+  const [videoDraftByRouteId, setVideoDraftByRouteId] = React.useState({});
+  const [videoSaveStatus, setVideoSaveStatus] = React.useState("");
+  const [videoSavingRouteId, setVideoSavingRouteId] = React.useState("");
+
+  const allRoutes = routeDisplayGroups.flatMap((group) => group.routes);
+  const videoRoute = allRoutes.find((route) => String(route.id) === String(videoRouteId)) || null;
+
+  function effectiveVideoUrls(route) {
+    const local = videoDraftByRouteId[route.id];
+    if (local?.savedUrls) return local.savedUrls;
+    return Array.isArray(route.videoUrls) ? route.videoUrls : [];
+  }
+
+  function videoDraftText(route) {
+    const local = videoDraftByRouteId[route.id];
+    if (local && Object.hasOwn(local, "draft")) return local.draft;
+    return effectiveVideoUrls(route).join("\n");
+  }
+
+  function updateVideoDraft(route, draft) {
+    setVideoDraftByRouteId((current) => ({
+      ...current,
+      [route.id]: {
+        ...(current[route.id] || {}),
+        draft,
+      },
+    }));
+    setVideoSaveStatus("");
+  }
+
+  async function saveRouteVideos(route, { silent = false } = {}) {
+    const videoUrls = parseVideoUrls(videoDraftText(route));
+    if (videoUrls.length > 10) {
+      setVideoSaveStatus("10 vidéos maximum par voie.");
+      return false;
+    }
+
+    try {
+      setVideoSavingRouteId(route.id);
+      setVideoSaveStatus("");
+      const updated = await apiFetch(`/routes/${encodeURIComponent(route.id)}`, {
+        method: "PUT",
+        body: JSON.stringify({ videoUrls }),
+      });
+      const savedUrls = Array.isArray(updated.videoUrls) ? updated.videoUrls : videoUrls;
+      setVideoDraftByRouteId((current) => ({
+        ...current,
+        [route.id]: {
+          draft: savedUrls.join("\n"),
+          savedUrls,
+        },
+      }));
+      if (!silent) {
+        setVideoSaveStatus(`${savedUrls.length} lien${savedUrls.length > 1 ? "s" : ""} vidéo enregistré${savedUrls.length > 1 ? "s" : ""}.`);
+      }
+      return true;
+    } catch (error) {
+      setVideoSaveStatus(error.message || "Enregistrement des vidéos impossible.");
+      return false;
+    } finally {
+      setVideoSavingRouteId("");
+    }
+  }
+
+  async function saveRouteEditionWithVideos(route) {
+    const videosSaved = await saveRouteVideos(route, { silent: true });
+    if (!videosSaved) return;
+    await saveRouteEdition(route);
+  }
+
+  if (videoRoute) {
+    const videoUrls = effectiveVideoUrls(videoRoute);
+    return (
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <h2>Vidéos · {formatRouteName(videoRoute)}</h2>
+            <div className="small">
+              Corde {normalizeRopeNumber(videoRoute.numeroCorde)} · {videoRoute.cotationAjustee || videoRoute.cotationReference || "nc"}
+            </div>
+          </div>
+          <Button variant="secondary" onClick={() => setVideoRouteId("")}>Retour aux voies</Button>
+        </div>
+
+        {videoUrls.length === 0 ? (
+          <div className="muted-box">Aucune vidéo n’est encore associée à cette voie.</div>
+        ) : (
+          <div className="stack">
+            {videoUrls.map((url, index) => (
+              <div className="subcard" key={`${url}-${index}`}>
+                <div className="card-header">
+                  <div>
+                    <strong>Vidéo {index + 1}</strong>
+                    <div className="small" style={{ overflowWrap: "anywhere" }}>{url}</div>
+                  </div>
+                  <a
+                    className="pill"
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: "none" }}
+                  >
+                    Voir la vidéo
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <>
       {adminUnlocked && (
@@ -90,6 +214,7 @@ export default function Voies({
                   <div className="stack">
                     {group.routes.map((route) => {
                       const routeRating = routeRatingsById[route.id] || { average: 0, count: 0 };
+                      const videoCount = effectiveVideoUrls(route).length;
                       return (
                         <div className={`route-card ${route.moulinetteOnly ? "moulinette-only" : ""}`} key={route.id} style={getRouteCardStyle(route.couleurPrises)}>
                           {adminUnlocked && editingRouteId === route.id && routeEditDraft ? (
@@ -138,14 +263,26 @@ export default function Voies({
                                   })}
                                 </div>
                               </div>
+                              <div style={{ marginTop: 10 }}>
+                                <label htmlFor={`route-videos-${route.id}`}>Vidéos de la voie</label>
+                                <textarea
+                                  id={`route-videos-${route.id}`}
+                                  rows={4}
+                                  value={videoDraftText(route)}
+                                  onChange={(event) => updateVideoDraft(route, event.target.value)}
+                                  placeholder={"https://youtu.be/...\nhttps://www.youtube.com/watch?v=..."}
+                                />
+                                <div className="small">Une URL par ligne · 10 vidéos maximum. Les utilisateurs y accèdent en cliquant sur le titre de la voie.</div>
+                                {videoSaveStatus && <div className="small" style={{ marginTop: 4 }}>{videoSaveStatus}</div>}
+                              </div>
                               {routeError && <div className="error" style={{ marginTop: 8 }}>{routeError}</div>}
                               <div className="group" style={{ marginTop: 8 }}>
                                 <Button
-                                  onClick={() => saveRouteEdition(route)}
-                                  disabled={savingRouteId === route.id}
-                                  aria-busy={savingRouteId === route.id}
+                                  onClick={() => saveRouteEditionWithVideos(route)}
+                                  disabled={savingRouteId === route.id || videoSavingRouteId === route.id}
+                                  aria-busy={savingRouteId === route.id || videoSavingRouteId === route.id}
                                 >
-                                  {savingRouteId === route.id ? "Enregistrement…" : "Enregistrer"}
+                                  {savingRouteId === route.id || videoSavingRouteId === route.id ? "Enregistrement…" : "Enregistrer"}
                                 </Button>
                                 <Button variant="secondary" onClick={cancelRouteEdition}>Annuler</Button>
                                 <Button variant="danger" onClick={() => deleteRoute(route)}>Supprimer la voie</Button>
@@ -156,7 +293,19 @@ export default function Voies({
                               <div className="route-summary">
                                 <strong className="route-primary-line">
                                   {routeSortMode !== "corde" && <>Corde {normalizeRopeNumber(route.numeroCorde)} · </>}
-                                  {route.cotationAjustee} · {formatRouteName(route)}
+                                  {route.cotationAjustee} · {" "}
+                                  <a
+                                    href={`#voie-videos-${route.id}`}
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      setVideoRouteId(route.id);
+                                    }}
+                                    style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }}
+                                    title="Voir les vidéos de cette voie"
+                                  >
+                                    {formatRouteName(route)}
+                                  </a>
+                                  {videoCount > 0 && <span className="small"> · 🎬 {videoCount}</span>}
                                 </strong>
                                 <div className="route-secondary-line">
                                   <span>Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}</span>
