@@ -87,7 +87,7 @@ test("les lectures participants et réalisations utilisent les contrôleurs de c
   const routes = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
   const privacy = await readFile(new URL("../admin-users/participant-privacy-service.js", import.meta.url), "utf8");
   assert.match(routes, /app\.get\("\/participants", requireAuth, listParticipantsWithPrivacy\)/);
-  assert.match(routes, /app\.get\("\/participants\/:id\/avatar", requireAuthUser, getParticipantCustomAvatar\)/);
+  assert.match(routes, /app\.get\("\/participants\/:id\/avatar", requireAuth, getParticipantCustomAvatar\)/);
   assert.match(routes, /app\.get\("\/realisations", requireAuth, listRealisationsWithPrivacy\)/);
   assert.match(privacy, /serializePublicParticipant/);
   assert.match(privacy, /cotisation: Boolean\(row\.cotisation\)/);
