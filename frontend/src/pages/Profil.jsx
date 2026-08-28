@@ -35,15 +35,6 @@ export default function Profil({
   const points = pointsByParticipantId[myParticipantId] || 0;
   const participations = sessionStats.participationCount[myParticipantId] || 0;
 
-  function handleAvatarClick(event) {
-    if (!event.target.closest?.(".profile-gecko-real-image")) return;
-    const fileInput = event.currentTarget.querySelector('.profile-custom-image-control input[type="file"]');
-    if (!fileInput) return;
-    event.preventDefault();
-    event.stopPropagation();
-    fileInput.click();
-  }
-
   return (
     <div className="stack">
       <div className="card" style={getPassportStyle(myParticipant)} data-passport={normalizePassport(myParticipant.passport)}>
@@ -61,10 +52,7 @@ export default function Profil({
         </div>
       </div>
 
-      <div onClickCapture={handleAvatarClick}>
-        <ProfileGecko grade={cpr.currentGrade || ""} sexe={myParticipant.sexe} participant={myParticipant} onProfileUpdate={updateMyProfile} />
-        <div className="small" style={{ textAlign: "center", marginTop: -6 }}>Cliquez directement sur l’image de l’avatar pour choisir ou remplacer votre image de profil.</div>
-      </div>
+      <ProfileGecko grade={cpr.currentGrade || ""} sexe={myParticipant.sexe} participant={myParticipant} onProfileUpdate={updateMyProfile} />
 
       <div className="card profile-stats-card" aria-label="Mes statistiques">
         <div className="stats-grid profile-stats-grid">
@@ -76,11 +64,11 @@ export default function Profil({
         </div>
       </div>
 
-      <div className="card"><div className="card-header"><h3>Export</h3><Button variant="secondary" onClick={exportMyRealisationsCsv} disabled={myRealisations.length === 0}>Exporter pour theCrag</Button></div></div>
-
       <ClimberProfilePanel realisations={myRealisations} routesById={routesById} cprGrade={cpr.currentGrade || ""} />
       <ParticipantBadges participant={myParticipant} realisations={myRealisations} allRealisations={allRealisations} routesById={routesById} sessions={getParticipantSessions(myParticipantId)} />
       <div className="card"><CprEvolutionChart realisations={myRealisations} routesById={routesById} /></div>
+
+      <div className="card"><div className="card-header"><h3>Export</h3><Button variant="secondary" onClick={exportMyRealisationsCsv} disabled={myRealisations.length === 0}>Exporter pour theCrag</Button></div></div>
     </div>
   );
 }
