@@ -11,7 +11,7 @@ test("la politique de mot de passe utilise un minimum de 8 caractères partout",
     readFile(new URL("../admin-users/email-association-service.js", import.meta.url), "utf8"),
   ]);
 
-  assert.match(frontend, /from "\.\/lib\/password-policy"/);
+  assert.match(frontend, /from "\.\/lib\/password-policy\.js"/);
   assert.match(frontend, /PASSWORD_RULE_TEXT/);
   assert.match(frontend, /isStrongPassword/);
   assert.match(frontendPolicy, /8 caractères minimum/);
