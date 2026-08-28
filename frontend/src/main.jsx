@@ -25,10 +25,10 @@ import "./styles/startup-video.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <ErrorBoundary>
-      <StartupVideoGate>
+    <StartupVideoGate>
+      <ErrorBoundary>
         <App />
-      </StartupVideoGate>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </StartupVideoGate>
   </React.StrictMode>
 );
