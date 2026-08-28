@@ -144,6 +144,14 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
+  function handleAvatarImageClick() {
+    if (editable) {
+      fileInputRef.current?.click();
+      return;
+    }
+    if (!customImage) setShowEvolutionHistory((visible) => !visible);
+  }
+
   return (
     <div className={`card profile-gecko-card${compact ? " profile-gecko-card--compact" : ""}`}>
       {!editable && (
@@ -165,27 +173,22 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
             </select>
           </label>
           <div className="profile-custom-image-control">
-            <span className="profile-custom-image-title">Image personnalisée</span>
-            <div className="profile-custom-image-actions">
-              <label className="profile-custom-image-button">
-                Charger une image
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={onCustomImageChange}
-                />
-              </label>
-              {customImage && (
-                <button type="button" className="secondary" onClick={removeCustomImage}>
-                  Revenir à l’avatar
-                </button>
-              )}
-            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={onCustomImageChange}
+              style={{ display: "none" }}
+            />
             <div className="small profile-custom-image-help">
+              Cliquez directement sur l’image de l’avatar pour charger ou remplacer votre photo.
               PNG, JPEG ou WebP · 5 Mo maximum · format carré 512×512 recommandé.
-              L’image est recadrée au centre et convertie automatiquement en WebP 512×512.
             </div>
+            {customImage && (
+              <button type="button" className="secondary" onClick={removeCustomImage}>
+                Revenir à l’avatar
+              </button>
+            )}
             {customImageError && <div className="profile-custom-image-error" role="alert">{customImageError}</div>}
           </div>
         </div>
@@ -195,17 +198,16 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
         <button
           type="button"
           className="profile-gecko-real-image"
-          aria-label={customImage ? "Image de profil personnalisée" : "Afficher les évolutions passées de l’avatar"}
-          aria-expanded={showEvolutionHistory}
-          aria-controls="profile-avatar-evolution-history"
-          onClick={() => {
-            if (!customImage) setShowEvolutionHistory((visible) => !visible);
-          }}
+          aria-label={editable ? "Changer l’image de profil" : customImage ? "Image de profil personnalisée" : "Afficher les évolutions passées de l’avatar"}
+          aria-expanded={!editable ? showEvolutionHistory : undefined}
+          aria-controls={!editable ? "profile-avatar-evolution-history" : undefined}
+          onClick={handleAvatarImageClick}
+          title={editable ? "Cliquer pour changer l’image de profil" : undefined}
         >
           <img className={`profile-animal-image${customImage ? " profile-custom-image" : ""}`} src={customImage || imageForLevel(avatar, level, variant)} alt="" draggable="false" />
         </button>
 
-        {!customImage && showEvolutionHistory && (
+        {!editable && !customImage && showEvolutionHistory && (
           <div id="profile-avatar-evolution-history" className="profile-avatar-evolution-history">
             <strong>Images des évolutions précédentes</strong>
             {level > 1 ? (
