@@ -45,7 +45,14 @@ export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, a
       <details className="faq-item">
         <summary><strong>Comment enregistrer une voie réalisée ?</strong></summary>
         <div className="small">
-          Dans l'onglet Voies, le bouton « Réalisation » ouvre la saisie. Si un jour est choisi, seuls les participants cotisants inscrits ce jour-là sont proposés. Si un participant est choisi, seuls ses jours d'inscription sont proposés. La saisie ne distingue pas les créneaux midi et soir.
+          Dans l'onglet Voies, le bouton « Réalisation » ouvre la saisie. Dans Progression, le bouton « Nouvelle réalisation » permet également d'enregistrer une voie pour le compte connecté. Si un jour est choisi, seuls les participants cotisants inscrits ce jour-là sont proposés. Si un participant est choisi, seuls ses jours d'inscription sont proposés. La saisie ne distingue pas les créneaux midi et soir.
+        </div>
+      </details>
+
+      <details className="faq-item">
+        <summary><strong>Quel grimpeur est affiché par défaut dans Progression ?</strong></summary>
+        <div className="small">
+          Lors de l'ouverture de Progression, si aucune voie ni aucun grimpeur n'a encore été sélectionné, l'application affiche automatiquement le grimpeur associé au compte connecté. Il reste possible de consulter ensuite un autre grimpeur ou une voie à l'aide des listes de sélection.
         </div>
       </details>
 
@@ -57,9 +64,30 @@ export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, a
       </details>
 
       <details className="faq-item">
-        <summary><strong>Comment fonctionnent les avatars ?</strong></summary>
+        <summary><strong>Comment fonctionnent les avatars et l'image de profil ?</strong></summary>
         <div className="small">
-          Chaque grimpeur peut choisir un avatar parmi plusieurs animaux, personnages, fruits et objets. L’avatar évolue visuellement selon le niveau récent calculé par l’application. Ces représentations sont proposées à titre purement ludique : elles ne portent aucun jugement sur les personnes et n’ont aucune intention offensante, discriminatoire ou stéréotypée. Le choix d’un avatar ne modifie ni les droits, ni les statistiques, ni le classement du grimpeur.
+          Chaque grimpeur peut choisir un avatar parmi plusieurs animaux, personnages, fruits et objets. L’avatar évolue visuellement selon le niveau récent calculé par l’application. Dans « Mon profil », un clic sur l'image ouvre les choix de personnalisation : avatar, sexe et image personnelle. Une image personnelle peut remplacer l'avatar ; les formats PNG, JPEG et WebP sont acceptés jusqu'à 5 Mo, puis l'image est recadrée au centre et convertie automatiquement en WebP carré 512 × 512. Il est toujours possible de revenir à l'avatar. Ces représentations sont proposées à titre purement ludique : elles ne portent aucun jugement sur les personnes et n’ont aucune intention offensante, discriminatoire ou stéréotypée. Le choix d’un avatar ou d'une image ne modifie ni les droits, ni les statistiques, ni le classement du grimpeur.
+        </div>
+      </details>
+
+      <details className="faq-item">
+        <summary><strong>A quoi sert le choix du sexe dans le profil ?</strong></summary>
+        <div className="small">
+          Le sexe peut être défini comme Homme, Femme ou Non précisé depuis la personnalisation ouverte en cliquant sur l'image de profil. Cette information sert notamment à choisir la variante visuelle de certains avatars et au filtre du Tableau d’honneur lorsqu'il est utilisé. Elle ne modifie pas le calcul du CPR, des points ou des réalisations.
+        </div>
+      </details>
+
+      <details className="faq-item">
+        <summary><strong>Comment fonctionnent les vidéos associées aux voies ?</strong></summary>
+        <div className="small">
+          Lorsqu'une voie possède une ou plusieurs vidéos, son titre permet d'ouvrir la page dédiée à ces vidéos. Les administrateurs peuvent les gérer depuis « Modifier » sur la voie. Ils peuvent ajouter des liens HTTP ou HTTPS, à raison d'une URL par ligne, ou charger une vidéo locale depuis leur appareil. Jusqu'à 10 vidéos peuvent être associées à une voie. Les formats locaux acceptés sont MP4, WebM, OGG et MOV, avec une taille maximale de 50 Mo par fichier.
+        </div>
+      </details>
+
+      <details className="faq-item">
+        <summary><strong>Les chargements de vidéos sont-ils tracés ?</strong></summary>
+        <div className="small">
+          Oui. Lorsqu'un administrateur charge une vidéo locale sur une voie, l'action est enregistrée dans les journaux administrateur avec la voie concernée, le nom du fichier, son type, son volume en octets et en Mo ainsi que l'identifiant technique de la vidéo.
         </div>
       </details>
 
@@ -112,19 +140,26 @@ export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, a
         </div>
       </details>
 
+      <details className="faq-item">
+        <summary><strong>Comment exporter ses réalisations vers theCrag ?</strong></summary>
+        <div className="small">
+          Dans « Mon profil », le bouton « Exporter pour theCrag » est placé en bas de page. Il génère un fichier CSV contenant les réalisations du grimpeur connecté dans un format adapté à l'import vers theCrag. Le bouton n'est actif que lorsque des réalisations sont disponibles.
+        </div>
+      </details>
+
       {canAccessAdminTabs && (
         <>
           <details className="faq-item">
-            <summary><strong>Qui peut accéder à Administration, Gestion des comptes et Log ?</strong></summary>
+            <summary><strong>Qui peut accéder à Administration, Gestion des comptes et Administration Serveur ?</strong></summary>
             <div className="small">
               Ces pages sont réservées aux administrateurs et ne sont pas affichées dans la navigation des utilisateurs standards.
             </div>
           </details>
 
           <details className="faq-item">
-            <summary><strong>A quoi servent Gestion des comptes et Log ?</strong></summary>
+            <summary><strong>A quoi servent Gestion des comptes et Administration Serveur ?</strong></summary>
             <div className="small">
-              Gestion des comptes permet d'approuver, révoquer, réactiver et réinitialiser les accès. Log présente les événements utiles de connexion et d'authentification ; les changements d'ambiance n'y sont pas enregistrés.
+              Gestion des comptes permet d'approuver, révoquer, réactiver et réinitialiser les accès. Administration Serveur regroupe notamment les sauvegardes, la restauration, la messagerie, la diffusion et les journaux techniques et administrateur. Les actions sensibles réalisées par les administrateurs y sont tracées lorsqu'elles sont concernées par la journalisation.
             </div>
           </details>
         </>
