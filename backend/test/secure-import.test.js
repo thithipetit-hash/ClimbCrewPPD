@@ -52,5 +52,5 @@ test("une réalisation historique sans note reste réimportable", () => {
 });
 
 test("la route fichier legacy reste bloquée en production", () => {
-  assert.match(serverSource, /app\.post\("\/import-data", requireSetupAccess, blockLegacyFileImportInProduction/);
+  assert.match(serverSource, /app\.post\("\/import-data", blockLegacyFileImportInProduction, requireSetupAccess, async/);
 });
