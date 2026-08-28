@@ -5,7 +5,6 @@ import ParticipantBadges from "../components/ParticipantBadges.jsx";
 import ProfileGecko from "../components/ProfileGecko.jsx";
 import CprEvolutionChart from "../sections/CprEvolutionChart.jsx";
 import { fullName, formatPoints } from "../lib/domain.js";
-import { apiFetch } from "../lib/api.js";
 
 export default function Profil({
   USE_API,
@@ -45,20 +44,10 @@ export default function Profil({
       ? "h"
       : String(patch.sexe || "").trim().toLowerCase();
 
-    await apiFetch("/participants/me/profile", {
-      method: "PATCH",
-      body: JSON.stringify({
-        avatarId: myParticipant.avatarId || "gecko",
-        crestId: myParticipant.crestId || "cristal",
-        profilePublic: myParticipant.profilePublic !== false,
-        customAvatarImage: myParticipant.customAvatarImage || "",
-        sexe: normalizedSexe,
-      }),
-    });
-
-    // Recharge l'état global pour que le sexe, l'avatar évolutif et les filtres
-    // utilisent immédiatement la valeur réellement persistée en base.
-    window.location.reload();
+    // Utilise la mise à jour optimiste du profil déjà gérée par App :
+    // le sexe et l'avatar évolutif changent immédiatement sans recharger
+    // toute l'application ni relancer la vidéo d'introduction.
+    return updateMyProfile({ ...patch, sexe: normalizedSexe });
   }
 
   return (
