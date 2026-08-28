@@ -6,6 +6,7 @@ FRONTEND_VERSION_FILE="frontend/src/lib/version.js"
 VERSION_PATTERN='^[0-9]{8}\.[0-9]{3}$'
 BASE_REF="${BASE_REF:-}"
 BEFORE_SHA="${BEFORE_SHA:-}"
+VERSION_CONSISTENCY_ONLY="${VERSION_CONSISTENCY_ONLY:-0}"
 
 extract_canonical_version() {
   tr -d '[:space:]' < "$1"
@@ -36,6 +37,11 @@ if [[ "$FRONTEND_VERSION" != "$CURRENT_VERSION" ]]; then
   exit 1
 fi
 
+echo "Version canonique synchronisée : $CURRENT_VERSION"
+if [ "$VERSION_CONSISTENCY_ONLY" = "1" ]; then
+  exit 0
+fi
+
 BASE_VERSION=""
 BASE_LABEL=""
 
@@ -64,7 +70,6 @@ if [ -z "$BASE_VERSION" ] && [ -n "$BASE_LABEL" ]; then
 fi
 
 if [ -z "$BASE_VERSION" ]; then
-  echo "Version courante valide et synchronisée : $CURRENT_VERSION"
   echo "Aucune version de référence disponible ; comparaison ignorée."
   exit 0
 fi
