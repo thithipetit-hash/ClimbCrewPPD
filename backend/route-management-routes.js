@@ -74,16 +74,18 @@ function routeDbToApi(row) {
  * Express tandis que les règles SQL et la conversion API restent regroupées ici.
  */
 export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, pool }) {
-  // Migration légère et idempotente : les vidéos sont stockées directement sur
-  // la voie sous forme de liste d'URL. Elle permet un déploiement sans opération
-  // SQL manuelle sur les bases déjà existantes.
-  const videoSchemaReady = pool.query(`
-    alter table routes
-    add column if not exists video_urls text[] not null default '{}'
-  `).catch((error) => {
-    console.error("Initialisation routes.video_urls impossible", error);
-    throw error;
-  });
+  // La migration doit être déclenchée après ensureSchema(), pas au moment où
+  // les routes Express sont enregistrées. Lors d'une base neuve, la table
+  // routes n'existe pas encore à cet instant.
+  let videoSchemaReady = false;
+  async function ensureVideoSchema() {
+    if (videoSchemaReady) return;
+    await pool.query(`
+      alter table routes
+      add column if not exists video_urls text[] not null default '{}'
+    `);
+    videoSchemaReady = true;
+  }
 
   app.get("/ropes", requireAuth, async (_req, res) => {
     try {
@@ -101,7 +103,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
 
   app.get("/routes", requireAuth, async (_req, res) => {
     try {
-      await videoSchemaReady;
+      await ensureVideoSchema();
       const result = await pool.query(
         `
           select
@@ -123,7 +125,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
 
   app.post("/routes", requireAuth, requireAdmin, async (req, res) => {
     try {
-      await videoSchemaReady;
+      await ensureVideoSchema();
       const requestedRoute = req.body || {};
       const id = requestedRoute.id || `route-${Date.now()}`;
       const route = validateRoutePayload({
@@ -170,7 +172,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
 
   app.put("/routes/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
-      await videoSchemaReady;
+      await ensureVideoSchema();
       const route = validateRoutePayload(req.body || {}, { partial: true });
       route.videoUrls = normalizeVideoUrls(req.body?.videoUrls);
       const result = await pool.query(
