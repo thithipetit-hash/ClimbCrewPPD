@@ -112,7 +112,7 @@ async function run() {
       prenom: "Integration",
       email: memberEmail,
       passport: "jaune",
-      sexe: "",
+      sexe: "f",
       cotisation: true,
       ffme: true,
       canEncadrer: false,
@@ -120,7 +120,7 @@ async function run() {
       canAdmin: false,
       avatarId: "gecko",
       crestId: "cristal",
-      profilePublic: true,
+      profilePublic: false,
     },
   });
   assert.equal(createParticipant.response.status, 201, JSON.stringify(createParticipant.payload));
@@ -138,6 +138,24 @@ async function run() {
     [participantId, memberEmail, memberHash],
   );
   const member = await login(memberEmail, memberPassword);
+
+  // Régression profil : une modification partielle ne doit jamais réinitialiser
+  // un sexe ou une confidentialité déjà enregistrés.
+  const patchProfile = await jsonRequest("/participants/me/profile", {
+    method: "PATCH",
+    cookies: member.cookies,
+    csrf: member.csrf,
+    body: { avatarId: "lynx" },
+  });
+  assert.equal(patchProfile.response.status, 200, JSON.stringify(patchProfile.payload));
+  const persistedProfile = await pool.query(
+    `select sexe, profile_public, avatar_id from participants where id = $1`,
+    [participantId],
+  );
+  assert.equal(persistedProfile.rowCount, 1);
+  assert.equal(persistedProfile.rows[0].sexe, "f", "le PATCH partiel a modifié le sexe");
+  assert.equal(persistedProfile.rows[0].profile_public, false, "le PATCH partiel a rendu le profil public");
+  assert.equal(persistedProfile.rows[0].avatar_id, "lynx", "le champ explicitement modifié n'a pas été persisté");
 
   const sessionId = `closed-${Date.now()}`;
   const sessionPayload = {

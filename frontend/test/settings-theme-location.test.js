@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { moveThemeSettingsOutOfSidebar } from "../vite.config.js";
+import { moveThemeSettingsOutOfSidebar } from "../scripts/app-source-adjustments.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 

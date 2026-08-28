@@ -40,7 +40,7 @@ test("un compte sans fiche ne peut pas être promu administrateur", () => {
   assert.match(lifecycleSource, /typeof isAdmin !== "boolean"/);
   assert.match(lifecycleSource, /isAdmin && !target\.participant_id/);
   assert.match(lifecycleSource, /Associez d’abord ce compte à une fiche participant/);
-  assert.match(routesSource, /app\.post\("\/admin\/auth\/users\/:id\/admin", requireEnhancementAdmin, updateAdminRightSafely\)/);
+  assert.match(routesSource, /app\.post\("\/admin\/auth\/users\/:id\/admin", requireAuth, requireAdmin, updateAdminRightSafely\)/);
 });
 
 test("supprimer une fiche liée à un compte est refusé", () => {
