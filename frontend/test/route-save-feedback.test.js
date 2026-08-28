@@ -9,8 +9,8 @@ test("le bouton indique l'enregistrement d'une voie en cours", async () => {
 
   assert.match(source, /setSavingRouteId\(route\.id\)/);
   assert.match(source, /finally \{/);
-  assert.match(voies, /disabled=\{savingRouteId === route\.id \|\| videoSavingRouteId === route\.id\}/);
-  assert.match(voies, /aria-busy=\{savingRouteId === route\.id \|\| videoSavingRouteId === route\.id\}/);
+  assert.match(voies, /disabled=\{savingRouteId === route\.id \|\| videoSavingRouteId === route\.id \|\| videoUploadingRouteId === route\.id\}/);
+  assert.match(voies, /aria-busy=\{savingRouteId === route\.id \|\| videoSavingRouteId === route\.id \|\| videoUploadingRouteId === route\.id\}/);
   assert.match(voies, /"Enregistrement…" : "Enregistrer"/);
 });
 
@@ -22,6 +22,8 @@ test("les vidéos d'une voie sont gérées depuis Modifier et accessibles par le
   assert.match(voies, /videoUrls/);
   assert.match(voies, /Voir les vidéos de cette voie/);
   assert.match(voies, /Voir la vidéo/);
+  assert.match(voies, /videoUploadingRouteId/);
+  assert.match(voies, /apiUpload/);
 });
 
 test("la voie est présentée sur deux lignes sans répéter la corde", async () => {
