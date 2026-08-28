@@ -73,6 +73,26 @@ function routeDbToApi(row) {
   };
 }
 
+function parseByteRange(rangeHeader, totalLength) {
+  const match = String(rangeHeader || "").match(/^bytes=(\d*)-(\d*)$/i);
+  if (!match) return null;
+
+  let start;
+  let end;
+  if (match[1] === "" && match[2] !== "") {
+    const suffixLength = Number(match[2]);
+    if (!Number.isFinite(suffixLength) || suffixLength <= 0) return null;
+    start = Math.max(totalLength - suffixLength, 0);
+    end = totalLength - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] === "" ? totalLength - 1 : Number(match[2]);
+  }
+
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || start >= totalLength) return null;
+  return { start, end: Math.min(end, totalLength - 1) };
+}
+
 export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, pool }) {
   let videoSchemaReady = false;
   async function ensureVideoSchema() {
@@ -130,12 +150,39 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
         [req.params.videoId, req.params.id],
       );
       if (!result.rowCount) return res.status(404).json({ error: "Vidéo introuvable" });
+
       const video = result.rows[0];
+      const content = Buffer.isBuffer(video.content) ? video.content : Buffer.from(video.content || "");
+      const totalLength = content.length;
       const disposition = req.query.download === "1" ? "attachment" : "inline";
+
       res.setHeader("Content-Type", video.mime_type);
       res.setHeader("Content-Disposition", `${disposition}; filename*=UTF-8''${encodeURIComponent(video.file_name)}`);
       res.setHeader("Cache-Control", "private, max-age=3600");
-      return res.send(video.content);
+      res.setHeader("Accept-Ranges", "bytes");
+
+      if (req.query.download === "1") {
+        res.setHeader("Content-Length", String(totalLength));
+        return res.status(200).send(content);
+      }
+
+      const rangeHeader = req.headers.range;
+      if (!rangeHeader) {
+        res.setHeader("Content-Length", String(totalLength));
+        return res.status(200).send(content);
+      }
+
+      const range = parseByteRange(rangeHeader, totalLength);
+      if (!range) {
+        res.setHeader("Content-Range", `bytes */${totalLength}`);
+        return res.status(416).end();
+      }
+
+      const chunk = content.subarray(range.start, range.end + 1);
+      res.status(206);
+      res.setHeader("Content-Range", `bytes ${range.start}-${range.end}/${totalLength}`);
+      res.setHeader("Content-Length", String(chunk.length));
+      return res.send(chunk);
     } catch (error) {
       console.error("GET /routes/:id/videos/:videoId", error);
       return res.status(500).json({ error: "Lecture de la vidéo impossible" });
