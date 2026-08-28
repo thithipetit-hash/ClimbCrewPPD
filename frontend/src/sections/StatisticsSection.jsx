@@ -48,14 +48,21 @@ export default function StatisticsSection({
           <h2>Grimpeurs par couleur de passeport</h2>
           <span className="badge">{sortedStatsParticipants.length} grimpeur{sortedStatsParticipants.length > 1 ? "s" : ""}</span>
         </div>
-        <div className="stats-grid">
+        <div
+          className="passport-statistics-grid"
+          style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}
+        >
           {PASSPORT_STATISTICS.map(([passport, label]) => (
-            <div className="stat" key={passport}>
-              <div className="label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div
+              className="stat passport-statistic"
+              key={passport}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, minWidth: 0 }}
+            >
+              <div className="label" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                 <span className="passport-dot" style={getPassportDotStyle({ passport })} aria-hidden="true" />
-                {label}
+                <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
               </div>
-              <div className="value">{sessionStats.passportCounts?.[passport] || 0}</div>
+              <div className="value" style={{ flex: "0 0 auto" }}>{sessionStats.passportCounts?.[passport] || 0}</div>
             </div>
           ))}
         </div>
