@@ -62,6 +62,30 @@ export function moveThemeSettingsOutOfSidebar(code) {
   );
 }
 
+export function extractRouteDisplayGrouping(code) {
+  const importAnchor = 'import { PASSWORD_RULE_TEXT, isStrongPassword } from "./lib/password-policy.js";';
+  if (!code.includes(importAnchor)) {
+    throw new Error("Le point d'import du module de groupement des voies est introuvable.");
+  }
+
+  let transformed = code.replace(
+    importAnchor,
+    `${importAnchor}\nimport { buildRouteDisplayGroups } from "./lib/route-display-groups.js";`,
+  );
+
+  const groupingBlock = /\n  \/\/ Prépare les groupes du tableau des voies\.[\s\S]*?\n  const routeDisplayGroups = useMemo\(\(\) => \{[\s\S]*?\n  \}, \[routeSortMode, state\.routes, state\.ropes\]\);/;
+  if (!groupingBlock.test(transformed)) {
+    throw new Error("Le bloc de groupement des voies de App.jsx est introuvable.");
+  }
+
+  return transformed.replace(
+    groupingBlock,
+    `\n  const routeDisplayGroups = useMemo(\n    () => buildRouteDisplayGroups({\n      routes: state.routes,\n      ropes: state.ropes,\n      sortMode: routeSortMode,\n    }),\n    [routeSortMode, state.routes, state.ropes],\n  );`,
+  );
+}
+
 export function applyAppSourceAdjustments(code) {
-  return moveThemeSettingsOutOfSidebar(makeRealisationRatingOptional(code));
+  return extractRouteDisplayGrouping(
+    moveThemeSettingsOutOfSidebar(makeRealisationRatingOptional(code)),
+  );
 }
