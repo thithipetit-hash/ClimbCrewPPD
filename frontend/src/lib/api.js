@@ -1,6 +1,8 @@
 export const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 export const USE_API = Boolean(API_BASE);
 
+const inFlightGetRequests = new Map();
+
 export function readCookie(name) {
   return document.cookie
     .split(";")
@@ -16,7 +18,7 @@ export function csrfHeaders(method = "GET") {
   return csrfToken ? { "X-CSRF-Token": csrfToken } : {};
 }
 
-export async function apiFetch(path, options = {}) {
+async function performApiFetch(path, options = {}) {
   const method = options.method || "GET";
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
@@ -33,6 +35,33 @@ export async function apiFetch(path, options = {}) {
   }
   if (response.status === 204) return null;
   return response.json();
+}
+
+export async function apiFetch(path, options = {}) {
+  const method = String(options.method || "GET").toUpperCase();
+
+  // Au démarrage, App peut demander les mêmes données une première fois pendant
+  // la vidéo d'introduction puis une seconde fois lorsque /auth/me se termine.
+  // Tant qu'une requête GET identique est déjà en cours, on partage sa Promise
+  // au lieu d'émettre un second appel réseau. L'application continue donc à se
+  // charger derrière la vidéo, sans trafic ni latence dupliqués.
+  if (method === "GET") {
+    const requestKey = `${API_BASE}${path}`;
+    const existingRequest = inFlightGetRequests.get(requestKey);
+    if (existingRequest) return existingRequest;
+
+    const request = performApiFetch(path, options)
+      .finally(() => {
+        if (inFlightGetRequests.get(requestKey) === request) {
+          inFlightGetRequests.delete(requestKey);
+        }
+      });
+
+    inFlightGetRequests.set(requestKey, request);
+    return request;
+  }
+
+  return performApiFetch(path, options);
 }
 
 export async function apiUpload(path, file, options = {}) {
