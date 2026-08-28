@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./business-storage-policy.js";
+import "./brand-name-ui.js";
 import App from "./App.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
 import StartupVideoGate from "./StartupVideoGate.jsx";
