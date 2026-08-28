@@ -6,8 +6,8 @@ import {
   RESET_CODE_HEX_LENGTH,
 } from "../admin-users/auth-hardening-service.js";
 
-const integrationSource = await readFile(
-  new URL("../admin-users/express-integration.js", import.meta.url),
+const routesSource = await readFile(
+  new URL("../admin-users/explicit-routes.js", import.meta.url),
   "utf8",
 );
 const hardeningSource = await readFile(
@@ -15,16 +15,14 @@ const hardeningSource = await readFile(
   "utf8",
 );
 
-test("les routes historiques utilisent les contrôleurs d'authentification durcis", () => {
-  assert.match(integrationSource, /path === "\/auth\/login"[\s\S]*secureLogin/);
-  assert.match(integrationSource, /path === "\/auth\/forgot-password"[\s\S]*secureForgotPassword/);
-  assert.match(integrationSource, /path === "\/auth\/reset-password"[\s\S]*secureResetPassword/);
-  assert.match(integrationSource, /path === "\/admin\/auth\/users\/:id\/reset-token"[\s\S]*secureAdminResetToken/);
+test("les routes d'authentification utilisent explicitement les contrôleurs durcis", () => {
+  assert.match(routesSource, /app\.post\("\/auth\/login", authRateLimit, secureLogin\)/);
+  assert.match(routesSource, /app\.post\("\/auth\/forgot-password", resetRateLimit, secureForgotPassword\)/);
+  assert.match(routesSource, /app\.post\("\/auth\/reset-password", resetRateLimit, secureResetPassword\)/);
+  assert.match(routesSource, /app\.post\("\/admin\/auth\/users\/:id\/reset-token", requireAuth, requireAdmin, secureAdminResetToken\)/);
 });
 
 test("un e-mail inconnu et un mauvais mot de passe suivent la même comparaison bcrypt", () => {
-  // Un e-mail sans candidat compare tout de même un hash factice, afin que
-  // l'absence de compte ne se distingue pas d'un mauvais mot de passe.
   const dummyCompareIndex = hardeningSource.indexOf("await bcrypt.compare(password, await dummyPasswordHashPromise)");
   const invalidIndex = hardeningSource.indexOf("if (!user || !passwordMatches)");
   const statusIndex = hardeningSource.indexOf('if (user.status !== "active")');
