@@ -145,9 +145,10 @@ export default function Voies({
                 <div className="card-header">
                   <div><strong>Vidéo {index + 1}</strong><div className="small" style={{ overflowWrap: "anywhere" }}>{url}</div></div>
                   <div className="group">
-                    <a className="pill" href={playableVideoUrl(url)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>Voir la vidéo</a>
-                    {isLocalVideoUrl(url) && (
+                    {isLocalVideoUrl(url) ? (
                       <a className="pill" href={downloadableVideoUrl(url)} download style={{ textDecoration: "none" }}>Télécharger</a>
+                    ) : (
+                      <a className="pill" href={playableVideoUrl(url)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>Voir la vidéo</a>
                     )}
                   </div>
                 </div>
