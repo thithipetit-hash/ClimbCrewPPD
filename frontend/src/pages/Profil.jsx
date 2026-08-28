@@ -25,25 +25,24 @@ export default function Profil({
   updateMyProfile,
   exportMyRealisationsCsv,
 }) {
-  if (!USE_API) {
-    return <div className="card"><div className="muted-box">Mon Profil est disponible avec le backend API.</div></div>;
-  }
+  if (!USE_API) return <div className="card"><div className="muted-box">Mon Profil est disponible avec le backend API.</div></div>;
 
   if (!myParticipant) {
-    return (
-      <div className="stack">
-        <div className="card">
-          <div className="muted-box">
-            Votre compte n'est pas encore relié à une fiche grimpeur. Demandez à un administrateur de faire l'association pour retrouver vos statistiques et vos badges ici.
-          </div>
-        </div>
-      </div>
-    );
+    return <div className="stack"><div className="card"><div className="muted-box">Votre compte n'est pas encore relié à une fiche grimpeur. Demandez à un administrateur de faire l'association pour retrouver vos statistiques et vos badges ici.</div></div></div>;
   }
 
   const cpr = cprByParticipantId[myParticipantId] || {};
   const points = pointsByParticipantId[myParticipantId] || 0;
   const participations = sessionStats.participationCount[myParticipantId] || 0;
+
+  function handleAvatarClick(event) {
+    if (!event.target.closest?.(".profile-gecko-real-image")) return;
+    const fileInput = event.currentTarget.querySelector('.profile-custom-image-control input[type="file"]');
+    if (!fileInput) return;
+    event.preventDefault();
+    event.stopPropagation();
+    fileInput.click();
+  }
 
   return (
     <div className="stack">
@@ -51,10 +50,7 @@ export default function Profil({
         <div className="card-header">
           <div className="participant-identity">
             <span className="passport-dot" style={getPassportDotStyle(myParticipant)} aria-hidden="true" />
-            <div>
-              <h2 style={{ margin: 0 }}>{fullName(myParticipant)}</h2>
-              <div className="small">{authUser.email}</div>
-            </div>
+            <div><h2 style={{ margin: 0 }}>{fullName(myParticipant)}</h2><div className="small">{authUser.email}</div></div>
           </div>
         </div>
         <div className="group" style={{ marginTop: 10 }}>
@@ -65,12 +61,10 @@ export default function Profil({
         </div>
       </div>
 
-      <ProfileGecko
-        grade={cpr.currentGrade || ""}
-        sexe={myParticipant.sexe}
-        participant={myParticipant}
-        onProfileUpdate={updateMyProfile}
-      />
+      <div onClickCapture={handleAvatarClick}>
+        <ProfileGecko grade={cpr.currentGrade || ""} sexe={myParticipant.sexe} participant={myParticipant} onProfileUpdate={updateMyProfile} />
+        <div className="small" style={{ textAlign: "center", marginTop: -6 }}>Cliquez directement sur l’image de l’avatar pour choisir ou remplacer votre image de profil.</div>
+      </div>
 
       <div className="card profile-stats-card" aria-label="Mes statistiques">
         <div className="stats-grid profile-stats-grid">
@@ -82,36 +76,11 @@ export default function Profil({
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <h3>Export</h3>
-          <Button
-            variant="secondary"
-            onClick={exportMyRealisationsCsv}
-            disabled={myRealisations.length === 0}
-          >
-            Exporter pour theCrag
-          </Button>
-        </div>
-      </div>
+      <div className="card"><div className="card-header"><h3>Export</h3><Button variant="secondary" onClick={exportMyRealisationsCsv} disabled={myRealisations.length === 0}>Exporter pour theCrag</Button></div></div>
 
-      <ClimberProfilePanel
-        realisations={myRealisations}
-        routesById={routesById}
-        cprGrade={cpr.currentGrade || ""}
-      />
-
-      <ParticipantBadges
-        participant={myParticipant}
-        realisations={myRealisations}
-        allRealisations={allRealisations}
-        routesById={routesById}
-        sessions={getParticipantSessions(myParticipantId)}
-      />
-
-      <div className="card">
-        <CprEvolutionChart realisations={myRealisations} routesById={routesById} />
-      </div>
+      <ClimberProfilePanel realisations={myRealisations} routesById={routesById} cprGrade={cpr.currentGrade || ""} />
+      <ParticipantBadges participant={myParticipant} realisations={myRealisations} allRealisations={allRealisations} routesById={routesById} sessions={getParticipantSessions(myParticipantId)} />
+      <div className="card"><CprEvolutionChart realisations={myRealisations} routesById={routesById} /></div>
     </div>
   );
 }
