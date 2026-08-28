@@ -123,6 +123,8 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
     [participant?.avatarId],
   );
   const customImage = customAvatarSource(participant);
+  const currentSexe = String(participant?.sexe || "").trim().toUpperCase();
+  const selectedSexe = currentSexe === "M" ? "H" : currentSexe;
 
   async function onCustomImageChange(event) {
     const file = event.target.files?.[0];
@@ -194,9 +196,9 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
 
               <label>
                 <span>Sexe</span>
-                <select value={String(participant?.sexe || "").toUpperCase()} onChange={(event) => onProfileUpdate?.({ sexe: event.target.value })}>
+                <select value={selectedSexe} onChange={(event) => onProfileUpdate?.({ sexe: event.target.value })}>
                   <option value="">Non précisé</option>
-                  <option value="M">Homme</option>
+                  <option value="H">Homme</option>
                   <option value="F">Femme</option>
                 </select>
               </label>
