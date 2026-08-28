@@ -27,7 +27,7 @@ test("aucun rapprochement automatique par prénom et nom n'est branché", () => 
   assert.doesNotMatch(associationSource, /lower\(trim\(p\.prenom\)\)/);
   assert.doesNotMatch(associationSource, /lower\(trim\(p\.nom\)\)/);
   assert.match(routesSource, /app\.post\("\/auth\/request-access", authRateLimit, requestAccessByEmailOnly\)/);
-  assert.match(routesSource, /app\.post\("\/admin\/auth\/associations\/auto", requireEnhancementAdmin, associateExistingAccountsByEmail\)/);
+  assert.match(routesSource, /app\.post\("\/admin\/auth\/associations\/auto", requireAuth, requireAdmin, associateExistingAccountsByEmail\)/);
 });
 
 test("une association automatique ne modifie pas le droit Administrateur de la fiche", () => {
