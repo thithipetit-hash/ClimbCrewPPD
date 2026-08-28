@@ -3,42 +3,39 @@
 # =============================================================================
 # Render construit directement le site statique avec render.yaml. Ce fichier
 # reste utilisé par Docker Compose sur Linux et produit le même bundle Vite.
+# Le contexte Docker est la racine du dépôt afin que VERSION reste l'unique
+# source du numéro applicatif pendant la compilation conteneurisée.
 
 # Étape 1 : compilation React/Vite dans une image Node temporaire.
 FROM node:24-alpine AS build
 
-WORKDIR /app
+WORKDIR /app/frontend
 
 # L'URL /api est volontairement relative sur Linux : le reverse proxy public et
 # Nginx servent le frontend et l'API sous le même domaine.
-# Impact visuel : aucune différence de mise en page ; cette valeur détermine
-# seulement l'adresse utilisée pour charger les données visibles à l'écran.
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=${VITE_API_URL}
 
-# La version applicative est fournie par le fichier VERSION racine via Compose.
-# Aucun numéro n'est dupliqué dans l'image ou dans le code frontend.
-ARG VITE_APP_VERSION
-ENV VITE_APP_VERSION=${VITE_APP_VERSION}
-
-# Le build de production utilise exactement le même lockfile que la CI. npm ci
-# refuse toute divergence package.json/package-lock.json et garantit ainsi que
-# les dépendances validées sont celles réellement déployées.
-COPY package.json package-lock.json ./
+# Le build de production utilise exactement le même lockfile que la CI.
+COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund --registry=https://registry.npmjs.org/
-COPY . .
 
-# Génère les fichiers HTML, CSS et JavaScript optimisés dans /app/dist.
+# Copie le frontend et la source canonique de version. vite.config.js lit
+# ../VERSION depuis /app/frontend, soit /app/VERSION dans l'image de build.
+COPY frontend/ ./
+COPY VERSION /app/VERSION
+
+# Génère les fichiers HTML, CSS et JavaScript optimisés dans /app/frontend/dist.
 RUN npm run build
 
 # Étape 2 : serveur web léger qui ne conserve aucun outil de compilation.
 FROM nginx:1.27-alpine
 
 # Configuration Nginx : sécurité, route React et relais de secours vers /api.
-COPY nginx.prod.conf /etc/nginx/conf.d/default.conf
+COPY frontend/nginx.prod.conf /etc/nginx/conf.d/default.conf
 
 # Copie uniquement le résultat final du build dans le répertoire public Nginx.
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /app/frontend/dist /usr/share/nginx/html
 
 # Port interne du conteneur frontend. Le reverse proxy Linux publie ensuite le
 # service en HTTPS ; Nginx ne gère pas directement les certificats.
