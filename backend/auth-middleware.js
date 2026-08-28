@@ -60,11 +60,17 @@ export function createAuthMiddleware({
       }
     }
 
+    const user = serializeUser(session);
     req.auth = {
       token: rawToken,
       sessionId: session.session_id,
-      user: serializeUser(session),
+      user,
     };
+
+    // Contexte de compatibilité pour les contrôleurs modernes. Une seule
+    // validation de session/CSRF alimente désormais les deux contrats pendant
+    // la migration, ce qui supprime le second passage en base par requête.
+    req.enhancementAuth = { user };
     next();
   }
 
