@@ -2,10 +2,20 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-import { APP_VERSION, APP_VERSION_PATTERN } from "../src/lib/version.js";
+const versionPattern = /^\d{8}\.\d{3}$/;
 
-test("la version respecte le format aammjj.iii", () => {
-  assert.match(APP_VERSION, APP_VERSION_PATTERN);
+test("VERSION est l'unique numéro de version applicative", async () => {
+  const [canonical, versionSource, viteSource] = await Promise.all([
+    readFile(new URL("../../VERSION", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/version.js", import.meta.url), "utf8"),
+    readFile(new URL("../vite.config.js", import.meta.url), "utf8"),
+  ]);
+  const version = canonical.trim();
+  assert.match(version, versionPattern);
+  assert.doesNotMatch(versionSource, /20\d{6}\.\d{3}/);
+  assert.match(versionSource, /import\.meta\.env\?\.VITE_APP_VERSION/);
+  assert.match(viteSource, /readFileSync\(new URL\("\.\.\/VERSION", import\.meta\.url\)/);
+  assert.match(viteSource, /"import\.meta\.env\.VITE_APP_VERSION": JSON\.stringify\(appVersion\)/);
 });
 
 test("App.jsx ne définit plus sa propre version", async () => {
