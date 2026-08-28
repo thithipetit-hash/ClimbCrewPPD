@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 
-import { USE_API } from "../lib/api.js";
 import { todayIso } from "../lib/domain.js";
 import { normalizeAppData } from "../lib/normalize.js";
 
@@ -28,7 +27,7 @@ function emptyInitialState() {
   }, EMPTY_APP_DATA);
 }
 
-export function loadInitialBusinessState({ useApi = USE_API, storage = globalThis.localStorage } = {}) {
+export function loadInitialBusinessState({ useApi = false, storage = globalThis.localStorage } = {}) {
   if (useApi) {
     // Une ancienne version pouvait laisser des données métier en clair dans le
     // navigateur. Elles sont supprimées dès que l'application utilise l'API.
@@ -53,7 +52,7 @@ export function loadInitialBusinessState({ useApi = USE_API, storage = globalThi
   }
 }
 
-export function persistBusinessState(state, { useApi = USE_API, storage = globalThis.localStorage } = {}) {
+export function persistBusinessState(state, { useApi = false, storage = globalThis.localStorage } = {}) {
   if (useApi) return;
   try {
     storage?.setItem(BUSINESS_STORAGE_KEY, JSON.stringify(state));
@@ -62,12 +61,12 @@ export function persistBusinessState(state, { useApi = USE_API, storage = global
   }
 }
 
-export function useAppBusinessState() {
-  const [state, setState] = useState(() => loadInitialBusinessState());
+export function useAppBusinessState({ useApi = false } = {}) {
+  const [state, setState] = useState(() => loadInitialBusinessState({ useApi }));
 
   useEffect(() => {
-    persistBusinessState(state);
-  }, [state]);
+    persistBusinessState(state, { useApi });
+  }, [state, useApi]);
 
   return [state, setState];
 }
