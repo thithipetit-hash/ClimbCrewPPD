@@ -52,6 +52,7 @@ jobs:
           set -euo pipefail
           chmod +x .github/scripts/verify-version.sh
           .github/scripts/verify-version.sh
+          printf 'VITE_APP_VERSION=%s\n' "$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_ENV"
 
       - name: Validate source consistency
         run: node scripts/validate-source.mjs
@@ -85,11 +86,7 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
-        shell: bash
-        run: |
-          set -euo pipefail
-          export VITE_APP_VERSION="$(tr -d '[:space:]' < ../VERSION)"
-          npm run build
+        run: npm run build
 
       - name: Prepare validation environment
         run: cp .env.production.example .env.production
