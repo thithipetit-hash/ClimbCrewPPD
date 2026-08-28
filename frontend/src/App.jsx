@@ -59,7 +59,7 @@ function App() {
   const [statsSortDirection, setStatsSortDirection] = useState("asc");
   const [wallOfFameSexFilter, setWallOfFameSexFilter] = useState("all");
   const [recentlyAddedParticipantIds, setRecentlyAddedParticipantIds] = useState([]);
-  const [state, setState] = useAppBusinessState();
+  const [state, setState] = useAppBusinessState({ useApi: USE_API });
   const [adminInput, setAdminInput] = useState("");
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [adminError, setAdminError] = useState("");
