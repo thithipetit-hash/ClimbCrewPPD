@@ -7,7 +7,7 @@ const mainSource = await readFile(new URL("../src/main.jsx", import.meta.url), "
 const stateHookSource = await readFile(new URL("../src/hooks/useAppBusinessState.js", import.meta.url), "utf8");
 
 test("App délègue la persistance métier à un hook dédié", () => {
-  assert.match(appSource, /useAppBusinessState\(\)/);
+  assert.match(appSource, /useAppBusinessState\(\{\s*useApi:\s*USE_API\s*\}\)/);
   assert.doesNotMatch(appSource, /localStorage\.setItem\("climbcrew_local_data_v2"/);
   assert.doesNotMatch(appSource, /localStorage\.getItem\("climbcrew_local_data_v2"/);
 });
