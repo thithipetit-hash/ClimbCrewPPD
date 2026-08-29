@@ -19,13 +19,16 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
     throw new RealisationIntegrityError("La voie sélectionnée n'existe pas.", "voieId");
   }
 
+  // participant_id est historique : certaines bases l'ont encore en text,
+  // les bases migrées l'ont en bigint. Comparer sa représentation textuelle
+  // maintient la validation compatible pendant toute la phase de migration.
   const sessionResult = await pool.query(
     `
       select s.date, p.cotisation
       from sessions s
       join session_participants sp on sp.session_id = s.id
-      join participants p on p.id::text = sp.participant_id
-      where s.id = $1 and sp.participant_id = $2
+      join participants p on p.id::text = $2
+      where s.id = $1 and sp.participant_id::text = $2
       limit 1
     `,
     [realisation.sessionId, ownerId],
@@ -65,8 +68,8 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
     `
       select 1
       from session_participants sp
-      join participants p on p.id::text = sp.participant_id
-      where sp.session_id = $1 and sp.participant_id = $2
+      join participants p on p.id::text = $2
+      where sp.session_id = $1 and sp.participant_id::text = $2
       limit 1
     `,
     [realisation.sessionId, assureurId],
