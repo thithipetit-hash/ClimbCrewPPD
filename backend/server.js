@@ -24,9 +24,16 @@ import {
   startAdminUserSchedulers,
 } from "./admin-users/explicit-routes.js";
 import { blockLegacyFileImportInProduction } from "./admin-users/maintenance-hardening.js";
+import { sanitizeMalformedCookieHeader } from "./admin-users/cookie-hardening.js";
+import { preBodyRequestGuard } from "./admin-users/prebody-rate-limit.js";
+import { trustedClientIpMiddleware } from "./admin-users/client-ip-hardening.js";
+import { rateLimitLogMiddleware } from "./admin-users/rate-limit-log-integration.js";
 
 const app = express();
 app.disable("x-powered-by");
+
+// Un cookie percent-encodé invalide ne doit jamais atteindre les parseurs legacy.
+app.use(sanitizeMalformedCookieHeader);
 
 // Le pont CSRF est désormais un middleware Express explicite. Il était auparavant
 // injecté implicitement en surchargeant express.application.use.
@@ -115,6 +122,12 @@ app.use((req, _res, next) => {
   req.url = normalizeApiPath(req.url);
   next();
 });
+
+// Les garde-fous transverses sont désormais enregistrés explicitement, après
+// normalisation de l'URL et avant CORS / express.json / limiteurs historiques.
+app.use(preBodyRequestGuard);
+app.use(trustedClientIpMiddleware);
+app.use(rateLimitLogMiddleware);
 
 app.use(cors({
   origin(origin, callback) {
