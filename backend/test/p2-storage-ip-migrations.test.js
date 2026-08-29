@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { trustedClientIpMiddleware } from "../admin-users/client-ip-hardening.js";
 
-const enhancementsSource = await readFile(new URL("../admin-user-enhancements.js", import.meta.url), "utf8");
+const enhancementsSource = await readFile(new URL("../deployment-bootstrap.js", import.meta.url), "utf8");
 const serverSource = await readFile(new URL("../server.js", import.meta.url), "utf8");
 const explicitRoutesSource = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
 const migrationServiceSource = await readFile(new URL("../admin-users/migration-service.js", import.meta.url), "utf8");
