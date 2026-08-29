@@ -1,13 +1,10 @@
 import React from "react";
-import { THEME_OPTIONS } from "../lib/theme.js";
 
 export default function AppSidebar({
   open,
   visibleTabs,
   activeTab,
   onSelectTab,
-  themePreference,
-  onThemePreferenceChange,
   authUser,
   onLogout,
   onClose,
@@ -47,24 +44,6 @@ export default function AppSidebar({
         </button>
       ))}
 
-      <div className="sidebar-theme">
-        <label htmlFor="sidebar-theme-selector">Ambiance</label>
-        <select
-          id="sidebar-theme-selector"
-          value={themePreference}
-          onChange={(event) => onThemePreferenceChange(event.target.value)}
-        >
-          {THEME_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-      </div>
-
-      {authUser && (
-        <div className="sidebar-account">
-          <div className="small">{authUser.email}</div>
-        </div>
-      )}
 
       {authUser && (
         <div className="sidebar-settings">

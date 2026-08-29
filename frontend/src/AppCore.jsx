@@ -1867,8 +1867,6 @@ async function handleThemePreferenceChange(nextTheme) {
         visibleTabs={visibleTabs}
         activeTab={tab}
         onSelectTab={setTab}
-        themePreference={themePreference}
-        onThemePreferenceChange={handleThemePreferenceChange}
         authUser={authUser}
         onLogout={handleLogout}
         onClose={() => setSidebarOpen(false)}
@@ -2185,6 +2183,9 @@ async function handleThemePreferenceChange(nextTheme) {
             authUser={authUser}
             changePassword={changePassword}
             requestEmailChange={requestEmailChange}
+            themePreference={themePreference}
+            onThemePreferenceChange={handleThemePreferenceChange}
+            themeOptions={THEME_OPTIONS}
           />
         )}
 
