@@ -3,7 +3,6 @@ import { installCookieHardening } from "./admin-users/cookie-hardening.js";
 import { installPreBodyRateLimit } from "./admin-users/prebody-rate-limit.js";
 import { installClientIpHardening } from "./admin-users/client-ip-hardening.js";
 import { installRateLimitLogIntegration } from "./admin-users/rate-limit-log-integration.js";
-import { installInitiatorQualificationIntegration } from "./admin-users/initiator-qualification-integration.js";
 
 /**
  * Point d'entrée préchargé par Node avant server.js.
@@ -19,4 +18,3 @@ installCookieHardening();
 installPreBodyRateLimit();
 installClientIpHardening();
 installRateLimitLogIntegration();
-installInitiatorQualificationIntegration();
