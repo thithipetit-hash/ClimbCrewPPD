@@ -1,3 +1,5 @@
+import { setPool } from "./admin-users/database.js";
+
 export function createAuthMiddleware({
   pool,
   hashToken,
@@ -8,6 +10,10 @@ export function createAuthMiddleware({
   constantTimeEqual,
   serializeUser,
 }) {
+  // Le serveur principal crée la connexion PostgreSQL et l'injecte explicitement
+  // dans les services séparés. Aucun remplacement global de pg.Pool n'est requis.
+  setPool(pool);
+
   async function loadSessionFromToken(rawToken) {
     const tokenHash = hashToken(rawToken);
     const result = await pool.query(
