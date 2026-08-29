@@ -34,6 +34,35 @@ jobs:
           node --check scripts/apply-audit-fixes.mjs
       - name: Appliquer les corrections
         run: node scripts/apply-audit-fixes.mjs
+      - name: Adapter les tests aux composants extraits
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('frontend/test/route-ratings.test.js')
+          s = p.read_text()
+          s = s.replace(
+            '  const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");\n  const voies =',
+            '  const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");\n  const modal = await readFile(new URL("../src/components/RealisationModal.jsx", import.meta.url), "utf8");\n  const voies =',
+          )
+          for marker in [
+            r'/\[1, 2, 3, 4, 5\]\.map/',
+            r'/role="radiogroup"/',
+            r'/newRealisation\.rating/',
+            r'/rating <= newRealisation\.rating/',
+            r'/\? "★" : "☆"/',
+          ]:
+            s = s.replace(f'assert.match(source, {marker});', f'assert.match(modal, {marker});')
+          p.write_text(s)
+
+          p = Path('frontend/test/route-save-feedback.test.js')
+          s = p.read_text()
+          old = '  const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");\n  // Le select de voie de la fenêtre de progression a été extrait dans pages/Progression.jsx.'
+          new = '  const modal = await readFile(new URL("../src/components/RealisationModal.jsx", import.meta.url), "utf8");\n  // Le select de voie de la fenêtre de progression a été extrait dans pages/Progression.jsx.'
+          s = s.replace(old, new)
+          s = s.replace('assert.match(source, /formatRouteForRealisation\\(realisationModalRoute\\)/);', 'assert.match(modal, /formatRouteForRealisation\\(route\\)/);')
+          p.write_text(s)
+          PY
       - name: Tester le backend
         working-directory: backend
         run: |
