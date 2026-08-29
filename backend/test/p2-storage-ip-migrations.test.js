@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { trustedClientIpMiddleware } from "../admin-users/client-ip-hardening.js";
 
 const enhancementsSource = await readFile(new URL("../admin-user-enhancements.js", import.meta.url), "utf8");
+const serverSource = await readFile(new URL("../server.js", import.meta.url), "utf8");
 const explicitRoutesSource = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
 const migrationServiceSource = await readFile(new URL("../admin-users/migration-service.js", import.meta.url), "utf8");
 const databaseSource = await readFile(new URL("../admin-users/database.js", import.meta.url), "utf8");
@@ -27,13 +28,13 @@ test("l'adresse IP fiable remplace une chaîne X-Forwarded-For potentiellement f
   assert.equal(nextCalled, true);
 });
 
-test("le durcissement IP est installé avant l'intégration des logs", () => {
-  const hardeningIndex = enhancementsSource.indexOf("installClientIpHardening();");
-  const logIndex = enhancementsSource.indexOf("installRateLimitLogIntegration();");
+test("le durcissement IP est installé explicitement avant l'intégration des logs", () => {
+  const hardeningIndex = serverSource.indexOf("app.use(trustedClientIpMiddleware);");
+  const logIndex = serverSource.indexOf("app.use(rateLimitLogMiddleware);");
   assert.ok(hardeningIndex >= 0);
   assert.ok(logIndex >= 0);
   assert.ok(hardeningIndex < logIndex);
-  assert.doesNotMatch(enhancementsSource, /installExpressIntegration/);
+  assert.doesNotMatch(enhancementsSource, /installClientIpHardening|installRateLimitLogIntegration|installExpressIntegration/);
 });
 
 test("les migrations versionnées sont appliquées explicitement avant l'écoute réseau", () => {
