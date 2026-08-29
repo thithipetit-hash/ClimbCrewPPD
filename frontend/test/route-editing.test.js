@@ -12,8 +12,6 @@ test("la modification d'une voie n'envoie que les champs éditables", async () =
 
 test("une erreur de modification est affichée dans la carte de la voie", async () => {
   const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  // Le rendu de l'erreur (routeError) a été extrait dans pages/Voies.jsx ;
-  // le setRouteError("") reste dans App.jsx (état + logique métier).
   const voies = await readFile(new URL("../src/pages/Voies.jsx", import.meta.url), "utf8");
 
   assert.match(source, /setRouteError\(""\);/);
@@ -21,7 +19,6 @@ test("une erreur de modification est affichée dans la carte de la voie", async 
 });
 
 test("une liste de réalisations peut être entièrement déployée ou repliée", async () => {
-  // Cette UI vit désormais dans pages/Progression.jsx.
   const source = await readFile(new URL("../src/pages/Progression.jsx", import.meta.url), "utf8");
 
   assert.match(source, /progressViewRealisations\.length > 1/);
@@ -31,11 +28,8 @@ test("une liste de réalisations peut être entièrement déployée ou repliée"
 });
 
 test("le graphique CPR reste dans la largeur mobile et la suppression est compacte", async () => {
-  // Le bouton de suppression est désormais rendu via <Button variant="danger"
-  // className="realisation-delete-button" ...> plutôt qu'un littéral
-  // className="danger realisation-delete-button".
   const source = await readFile(new URL("../src/pages/Progression.jsx", import.meta.url), "utf8");
-  const styles = await readFile(new URL("../src/climbcrew-enhancements.js", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/climbcrew-enhancements-legacy.js", import.meta.url), "utf8");
 
   assert.match(source, /variant="danger" className="realisation-delete-button"/);
   assert.match(styles, /\.cpr-chart \{[^}]*max-width:100%[^}]*min-width:0/s);
