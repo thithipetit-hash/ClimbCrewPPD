@@ -88,6 +88,18 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Install Playwright for Android responsive tests
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-package-lock @playwright/test
+          npx playwright install --with-deps chromium
+
+      - name: Run Android responsive browser tests
+        working-directory: frontend
+        run: npx playwright test --config=playwright.config.mjs
+
       - name: Prepare validation environment
         run: cp .env.production.example .env.production
 
