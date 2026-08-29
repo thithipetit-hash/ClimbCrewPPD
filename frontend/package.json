@@ -4,9 +4,9 @@
   "version": "2.2.0-legacy-import-ready",
   "type": "module",
   "scripts": {
-    "predev": "node scripts/prepare-startup-video.mjs",
+    "predev": "node scripts/prepare-startup-video.mjs && node scripts/prepare-deployment-version.mjs",
     "dev": "vite --host 0.0.0.0",
-    "prebuild": "node scripts/prepare-startup-video.mjs",
+    "prebuild": "node scripts/prepare-startup-video.mjs && node scripts/prepare-deployment-version.mjs",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test"
