@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 
 import Button from "./components/Button.jsx";
 import AuthPage from "./components/AuthPage.jsx";
+import AppSidebar from "./components/AppSidebar.jsx";
+import MobileBottomNav from "./components/MobileBottomNav.jsx";
 import FaqSection from "./sections/FaqSection.jsx";
 import Inscriptions from "./pages/Inscriptions.jsx";
 import Voies from "./pages/Voies.jsx";
@@ -1860,69 +1862,17 @@ async function handleThemePreferenceChange(nextTheme) {
 
       {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
 
-      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`} aria-label="Navigation ClimbClubCristal">
-        <div className="sidebar-header">
-          <div className="sidebar-brand">
-            <img src="/logo-climbcrew.png" alt="Logo ClimbClubCristal" className="sidebar-logo" />
-            <span>ClimbClubCristal</span>
-          </div>
-          <button
-            className="sidebar-close sidebar-logout"
-            onClick={() => {
-              setSidebarOpen(false);
-              handleLogout();
-            }}
-            aria-label="Se déconnecter"
-            title="Déconnexion"
-          >
-            <svg className="sidebar-logout-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-        {visibleTabs.map((item) => (
-          <button
-            key={item.key}
-            className={`side-tab ${tab === item.key ? "active" : ""}`}
-            onClick={() => {
-              setTab(item.key);
-              setSidebarOpen(false);
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
-        <div className="sidebar-theme">
-          <label htmlFor="sidebar-theme-selector">Ambiance</label>
-          <select
-            id="sidebar-theme-selector"
-            value={themePreference}
-            onChange={(event) => handleThemePreferenceChange(event.target.value)}
-          >
-            {THEME_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </div>
-        {authUser && (
-          <div className="sidebar-account">
-            <div className="small">{authUser.email}</div>
-          </div>
-        )}
-        {authUser && (
-          <div className="sidebar-settings">
-            <button
-              className={`side-tab ${tab === "parametres" ? "active" : ""}`}
-              onClick={() => {
-                setTab("parametres");
-                setSidebarOpen(false);
-              }}
-            >
-              ⚙ Paramètres
-            </button>
-          </div>
-        )}
-      </aside>
+      <AppSidebar
+        open={sidebarOpen}
+        visibleTabs={visibleTabs}
+        activeTab={tab}
+        onSelectTab={setTab}
+        themePreference={themePreference}
+        onThemePreferenceChange={handleThemePreferenceChange}
+        authUser={authUser}
+        onLogout={handleLogout}
+        onClose={() => setSidebarOpen(false)}
+      />
       {pendingBroadcastMessages.length > 0 && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="broadcast-message-title">
           <div className="modal-panel" style={{ maxWidth: 560 }}>
@@ -2114,18 +2064,11 @@ async function handleThemePreferenceChange(nextTheme) {
         </div>
       )}
 
-      <nav className="mobile-bottom-nav" aria-label="Navigation mobile ClimbClubCristal">
-        {visibleTabs.map((item) => (
-          <button
-            key={item.key}
-            className={`bottom-tab ${tab === item.key ? "active" : ""}`}
-            onClick={() => setTab(item.key)}
-            title={item.label}
-          >
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </nav>
+      <MobileBottomNav
+        visibleTabs={visibleTabs}
+        activeTab={tab}
+        onSelectTab={setTab}
+      />
 
       <div className="shell">
   <div className="hero">
