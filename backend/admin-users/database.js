@@ -1,33 +1,23 @@
-import pg from "pg";
-
-const OriginalPool = pg.Pool;
-let capturedPool = null;
-let captureInstalled = false;
+let sharedPool = null;
 
 /**
- * Intercepte la création du Pool PostgreSQL du serveur principal.
- * Le module est préchargé avant server.js, ce qui permet aux services séparés
- * d'utiliser exactement la même connexion sans dupliquer la configuration.
+ * Enregistre explicitement la connexion PostgreSQL créée par le serveur principal.
+ * Les services séparés réutilisent ainsi exactement le même pool sans modifier
+ * globalement le constructeur fourni par le module `pg`.
  */
-export function installPoolCapture() {
-  if (captureInstalled) return;
-
-  pg.Pool = class ClimbCrewCapturedPool extends OriginalPool {
-    constructor(...args) {
-      super(...args);
-      capturedPool = this;
-    }
-  };
-
-  captureInstalled = true;
+export function setPool(pool) {
+  if (!pool || typeof pool.query !== "function") {
+    throw new TypeError("Pool PostgreSQL ClimbCrew invalide");
+  }
+  sharedPool = pool;
 }
 
 /** Retourne la connexion partagée ou lève une erreur explicite. */
 export function getPool() {
-  if (!capturedPool) {
+  if (!sharedPool) {
     throw new Error("Connexion PostgreSQL ClimbCrew introuvable");
   }
-  return capturedPool;
+  return sharedPool;
 }
 
 /**
