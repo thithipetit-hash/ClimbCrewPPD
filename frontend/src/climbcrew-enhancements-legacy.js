@@ -1,15 +1,12 @@
 /**
  * Ajustements DOM historiques encore nécessaires à ClimbCrew.
  *
- * Le thème, la FAQ et les couleurs fonctionnelles des voies sont désormais
- * entièrement gérés par React et les feuilles CSS.
+ * Le thème, la FAQ, les couleurs fonctionnelles des voies et l'ordre des séances
+ * de la vue semaine sont désormais entièrement gérés par React et les feuilles CSS.
  * Ce module ne conserve plus que les compatibilités encore dépendantes du DOM :
- * - ordre des séances dans la vue semaine ;
  * - hachurage des inscriptions incompatibles avec une séance libre ;
  * - navigation tactile horizontale.
  */
-const SLOT_ORDER = ["midi", "soir", "matin"];
-
 let scheduled = false;
 
 function normalize(value) {
@@ -18,51 +15,6 @@ function normalize(value) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
-}
-
-function sessionSlot(card) {
-  const title = card.querySelector(":scope > .card-header h3, :scope > .card-header strong");
-  const text = normalize(title?.textContent);
-  return SLOT_ORDER.find((slot) => text === slot || text.endsWith(slot)) || "";
-}
-
-function reorderChildren(parent, cards) {
-  const sorted = [...cards].sort((left, right) => {
-    const leftIndex = SLOT_ORDER.indexOf(sessionSlot(left));
-    const rightIndex = SLOT_ORDER.indexOf(sessionSlot(right));
-    return (leftIndex < 0 ? 99 : leftIndex) - (rightIndex < 0 ? 99 : rightIndex);
-  });
-
-  if (cards.every((card, index) => card === sorted[index])) return;
-  sorted.forEach((card) => parent.appendChild(card));
-}
-
-/**
- * Trie les séances uniquement à l'intérieur de leur propre journée.
- * Aucun déplacement n'est effectué entre deux cartes de jour.
- */
-function normalizeWeekView() {
-  document.querySelectorAll(".week-day-card").forEach((dayCard) => {
-    const sessionsContainer = dayCard.querySelector(":scope > .week-day-sessions");
-    if (!sessionsContainer) return;
-
-    const cards = [...sessionsContainer.children]
-      .filter((child) => child.classList?.contains("session-card"));
-
-    if (cards.length > 1) reorderChildren(sessionsContainer, cards);
-  });
-
-  /* Compatibilité avec l'ancienne structure de la vue semaine. */
-  document.querySelectorAll(".grid.five > .card").forEach((dayCard) => {
-    const stack = [...dayCard.children]
-      .find((child) => child.classList?.contains("stack"));
-    if (!stack) return;
-
-    const cards = [...stack.children]
-      .filter((child) => child.classList?.contains("subcard"));
-
-    if (cards.length > 1) reorderChildren(stack, cards);
-  });
 }
 
 function sessionStatus(card) {
@@ -135,7 +87,6 @@ function refresh() {
 
   requestAnimationFrame(() => {
     scheduled = false;
-    normalizeWeekView();
     updateHatching();
   });
 }
