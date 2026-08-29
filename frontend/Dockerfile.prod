@@ -16,6 +16,12 @@ WORKDIR /app/frontend
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=${VITE_API_URL}
 
+# Le SHA du commit validé est injecté explicitement par le workflow de
+# déploiement. Le contexte Docker ne contient volontairement pas .git, donc le
+# script de génération du marqueur ne peut pas le découvrir tout seul.
+ARG GITHUB_SHA=unknown
+ENV GITHUB_SHA=${GITHUB_SHA}
+
 # Le build de production utilise exactement le même lockfile que la CI.
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund --registry=https://registry.npmjs.org/
