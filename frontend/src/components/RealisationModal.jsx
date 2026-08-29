@@ -19,6 +19,12 @@ export default function RealisationModal({
 }) {
   if (!open) return null;
 
+  const eligibleParticipantIds = new Set(eligibleParticipants.map((participant) => String(participant.id)));
+  const eligibleBelayers = participants.filter((participant) => (
+    eligibleParticipantIds.has(String(participant.id))
+    && String(participant.id) !== String(newRealisation.participantId)
+  ));
+
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Enregistrer une voie réalisée">
       <div className="modal-panel">
@@ -37,7 +43,7 @@ export default function RealisationModal({
               value={newRealisation.selectedDay}
               onChange={(event) => {
                 const selectedDay = event.target.value;
-                setNewRealisation((prev) => ({ ...prev, selectedDay, sessionId: "" }));
+                setNewRealisation((prev) => ({ ...prev, selectedDay, sessionId: "", assureurId: "" }));
               }}
             >
               <option value="">Choisir un jour</option>
@@ -58,7 +64,7 @@ export default function RealisationModal({
               value={newRealisation.participantId}
               onChange={(event) => {
                 const participantId = event.target.value;
-                setNewRealisation((prev) => ({ ...prev, participantId, sessionId: "" }));
+                setNewRealisation((prev) => ({ ...prev, participantId, sessionId: "", assureurId: "" }));
               }}
             >
               <option value="">Choisir un participant</option>
@@ -148,9 +154,11 @@ export default function RealisationModal({
               <label>Binôme assureur</label>
               <select value={newRealisation.assureurId} onChange={(event) => setNewRealisation((prev) => ({ ...prev, assureurId: event.target.value }))}>
                 <option value="">Choisir le binôme</option>
-                {participants
-                  .filter((participant) => String(participant.id) !== String(newRealisation.participantId))
-                  .map((participant) => <option key={participant.id} value={participant.id}>{fullName(participant)}</option>)}
+                {eligibleBelayers.length === 0 ? (
+                  <option value="" disabled>Aucun assureur éligible</option>
+                ) : (
+                  eligibleBelayers.map((participant) => <option key={participant.id} value={participant.id}>{fullName(participant)}</option>)
+                )}
               </select>
             </div>
           )}
