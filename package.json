@@ -10,6 +10,6 @@
     "prod:logs": "docker compose --env-file .env.production -f docker-compose.prod.yml logs -f",
     "prod:setup-db": "bash deploy/scripts/setup-db.sh .env.production",
     "prod:health": "bash deploy/scripts/healthcheck.sh .env.production",
-    "legacy:validate": "node tools/validate-import-data.mjs ./backend/import-data.json"
+    "validate:import": "node tools/validate-import-data.mjs ./backend/import-data.json"
   }
 }
