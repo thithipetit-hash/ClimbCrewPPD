@@ -7,6 +7,7 @@ function fail(message) {
 
 const app = fs.readFileSync("frontend/src/App.jsx", "utf8");
 const domain = fs.readFileSync("frontend/src/lib/domain.js", "utf8");
+const frontendDockerfile = fs.readFileSync("frontend/Dockerfile.prod", "utf8");
 const dayStart = app.indexOf("const daySessions = useMemo");
 const weekStart = app.indexOf("const weekDates = useMemo", dayStart);
 const dayBlock = dayStart >= 0 && weekStart > dayStart ? app.slice(dayStart, weekStart) : "";
@@ -59,6 +60,9 @@ if (!explicitRoutes.includes('app.put("/sessions/:id", requireAuth, updateSessio
 if (backend.includes("legacyReplacedRoute") || fs.existsSync("backend/admin-users/express-integration.js")) {
   fail("ancien câblage Express legacy encore présent");
 }
+if (backend.includes("function defaultSessionStatus(")) {
+  fail("ancienne copie morte de la règle de statut encore présente dans server.js");
+}
 if (!sessionDefaultStatus.includes("export function getDefaultSessionStatus(date, slot)")) {
   fail("règle canonique de statut par défaut absente");
 }
@@ -70,6 +74,15 @@ if (!sessionAuthorization.includes("const resolvedStatus = requested.status")) {
 }
 if (!sessionAuthorization.includes("getDefaultSessionStatus(requested.date, requested.slot)")) {
   fail("règle canonique de statut non utilisée lors de la résolution du statut");
+}
+if (domain.includes("export function defaultSessionStatus")) {
+  fail("duplication frontend de la règle de statut par défaut encore présente");
+}
+if (!domain.includes('export { getDefaultSessionStatus as defaultSessionStatus } from "../../../backend/session-default-status.js";')) {
+  fail("frontend non branché sur la règle canonique backend de statut");
+}
+if (!frontendDockerfile.includes("COPY backend/session-default-status.js /app/backend/session-default-status.js")) {
+  fail("helper canonique de statut absent du contexte de build frontend Docker");
 }
 if (!sessionAuthorization.includes("const newlyAdded =")
     || !sessionAuthorization.includes("assertLibreEligibility")) {
