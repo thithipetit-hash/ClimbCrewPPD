@@ -1,10 +1,10 @@
 /**
  * Ajustements DOM historiques encore nécessaires à ClimbCrew.
  *
- * Le thème et la FAQ sont désormais entièrement gérés par React.
+ * Le thème, la FAQ et les couleurs fonctionnelles des voies sont désormais
+ * entièrement gérés par React et les feuilles CSS.
  * Ce module ne conserve plus que les compatibilités encore dépendantes du DOM :
  * - ordre des séances dans la vue semaine ;
- * - protection des couleurs fonctionnelles des voies ;
  * - hachurage des inscriptions incompatibles avec une séance libre ;
  * - navigation tactile horizontale.
  */
@@ -62,15 +62,6 @@ function normalizeWeekView() {
       .filter((child) => child.classList?.contains("subcard"));
 
     if (cards.length > 1) reorderChildren(stack, cards);
-  });
-}
-
-function preserveFunctionalRouteColors() {
-  document.querySelectorAll(".route-card").forEach((card) => {
-    const backgroundColor = card.style.backgroundColor;
-    const color = card.style.color;
-    if (backgroundColor) card.style.setProperty("background-color", backgroundColor, "important");
-    if (color) card.style.setProperty("color", color, "important");
   });
 }
 
@@ -144,7 +135,6 @@ function refresh() {
 
   requestAnimationFrame(() => {
     scheduled = false;
-    preserveFunctionalRouteColors();
     normalizeWeekView();
     updateHatching();
   });
