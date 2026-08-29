@@ -1,10 +1,8 @@
-import express from "express";
 import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { getPool } from "./database.js";
 
-const EXPRESS_MIGRATION_PATCH = Symbol.for("climbcrew.migration-listen-patch");
 const MIGRATIONS_DIR = fileURLToPath(new URL("../migrations/", import.meta.url));
 
 async function ensureMigrationTable(client) {
@@ -62,27 +60,4 @@ export async function runDatabaseMigrations() {
   } finally {
     client.release();
   }
-}
-
-/**
- * server.js construit d'abord le schéma historique puis appelle app.listen().
- * Le hook exécute les migrations versionnées entre ces deux étapes, avant que
- * le serveur n'accepte la première requête réseau.
- */
-export function installMigrationHook() {
-  if (express.application[EXPRESS_MIGRATION_PATCH]) return;
-  express.application[EXPRESS_MIGRATION_PATCH] = true;
-
-  const originalListen = express.application.listen;
-  express.application.listen = function listenAfterMigrations(...args) {
-    const app = this;
-    runDatabaseMigrations()
-      .then(() => originalListen.apply(app, args))
-      .catch((error) => {
-        console.error("Erreur de migration PostgreSQL :", error);
-        process.exitCode = 1;
-      });
-
-    return app;
-  };
 }
