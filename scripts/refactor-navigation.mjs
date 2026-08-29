@@ -12,27 +12,27 @@ for (const file of files) {
     );
   }
 
-  const sidebarToken = source.indexOf('sidebar-backdrop');
-  const pendingAnchor = source.indexOf('pendingBroadcastMessages.length > 0', sidebarToken);
-  if (sidebarToken < 0 || pendingAnchor < 0) {
-    throw new Error(`Repères sidebar introuvables dans ${file}: ${sidebarToken}/${pendingAnchor}`);
+  const pendingAnchor = source.indexOf('pendingBroadcastMessages.length > 0');
+  const asideAnchor = source.lastIndexOf('<aside', pendingAnchor);
+  if (asideAnchor < 0 || pendingAnchor < 0) {
+    throw new Error(`Repères aside introuvables dans ${file}: ${asideAnchor}/${pendingAnchor}`);
   }
-  const sidebarLineStart = source.lastIndexOf('\n', source.lastIndexOf('\n', sidebarToken) - 1) + 1;
+  const asideLineStart = source.lastIndexOf('\n', asideAnchor) + 1;
   const pendingLineStart = source.lastIndexOf('\n', pendingAnchor) + 1;
-  source = source.slice(0, sidebarLineStart) + `      <AppSidebar\n        open={sidebarOpen}\n        visibleTabs={visibleTabs}\n        activeTab={tab}\n        onSelectTab={setTab}\n        themePreference={themePreference}\n        onThemePreferenceChange={handleThemePreferenceChange}\n        authUser={authUser}\n        onLogout={handleLogout}\n        onClose={() => setSidebarOpen(false)}\n      />\n` + source.slice(pendingLineStart);
+  source = source.slice(0, asideLineStart) + `      <AppSidebar\n        open={sidebarOpen}\n        visibleTabs={visibleTabs}\n        activeTab={tab}\n        onSelectTab={setTab}\n        themePreference={themePreference}\n        onThemePreferenceChange={handleThemePreferenceChange}\n        authUser={authUser}\n        onLogout={handleLogout}\n        onClose={() => setSidebarOpen(false)}\n      />\n` + source.slice(pendingLineStart);
 
-  const mobileToken = source.indexOf('mobile-bottom-nav');
-  const shellToken = source.indexOf('className="shell"', mobileToken);
-  if (mobileToken < 0 || shellToken < 0) {
-    throw new Error(`Repères navigation mobile introuvables dans ${file}: ${mobileToken}/${shellToken}`);
+  const shellToken = source.indexOf('className="shell"');
+  const navAnchor = source.lastIndexOf('<nav', shellToken);
+  if (navAnchor < 0 || shellToken < 0) {
+    throw new Error(`Repères navigation mobile introuvables dans ${file}: ${navAnchor}/${shellToken}`);
   }
-  const mobileLineStart = source.lastIndexOf('\n', mobileToken) + 1;
+  const navLineStart = source.lastIndexOf('\n', navAnchor) + 1;
   const shellLineStart = source.lastIndexOf('\n', shellToken) + 1;
-  source = source.slice(0, mobileLineStart) + `      <MobileBottomNav\n        visibleTabs={visibleTabs}\n        activeTab={tab}\n        onSelectTab={setTab}\n      />\n\n` + source.slice(shellLineStart);
+  source = source.slice(0, navLineStart) + `      <MobileBottomNav\n        visibleTabs={visibleTabs}\n        activeTab={tab}\n        onSelectTab={setTab}\n      />\n\n` + source.slice(shellLineStart);
 
   fs.writeFileSync(file, source);
 }
 
-fs.writeFileSync("VERSION", "20260829.031\n");
+fs.writeFileSync("VERSION", "20260829.032\n");
 fs.rmSync("scripts/refactor-navigation.mjs");
 fs.rmSync(".github/workflows/refactor-navigation-once.yml");
