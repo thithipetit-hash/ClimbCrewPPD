@@ -1,51 +1,10 @@
 /**
- * Ajustements DOM historiques encore nécessaires à ClimbCrew.
+ * Dernière compatibilité DOM historique de ClimbCrew.
  *
- * Le thème, la FAQ, les couleurs fonctionnelles des voies et l'ordre des séances
- * de la vue semaine sont désormais entièrement gérés par React et les feuilles CSS.
- * Ce module ne conserve plus que les compatibilités encore dépendantes du DOM :
- * - hachurage des inscriptions incompatibles avec une séance libre ;
- * - navigation tactile horizontale.
+ * Le thème, la FAQ, les couleurs de voies, l'ordre des séances et le hachurage
+ * sont désormais entièrement gérés par React et les feuilles CSS.
+ * Ce module ne conserve temporairement que la navigation tactile horizontale.
  */
-let scheduled = false;
-
-function normalize(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function sessionStatus(card) {
-  const field = [...card.querySelectorAll(".inline-field")]
-    .find((item) => normalize(item.querySelector("label")?.textContent) === "statut");
-  const select = field?.querySelector("select");
-  if (select) return normalize(select.value);
-
-  const line = [...card.querySelectorAll(".small")]
-    .find((item) => normalize(item.textContent).startsWith("statut :"));
-  return normalize(line?.textContent).replace("statut :", "").trim();
-}
-
-function hasNoPassport(row) {
-  return normalize(row.dataset.passport) === "sans";
-}
-
-function updateHatching() {
-  const cards = [
-    ...document.querySelectorAll(".session-card"),
-    ...document.querySelectorAll(".grid.five > .card > .stack > .subcard"),
-  ];
-
-  cards.forEach((card) => {
-    const isFree = sessionStatus(card) === "libre";
-    card.querySelectorAll(".passport-row").forEach((row) => {
-      row.classList.toggle("passport-warning-hatched", isFree && hasNoPassport(row));
-    });
-  });
-}
-
 function enableHorizontalSwipe() {
   let startX = 0;
   let startY = 0;
@@ -81,28 +40,8 @@ function enableHorizontalSwipe() {
   }, { passive: true });
 }
 
-function refresh() {
-  if (scheduled) return;
-  scheduled = true;
-
-  requestAnimationFrame(() => {
-    scheduled = false;
-    updateHatching();
-  });
-}
-
-function start() {
-  refresh();
-  enableHorizontalSwipe();
-
-  new MutationObserver(refresh)
-    .observe(document.body, { childList: true, subtree: true });
-
-  document.addEventListener("change", refresh, true);
-}
-
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", start, { once: true });
+  document.addEventListener("DOMContentLoaded", enableHorizontalSwipe, { once: true });
 } else {
-  start();
+  enableHorizontalSwipe();
 }
