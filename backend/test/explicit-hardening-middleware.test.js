@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const serverSource = await readFile(new URL("../server.js", import.meta.url), "utf8");
-const preloadSource = await readFile(new URL("../admin-user-enhancements.js", import.meta.url), "utf8");
+const preloadSource = await readFile(new URL("../deployment-bootstrap.js", import.meta.url), "utf8");
 const modulePaths = [
   "../admin-users/cookie-hardening.js",
   "../admin-users/prebody-rate-limit.js",
