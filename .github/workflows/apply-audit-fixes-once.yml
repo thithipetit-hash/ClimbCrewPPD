@@ -28,6 +28,7 @@ jobs:
           p = Path('scripts/apply-audit-fixes.mjs')
           s = p.read_text()
           s = s.replace(';nbroadcastTest =', ';\nbroadcastTest =')
+          s = s.replace('${rating} étoile', '\\${rating} étoile')
           p.write_text(s)
           PY
           node --check scripts/apply-audit-fixes.mjs
