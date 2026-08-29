@@ -41,16 +41,26 @@ export function moveThemeSettingsOutOfSidebar(code) {
   let transformed = code;
 
   const sidebarThemeBlock = /\s*<div className="sidebar-theme">[\s\S]*?<\/div>\s*(?=\{authUser && \(\s*<div className="sidebar-account">)/;
-  if (!sidebarThemeBlock.test(transformed)) {
-    throw new Error("Le bloc Ambiance du menu latéral est introuvable.");
-  }
-  transformed = transformed.replace(sidebarThemeBlock, "\n");
-
   const sidebarEmailBlock = /\s*\{authUser && \(\s*<div className="sidebar-account">\s*<div className="small">\{authUser\.email\}<\/div>\s*<\/div>\s*\)\}/;
-  if (!sidebarEmailBlock.test(transformed)) {
-    throw new Error("L'adresse e-mail du menu latéral est introuvable.");
+  const settingsAlreadyMoved = /<Parametres\b[\s\S]*?themePreference=\{themePreference\}[\s\S]*?onThemePreferenceChange=\{handleThemePreferenceChange\}[\s\S]*?themeOptions=\{THEME_OPTIONS\}[\s\S]*?\/>/;
+
+  if (!sidebarThemeBlock.test(transformed) && !sidebarEmailBlock.test(transformed)) {
+    if (settingsAlreadyMoved.test(transformed)) {
+      return transformed;
+    }
+    throw new Error("Le bloc Ambiance du menu latéral est introuvable et Paramètres n'est pas déjà configuré.");
   }
-  transformed = transformed.replace(sidebarEmailBlock, "");
+
+  if (sidebarThemeBlock.test(transformed)) {
+    transformed = transformed.replace(sidebarThemeBlock, "\n");
+  }
+  if (sidebarEmailBlock.test(transformed)) {
+    transformed = transformed.replace(sidebarEmailBlock, "");
+  }
+
+  if (settingsAlreadyMoved.test(transformed)) {
+    return transformed;
+  }
 
   const settingsProps = /(<Parametres\b[\s\S]*?)(\s*\/>)/;
   if (!settingsProps.test(transformed)) {
