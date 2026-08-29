@@ -244,10 +244,22 @@ function requireSetupAccess(req, res, next) {
 }
 
 const rateLimitBuckets = new Map();
+const RATE_LIMIT_CLEANUP_INTERVAL_MS = 60 * 1000;
+let nextRateLimitCleanupAt = 0;
+
+function cleanupExpiredRateLimitBuckets(now = Date.now()) {
+  if (now < nextRateLimitCleanupAt) return;
+  for (const [key, bucket] of rateLimitBuckets.entries()) {
+    if (!bucket || bucket.resetAt <= now) rateLimitBuckets.delete(key);
+  }
+  nextRateLimitCleanupAt = now + RATE_LIMIT_CLEANUP_INTERVAL_MS;
+}
+
 function rateLimit({ keyPrefix, windowMs, max }) {
   return (req, res, next) => {
-    const key = `${keyPrefix}:${getClientIp(req) || "unknown"}`;
     const now = Date.now();
+    cleanupExpiredRateLimitBuckets(now);
+    const key = `${keyPrefix}:${getClientIp(req) || "unknown"}`;
     const current = rateLimitBuckets.get(key) || { count: 0, resetAt: now + windowMs };
     if (current.resetAt <= now) {
       current.count = 0;
@@ -301,10 +313,9 @@ function serializeUser(row) {
 }
 
 function getClientIp(req) {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.length > 0) {
-    return forwarded.split(",")[0].trim();
-  }
+  // Express calcule req.ip à partir de la socket et de la configuration
+  // `trust proxy`. Ne jamais relire manuellement l'en-tête de proxy ici :
+  // cela contournerait précisément la chaîne de confiance configurée par Express.
   return req.ip || null;
 }
 
