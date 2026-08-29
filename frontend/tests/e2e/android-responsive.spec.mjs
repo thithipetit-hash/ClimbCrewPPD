@@ -16,6 +16,56 @@ function shortElementName(element) {
   return `${element.tagName.toLowerCase()}${id}${classes}`;
 }
 
+test("la vidéo d'introduction libère une application déjà chargée", async ({ page }) => {
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  const intro = page.locator(".startup-video");
+  const app = page.locator(".startup-video-app");
+  const skipButton = page.getByRole("button", { name: "Passer" });
+
+  await expect(intro).toBeVisible();
+  await expect(skipButton).toBeVisible();
+  await expect(app).toHaveCount(1);
+  await expect(app).toHaveAttribute("aria-hidden", "true");
+  await expect(page.locator("body")).toHaveClass(/startup-video-active/);
+
+  const appStateDuringIntro = await app.evaluate((element) => ({
+    inert: element.inert,
+    childCount: element.querySelectorAll("*").length,
+    textLength: (element.textContent || "").trim().length,
+  }));
+
+  expect(appStateDuringIntro.inert, "L'application doit rester non interactive pendant l'intro").toBe(true);
+  expect(
+    appStateDuringIntro.childCount,
+    "L'application doit déjà être montée et chargée derrière la vidéo"
+  ).toBeGreaterThan(0);
+  expect(
+    appStateDuringIntro.textLength,
+    "L'application montée derrière la vidéo doit déjà contenir son interface"
+  ).toBeGreaterThan(0);
+
+  await skipButton.click();
+  await expect(intro).toHaveClass(/startup-video--leaving/);
+  await expect(intro).toHaveCount(0, { timeout: 2_000 });
+  await expect(app).not.toHaveAttribute("aria-hidden", "true");
+  await expect(page.locator("body")).not.toHaveClass(/startup-video-active/);
+
+  await expect.poll(async () => app.evaluate((element) => element.inert)).toBe(false);
+  await expect(page.locator("#root")).toBeVisible();
+
+  const interactiveCount = await page.locator("button, a, input, select, textarea").count();
+  expect(
+    interactiveCount,
+    "Une fois l'intro terminée, l'application doit exposer au moins un contrôle interactif"
+  ).toBeGreaterThan(0);
+
+  expect(pageErrors, `Erreurs JavaScript pendant la transition: ${pageErrors.join(" | ")}`).toEqual([]);
+});
+
 test("l'application tient dans la largeur d'un écran Android", async ({ page }) => {
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
