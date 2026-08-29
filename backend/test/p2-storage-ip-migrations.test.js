@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { trustedClientIpMiddleware } from "../admin-users/client-ip-hardening.js";
 
 const enhancementsSource = await readFile(new URL("../admin-user-enhancements.js", import.meta.url), "utf8");
+const explicitRoutesSource = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
 const migrationServiceSource = await readFile(new URL("../admin-users/migration-service.js", import.meta.url), "utf8");
 const migrationSql = await readFile(new URL("../migrations/001_integrity_constraints.sql", import.meta.url), "utf8");
 const schemaSource = await readFile(new URL("../schema.sql", import.meta.url), "utf8");
@@ -33,11 +34,16 @@ test("le durcissement IP est installé avant l'intégration des logs", () => {
   assert.doesNotMatch(enhancementsSource, /installExpressIntegration/);
 });
 
-test("les migrations versionnées sont appliquées avant l'écoute réseau", () => {
+test("les migrations versionnées sont appliquées explicitement avant l'écoute réseau", () => {
   assert.match(migrationServiceSource, /create table if not exists schema_migrations/);
   assert.match(migrationServiceSource, /insert into schema_migrations \(version\)/);
-  assert.match(migrationServiceSource, /runDatabaseMigrations\(\)/);
-  assert.match(enhancementsSource, /installMigrationHook\(\)/);
+  assert.doesNotMatch(migrationServiceSource, /express\.application\.listen/);
+  assert.doesNotMatch(enhancementsSource, /installMigrationHook/);
+  const migrationIndex = explicitRoutesSource.indexOf("await runDatabaseMigrations();");
+  const adminSchemaIndex = explicitRoutesSource.indexOf("await ensureAdminUserSchema();");
+  assert.ok(migrationIndex >= 0);
+  assert.ok(adminSchemaIndex >= 0);
+  assert.ok(migrationIndex < adminSchemaIndex);
 });
 
 test("la migration ajoute les relations structurantes sans bloquer un historique orphelin", () => {
