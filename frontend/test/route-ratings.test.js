@@ -17,7 +17,7 @@ test("la note de une à cinq étoiles est saisie avec la réalisation", async ()
 });
 
 test("les étoiles sélectionnées sont affichées en jaune", async () => {
-  const styles = await readFile(new URL("../src/climbcrew-enhancements-legacy.js", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/styles/climbcrew-enhancements.css", import.meta.url), "utf8");
   assert.match(styles, /\.rating-stars \.rating-star\.selected/);
   assert.match(styles, /color:#facc15!important/);
   assert.match(styles, /not\(\.remove-button\)/);

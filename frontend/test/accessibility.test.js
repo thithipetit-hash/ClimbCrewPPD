@@ -15,7 +15,7 @@ test("les commandes composées d'une icône possèdent un libellé accessible", 
 
 test("le clavier et les zones tactiles disposent de styles accessibles", async () => {
   const source = await readFile(
-    new URL("../src/climbcrew-enhancements-legacy.js", import.meta.url),
+    new URL("../src/styles/climbcrew-enhancements.css", import.meta.url),
     "utf8",
   );
 
@@ -26,7 +26,7 @@ test("le clavier et les zones tactiles disposent de styles accessibles", async (
 });
 
 test("la liste des inscrits devient multicolonne sans couper les noms sur plusieurs lignes", async () => {
-  const styles = await readFile(new URL("../src/climbcrew-enhancements-legacy.js", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/styles/climbcrew-enhancements.css", import.meta.url), "utf8");
   assert.match(styles, /@media \(min-width:720px\)[\s\S]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(styles, /@media \(min-width:1100px\)[\s\S]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
   assert.match(styles, /@media \(min-width:1500px\)[\s\S]*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);

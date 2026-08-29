@@ -15,6 +15,7 @@ import "./realisation-mode-ui.js";
 import "./progression-ui.js";
 import "./badge-faq-ui.js";
 import "./climber-profile-ui.js";
+import "./styles/climbcrew-enhancements.css";
 import "./styles/index.css";
 import "./styles/session-status-colors.css";
 import "./styles/badges.css";

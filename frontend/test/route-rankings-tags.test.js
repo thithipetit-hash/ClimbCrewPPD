@@ -16,7 +16,7 @@ test("le résumé statistique ne répète plus les compteurs de réalisations", 
 });
 
 test("les lignes sombres des classements utilisent un texte clair", async () => {
-  const styles = await readFile(new URL("../src/climbcrew-enhancements-legacy.js", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/styles/climbcrew-enhancements.css", import.meta.url), "utf8");
   assert.match(styles, /\.route-ranking-row > span[\s\S]*color:#f8fafc!important/);
   assert.match(styles, /\.route-ranking-row > strong[\s\S]*color:#ffffff!important/);
   assert.match(styles, /\.app \.card \.lead-grade-row > span[\s\S]*-webkit-text-fill-color:#ffffff!important/);

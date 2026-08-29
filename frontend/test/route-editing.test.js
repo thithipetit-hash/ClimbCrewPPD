@@ -29,7 +29,7 @@ test("une liste de réalisations peut être entièrement déployée ou repliée"
 
 test("le graphique CPR reste dans la largeur mobile et la suppression est compacte", async () => {
   const source = await readFile(new URL("../src/pages/Progression.jsx", import.meta.url), "utf8");
-  const styles = await readFile(new URL("../src/climbcrew-enhancements-legacy.js", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/styles/climbcrew-enhancements.css", import.meta.url), "utf8");
 
   assert.match(source, /variant="danger" className="realisation-delete-button"/);
   assert.match(styles, /\.cpr-chart \{[^}]*max-width:100%[^}]*min-width:0/s);
