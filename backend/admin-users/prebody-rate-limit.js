@@ -1,7 +1,3 @@
-import express from "express";
-
-const EXPRESS_PREBODY_PATCH = Symbol.for("climbcrew.prebody-rate-limit-patch");
-const APP_PREBODY_MIDDLEWARE = Symbol.for("climbcrew.prebody-rate-limit-middleware");
 export const CANONICAL_RATE_LIMIT_IP = Symbol.for("climbcrew.canonical-rate-limit-ip");
 
 const WINDOW_MS = 60_000;
@@ -140,19 +136,5 @@ export function describePreBodyRateLimit() {
     publicAuthMaxBytes: PUBLIC_AUTH_MAX_BYTES,
     generalJsonMaxBytes: GENERAL_JSON_MAX_BYTES,
     trackedClients: buckets.size,
-  };
-}
-
-export function installPreBodyRateLimit() {
-  if (express.application[EXPRESS_PREBODY_PATCH]) return;
-  express.application[EXPRESS_PREBODY_PATCH] = true;
-
-  const originalUse = express.application.use;
-  express.application.use = function patchedUseWithPreBodyGuard(...handlers) {
-    if (!this[APP_PREBODY_MIDDLEWARE]) {
-      originalUse.call(this, preBodyRequestGuard);
-      this[APP_PREBODY_MIDDLEWARE] = true;
-    }
-    return originalUse.apply(this, handlers);
   };
 }
