@@ -2,46 +2,36 @@ import fs from "node:fs";
 
 const files = ["frontend/src/App.jsx", "frontend/src/AppCore.jsx"];
 
-function replaceBlock(source, startMarker, endMarker, replacement, label, file) {
-  const start = source.indexOf(startMarker);
-  if (start < 0) throw new Error(`${label} début introuvable dans ${file}`);
-  const endStart = source.indexOf(endMarker, start);
-  if (endStart < 0) throw new Error(`${label} fin introuvable dans ${file}`);
-  const end = endStart + endMarker.length;
-  return source.slice(0, start) + replacement + source.slice(end);
-}
-
 for (const file of files) {
   let source = fs.readFileSync(file, "utf8");
 
   if (!source.includes('import AppSidebar from "./components/AppSidebar.jsx";')) {
     source = source.replace(
-      'import AuthPage from "./components/AuthPage.jsx";\n',
-      'import AuthPage from "./components/AuthPage.jsx";\nimport AppSidebar from "./components/AppSidebar.jsx";\nimport MobileBottomNav from "./components/MobileBottomNav.jsx";\n'
+      'import AuthPage from "./components/AuthPage.jsx";',
+      'import AuthPage from "./components/AuthPage.jsx";\nimport AppSidebar from "./components/AppSidebar.jsx";\nimport MobileBottomNav from "./components/MobileBottomNav.jsx";'
     );
   }
 
-  source = replaceBlock(
-    source,
-    '      {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}\n\n      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`} aria-label="Navigation ClimbClubCristal">',
-    '      </aside>\n',
-    `      <AppSidebar\n        open={sidebarOpen}\n        visibleTabs={visibleTabs}\n        activeTab={tab}\n        onSelectTab={setTab}\n        themePreference={themePreference}\n        onThemePreferenceChange={handleThemePreferenceChange}\n        authUser={authUser}\n        onLogout={handleLogout}\n        onClose={() => setSidebarOpen(false)}\n      />\n`,
-    "Bloc sidebar",
-    file
-  );
+  const sidebarAnchor = source.indexOf('{sidebarOpen && <div className="sidebar-backdrop"');
+  const pendingAnchor = source.indexOf('{pendingBroadcastMessages.length > 0 && (', sidebarAnchor);
+  if (sidebarAnchor < 0 || pendingAnchor < 0) {
+    throw new Error(`Repères sidebar introuvables dans ${file}: ${sidebarAnchor}/${pendingAnchor}`);
+  }
+  const sidebarLineStart = source.lastIndexOf('\n', sidebarAnchor) + 1;
+  source = source.slice(0, sidebarLineStart) + `      <AppSidebar\n        open={sidebarOpen}\n        visibleTabs={visibleTabs}\n        activeTab={tab}\n        onSelectTab={setTab}\n        themePreference={themePreference}\n        onThemePreferenceChange={handleThemePreferenceChange}\n        authUser={authUser}\n        onLogout={handleLogout}\n        onClose={() => setSidebarOpen(false)}\n      />\n` + source.slice(source.lastIndexOf('\n', pendingAnchor) + 1);
 
-  source = replaceBlock(
-    source,
-    '      <nav className="mobile-bottom-nav" aria-label="Navigation mobile ClimbClubCristal">',
-    '      </nav>\n',
-    `      <MobileBottomNav\n        visibleTabs={visibleTabs}\n        activeTab={tab}\n        onSelectTab={setTab}\n      />\n`,
-    "Navigation mobile",
-    file
-  );
+  const mobileAnchor = source.indexOf('<nav className="mobile-bottom-nav"');
+  const shellAnchor = source.indexOf('<div className="shell">', mobileAnchor);
+  if (mobileAnchor < 0 || shellAnchor < 0) {
+    throw new Error(`Repères navigation mobile introuvables dans ${file}: ${mobileAnchor}/${shellAnchor}`);
+  }
+  const mobileLineStart = source.lastIndexOf('\n', mobileAnchor) + 1;
+  const shellLineStart = source.lastIndexOf('\n', shellAnchor) + 1;
+  source = source.slice(0, mobileLineStart) + `      <MobileBottomNav\n        visibleTabs={visibleTabs}\n        activeTab={tab}\n        onSelectTab={setTab}\n      />\n\n` + source.slice(shellLineStart);
 
   fs.writeFileSync(file, source);
 }
 
-fs.writeFileSync("VERSION", "20260829.029\n");
+fs.writeFileSync("VERSION", "20260829.030\n");
 fs.rmSync("scripts/refactor-navigation.mjs");
 fs.rmSync(".github/workflows/refactor-navigation-once.yml");
