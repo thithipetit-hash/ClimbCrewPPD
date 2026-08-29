@@ -156,11 +156,6 @@ function cleanEmail(value = "") {
   return String(value || "").trim().toLowerCase();
 }
 
-function defaultSessionStatus(date, slot) {
-  const day = new Date(`${date}T12:00:00`).getDay();
-  return slot === "midi" && (day === 2 || day === 4) ? "encadree" : "libre";
-}
-
 function parseCookies(req) {
   const header = req.headers.cookie || "";
   return Object.fromEntries(
