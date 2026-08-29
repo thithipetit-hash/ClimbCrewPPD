@@ -90,7 +90,7 @@ services:
       dockerfile: frontend/Dockerfile.prod
       args:
         VITE_API_URL: ${VITE_API_URL:-/api}
-        GITHUB_SHA: ${DEPLOY_COMMIT_SHA:-unknown}
+        GITHUB_SHA: ${GITHUB_SHA:-unknown}
     image: climbcrew-frontend:prod
     container_name: climbcrew-frontend
     restart: unless-stopped
