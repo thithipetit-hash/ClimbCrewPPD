@@ -27,10 +27,8 @@ jobs:
           function_start = source.index('function injectStyles() {')
           css_marker = '  style.textContent = `'
           css_start = source.index(css_marker, function_start) + len(css_marker)
-          css_end_marker = '`;\n  document.head.appendChild(style);'
-          css_end = source.index(css_end_marker, css_start)
-          function_end_marker = '  document.head.appendChild(style);\n}'
-          function_end = source.index(function_end_marker, css_end) + len(function_end_marker)
+          css_end = source.index('`;', css_start)
+          function_end = source.index('\n}', css_end) + 2
 
           css = source[css_start:css_end].strip() + '\n'
           css_path = Path('frontend/src/styles/climbcrew-enhancements.css')
