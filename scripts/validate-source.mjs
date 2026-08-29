@@ -16,6 +16,9 @@ if (!dayBlock.includes("defaultSessionStatus(selectedDate, slot)")) fail("statut
 
 const main = fs.readFileSync("frontend/src/main.jsx", "utf8");
 if (!main.includes("<ErrorBoundary>")) fail("ErrorBoundary absent du point d’entrée React");
+if (main.includes("climbcrew-enhancements.js") || fs.existsSync("frontend/src/climbcrew-enhancements.js") || fs.existsSync("frontend/src/climbcrew-enhancements-legacy.js")) {
+  fail("ancienne couche frontend legacy encore présente");
+}
 
 const backendPackage = JSON.parse(fs.readFileSync("backend/package.json", "utf8"));
 const allowedBackendStartCommands = new Set([
@@ -36,9 +39,9 @@ if (app.includes("Sans nom") || app.includes("Voie sans nom")) fail("un libellé
 if (!domain.includes("function formatRouteName(route)")) fail("formatage ouvreur puis nom de voie absent");
 if (!app.includes("async function deleteRealisation(realisation)")) fail("suppression de réalisation absente de la progression");
 if (!app.includes("state.routes.map((route) => normalizeRopeNumber(route.numeroCorde))")) fail("les cordes vides ne sont pas masquées");
-
-const enhancements = fs.readFileSync("frontend/src/climbcrew-enhancements.js", "utf8");
-if (enhancements.includes("l’ocre apparaît sur fond marron")) fail("mention ocre sur fond marron encore présente dans la FAQ");
+if (app.includes("l’ocre apparaît sur fond marron") || main.includes("l’ocre apparaît sur fond marron")) {
+  fail("mention ocre sur fond marron encore présente dans le frontend");
+}
 
 const backend = fs.readFileSync("backend/server.js", "utf8");
 const explicitRoutes = fs.readFileSync("backend/admin-users/explicit-routes.js", "utf8");
