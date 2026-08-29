@@ -46,6 +46,7 @@ if (app.includes("l’ocre apparaît sur fond marron") || main.includes("l’ocr
 const backend = fs.readFileSync("backend/server.js", "utf8");
 const explicitRoutes = fs.readFileSync("backend/admin-users/explicit-routes.js", "utf8");
 const sessionAuthorization = fs.readFileSync("backend/admin-users/session-authorization-service.js", "utf8");
+const sessionDefaultStatus = fs.readFileSync("backend/session-default-status.js", "utf8");
 const realisationManagement = fs.readFileSync("backend/realisation-management-routes.js", "utf8");
 
 // PUT /sessions/:id est désormais déclaré explicitement avec son contrôleur sécurisé.
@@ -58,8 +59,11 @@ if (!explicitRoutes.includes('app.put("/sessions/:id", requireAuth, updateSessio
 if (backend.includes("legacyReplacedRoute") || fs.existsSync("backend/admin-users/express-integration.js")) {
   fail("ancien câblage Express legacy encore présent");
 }
-if (!sessionAuthorization.includes("function defaultSessionStatus(date, slot)")) {
-  fail("règle de statut par défaut absente du contrôleur de séances");
+if (!sessionDefaultStatus.includes("export function defaultSessionStatus(date, slot)")) {
+  fail("règle canonique de statut par défaut absente");
+}
+if (!sessionAuthorization.includes('import { defaultSessionStatus } from "../session-default-status.js";')) {
+  fail("contrôleur de séances non branché sur la règle canonique de statut");
 }
 if (!sessionAuthorization.includes("const resolvedStatus = requested.status")) {
   fail("statut de séance non résolu dans le contrôleur actif");
