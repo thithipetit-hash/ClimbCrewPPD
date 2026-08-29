@@ -2,6 +2,48 @@ import React from "react";
 import Button from "../components/Button.jsx";
 import { formatDateFr, nextBusinessDay } from "../lib/domain.js";
 
+const SESSION_SLOT_ORDER = ["midi", "soir", "matin"];
+
+function normalizeSessionSlot(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getSessionSlot(session) {
+  const candidates = [
+    session?.slot,
+    session?.creneau,
+    session?.timeSlot,
+    session?.periode,
+    session?.moment,
+    session?.type,
+    session?.nom,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeSessionSlot(candidate);
+    const slot = SESSION_SLOT_ORDER.find((item) => normalized === item || normalized.endsWith(item));
+    if (slot) return slot;
+  }
+  return "";
+}
+
+function sortSessionsBySlot(sessions = []) {
+  return sessions
+    .map((session, index) => ({ session, index }))
+    .sort((left, right) => {
+      const leftSlot = SESSION_SLOT_ORDER.indexOf(getSessionSlot(left.session));
+      const rightSlot = SESSION_SLOT_ORDER.indexOf(getSessionSlot(right.session));
+      const leftRank = leftSlot < 0 ? 99 : leftSlot;
+      const rightRank = rightSlot < 0 ? 99 : rightSlot;
+      return leftRank - rightRank || left.index - right.index;
+    })
+    .map(({ session }) => session);
+}
+
 export default function Inscriptions({
   viewMode,
   setViewMode,
@@ -57,7 +99,7 @@ export default function Inscriptions({
                 <h3>{formatDateFr(day.date)}</h3>
               </div>
               <div className="week-day-sessions">
-                {day.sessions.map((session) => renderSessionCard(session, true))}
+                {sortSessionsBySlot(day.sessions).map((session) => renderSessionCard(session, true))}
               </div>
             </section>
           ))}
