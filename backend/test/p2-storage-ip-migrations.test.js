@@ -6,6 +6,8 @@ import { trustedClientIpMiddleware } from "../admin-users/client-ip-hardening.js
 const enhancementsSource = await readFile(new URL("../admin-user-enhancements.js", import.meta.url), "utf8");
 const explicitRoutesSource = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
 const migrationServiceSource = await readFile(new URL("../admin-users/migration-service.js", import.meta.url), "utf8");
+const databaseSource = await readFile(new URL("../admin-users/database.js", import.meta.url), "utf8");
+const authMiddlewareSource = await readFile(new URL("../auth-middleware.js", import.meta.url), "utf8");
 const migrationSql = await readFile(new URL("../migrations/001_integrity_constraints.sql", import.meta.url), "utf8");
 const schemaSource = await readFile(new URL("../schema.sql", import.meta.url), "utf8");
 
@@ -44,6 +46,17 @@ test("les migrations versionnées sont appliquées explicitement avant l'écoute
   assert.ok(migrationIndex >= 0);
   assert.ok(adminSchemaIndex >= 0);
   assert.ok(migrationIndex < adminSchemaIndex);
+});
+
+test("le pool PostgreSQL est partagé explicitement sans monkey-patch de pg.Pool", () => {
+  assert.doesNotMatch(databaseSource, /import pg from ["']pg["']/);
+  assert.doesNotMatch(databaseSource, /pg\.Pool\s*=/);
+  assert.doesNotMatch(databaseSource, /installPoolCapture/);
+  assert.doesNotMatch(enhancementsSource, /installPoolCapture/);
+  assert.match(databaseSource, /export function setPool\(pool\)/);
+  assert.match(databaseSource, /let sharedPool = null/);
+  assert.match(authMiddlewareSource, /import \{ setPool \} from "\.\/admin-users\/database\.js"/);
+  assert.match(authMiddlewareSource, /setPool\(pool\);/);
 });
 
 test("la migration ajoute les relations structurantes sans bloquer un historique orphelin", () => {
