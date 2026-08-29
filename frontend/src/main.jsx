@@ -7,7 +7,6 @@ import StartupVideoGate from "./StartupVideoGate.jsx";
 import "./api-error-messages.js";
 import "./issue-13-access-page.js";
 import "./admin-user-management.js";
-import "./climbcrew-enhancements.js";
 import "./release-version-enhancements.js";
 import "./session-status-display.js";
 import "./account-participant-priority.js";
