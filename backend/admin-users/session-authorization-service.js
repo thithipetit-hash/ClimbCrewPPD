@@ -1,5 +1,6 @@
 import { getPool } from "./database.js";
 import { validateSessionPayload } from "../validation.js";
+import { getDefaultSessionStatus } from "../session-default-status.js";
 
 function normalizedId(value) {
   return value === null || value === undefined || value === "" ? null : String(value);
@@ -7,11 +8,6 @@ function normalizedId(value) {
 
 function sameId(left, right) {
   return normalizedId(left) === normalizedId(right);
-}
-
-function defaultSessionStatus(date, slot) {
-  const day = new Date(`${date}T12:00:00`).getDay();
-  return slot === "midi" && (day === 2 || day === 4) ? "encadree" : "libre";
 }
 
 function symmetricDifference(left, right) {
@@ -181,7 +177,7 @@ export async function updateSessionWithAuthorization(req, res) {
 
     const resolvedStatus = requested.status
       || existing?.status
-      || defaultSessionStatus(requested.date, requested.slot);
+      || getDefaultSessionStatus(requested.date, requested.slot);
 
     let sessionRow;
     if (policy.canManageAll) {
