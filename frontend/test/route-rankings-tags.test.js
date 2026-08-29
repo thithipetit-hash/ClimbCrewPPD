@@ -10,14 +10,13 @@ test("les statistiques proposent quatre classements de voies", async () => {
 });
 
 test("le résumé statistique ne répète plus les compteurs de réalisations", async () => {
-  // Ce contenu vit désormais dans sections/StatisticsSection.jsx (extrait de App.jsx).
   const source = await readFile(new URL("../src/sections/StatisticsSection.jsx", import.meta.url), "utf8");
   assert.doesNotMatch(source, /className="label">Réalisations<\/div><div className="value"/);
   assert.doesNotMatch(source, /className="label">Réalisations en tête<\/div><div className="value"/);
 });
 
 test("les lignes sombres des classements utilisent un texte clair", async () => {
-  const styles = await readFile(new URL("../src/climbcrew-enhancements.js", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../src/climbcrew-enhancements-legacy.js", import.meta.url), "utf8");
   assert.match(styles, /\.route-ranking-row > span[\s\S]*color:#f8fafc!important/);
   assert.match(styles, /\.route-ranking-row > strong[\s\S]*color:#ffffff!important/);
   assert.match(styles, /\.app \.card \.lead-grade-row > span[\s\S]*-webkit-text-fill-color:#ffffff!important/);
@@ -25,8 +24,6 @@ test("les lignes sombres des classements utilisent un texte clair", async () => 
 
 test("les caractéristiques sont associées à la voie à sa création et à sa modification", async () => {
   const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  // ROUTE_TAGS a été extrait de App.jsx vers lib/ui-config.js ; le formulaire et
-  // l'affichage des caractéristiques de voie vivent désormais dans pages/Voies.jsx.
   const uiConfig = await readFile(new URL("../src/lib/ui-config.js", import.meta.url), "utf8");
   const voies = await readFile(new URL("../src/pages/Voies.jsx", import.meta.url), "utf8");
 
@@ -46,8 +43,6 @@ test("les caractéristiques sont associées à la voie à sa création et à sa 
 
 test("la création d'une voie démarre vide et utilise une case moulinette", async () => {
   const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  // Le formulaire d'ajout de voie (case moulinette, compteur de tags, coche ✓)
-  // vit désormais dans pages/Voies.jsx.
   const voies = await readFile(new URL("../src/pages/Voies.jsx", import.meta.url), "utf8");
 
   assert.match(source, /numeroCorde: "",[\s\S]*couleurPrises: "",[\s\S]*cotationReference: ""/);
@@ -58,7 +53,6 @@ test("la création d'une voie démarre vide et utilise une case moulinette", asy
 
 test("le Wall of Fame peut être filtré par sexe", async () => {
   const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  // Le sélecteur H/F/Tous a été extrait dans sections/WallOfFameSection.jsx.
   const wallOfFame = await readFile(new URL("../src/sections/WallOfFameSection.jsx", import.meta.url), "utf8");
 
   assert.match(source, /wallOfFameSexFilter === "all" \|\| participant\.sexe === wallOfFameSexFilter/);
