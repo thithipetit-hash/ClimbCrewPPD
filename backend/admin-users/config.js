@@ -32,9 +32,9 @@ export function hasRequiredEnhancementPreload({
 
   return (execArgv || []).some((value, index, values) => {
     const arg = String(value || "");
-    if (/^--import=.*admin-user-enhancements\.js(?:$|[?#])/.test(arg)) return true;
+    if (/^--import=.*deployment-bootstrap\.js(?:$|[?#])/.test(arg)) return true;
     if (arg === "--import") {
-      return /admin-user-enhancements\.js(?:$|[?#])/.test(String(values?.[index + 1] || ""));
+      return /deployment-bootstrap\.js(?:$|[?#])/.test(String(values?.[index + 1] || ""));
     }
     return false;
   });
@@ -42,7 +42,7 @@ export function hasRequiredEnhancementPreload({
 
 if (!hasRequiredEnhancementPreload()) {
   throw new Error(
-    "Démarrage production refusé : utilise `npm start` afin de précharger admin-user-enhancements.js. " +
+    "Démarrage production refusé : utilise `npm start` afin de précharger deployment-bootstrap.js. " +
     "Le lancement direct `node server.js` contournerait des protections de sécurité.",
   );
 }

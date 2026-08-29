@@ -110,7 +110,15 @@ jobs:
         run: docker compose --env-file .env.production -f docker-compose.prod.yml build
 
       - name: Start stack
-        run: docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! docker compose --env-file .env.production -f docker-compose.prod.yml up -d; then
+            echo "Docker Compose failed while starting the validation stack."
+            docker compose --env-file .env.production -f docker-compose.prod.yml ps || true
+            docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail=200 backend db backup-init || true
+            exit 1
+          fi
 
       - name: Runtime health and authorization smoke tests
         shell: bash

@@ -23,14 +23,14 @@ if (main.includes("climbcrew-enhancements.js") || fs.existsSync("frontend/src/cl
 const backendPackage = JSON.parse(fs.readFileSync("backend/package.json", "utf8"));
 const allowedBackendStartCommands = new Set([
   "node server.js",
-  "node --import ./admin-user-enhancements.js server.js",
+  "node --import ./deployment-bootstrap.js server.js",
 ]);
 if (!allowedBackendStartCommands.has(backendPackage.scripts?.start)) {
   fail("commande de démarrage backend non reconnue");
 }
-if (backendPackage.scripts?.start.includes("admin-user-enhancements.js")
-    && !fs.existsSync("backend/admin-user-enhancements.js")) {
-  fail("préchargement admin-user-enhancements.js introuvable");
+if (backendPackage.scripts?.start.includes("deployment-bootstrap.js")
+    && !fs.existsSync("backend/deployment-bootstrap.js")) {
+  fail("préchargement deployment-bootstrap.js introuvable");
 }
 if (fs.existsSync("backend/server-runtime.js")) fail("server-runtime.js ne doit plus être utilisé");
 

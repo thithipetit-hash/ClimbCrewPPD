@@ -4,7 +4,7 @@
   "version": "1.5.0-render-linux-compatible",
   "type": "module",
   "scripts": {
-    "start": "node --import ./admin-user-enhancements.js server.js",
+    "start": "node --import ./deployment-bootstrap.js server.js",
     "test": "node --test",
     "backup:decrypt": "node tools/decrypt-backup.mjs"
   },
