@@ -1,0 +1,61 @@
+name: Fix navigation settings once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-navigation-settings-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Corriger navigation et paramètres
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          const appPath = 'frontend/src/AppCore.jsx';
+          let app = fs.readFileSync(appPath, 'utf8');
+          app = app.replace('        themePreference={themePreference}\n        onThemePreferenceChange={handleThemePreferenceChange}\n', '');
+          if (!app.includes('            themePreference={themePreference}')) {
+            const anchor = '            requestEmailChange={requestEmailChange}\n';
+            if (!app.includes(anchor)) throw new Error('Ancre Parametres introuvable');
+            app = app.replace(anchor, `${anchor}            themePreference={themePreference}\n            onThemePreferenceChange={handleThemePreferenceChange}\n            themeOptions={THEME_OPTIONS}\n`);
+          }
+          fs.writeFileSync(appPath, app);
+
+          const sidebarPath = 'frontend/src/components/AppSidebar.jsx';
+          let sidebar = fs.readFileSync(sidebarPath, 'utf8');
+          sidebar = sidebar.replace('import { THEME_OPTIONS } from "../lib/theme.js";\n', '');
+          sidebar = sidebar.replace('  themePreference,\n  onThemePreferenceChange,\n', '');
+          sidebar = sidebar.replace(/\n      <div className="sidebar-theme">[\s\S]*?<\/div>\n\n      \{authUser && \(\n        <div className="sidebar-account">[\s\S]*?<\/div>\n      \)\}\n/, '\n');
+          if (sidebar.includes('sidebar-theme') || sidebar.includes('authUser.email')) {
+            throw new Error('Nettoyage sidebar incomplet');
+          }
+          fs.writeFileSync(sidebarPath, sidebar);
+          NODE
+      - name: Tester le frontend
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build
+      - name: Finaliser et pousser
+        run: |
+          printf '20260829.037\n' > VERSION
+          git rm .github/workflows/fix-navigation-settings-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src/AppCore.jsx frontend/src/components/AppSidebar.jsx VERSION
+          git commit -m 'fix(frontend): déplacer ambiance dans Paramètres'
+          git push origin HEAD:main
