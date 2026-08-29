@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const routesSource = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
-const preloadSource = await readFile(new URL("../admin-user-enhancements.js", import.meta.url), "utf8");
+const preloadSource = await readFile(new URL("../deployment-bootstrap.js", import.meta.url), "utf8");
 
 test("la route de qualification initiateur est enregistrée explicitement", () => {
   assert.match(
