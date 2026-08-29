@@ -14,7 +14,7 @@ if (!DATABASE_URL) throw new Error("DATABASE_URL est requis pour le test d'inté
 const pool = new Pool({ connectionString: DATABASE_URL });
 const server = spawn(
   process.execPath,
-  ["--import", "./admin-user-enhancements.js", "server.js"],
+  ["--import", "./deployment-bootstrap.js", "server.js"],
   {
     cwd: process.cwd(),
     env: process.env,
