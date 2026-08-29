@@ -1,5 +1,4 @@
 import { configureDeploymentEnvironment } from "./deployment-compatibility.js";
-import { installPoolCapture } from "./admin-users/database.js";
 import { installCookieHardening } from "./admin-users/cookie-hardening.js";
 import { installPreBodyRateLimit } from "./admin-users/prebody-rate-limit.js";
 import { installClientIpHardening } from "./admin-users/client-ip-hardening.js";
@@ -10,11 +9,10 @@ import { installInitiatorQualificationIntegration } from "./admin-users/initiato
  * Point d'entrée préchargé par Node avant server.js.
  *
  * Seules les adaptations réellement transverses restent préchargées. Les routes,
- * les migrations et le cycle de vie HTTP sont enregistrés explicitement par
- * server.js au lieu de surcharger Express au démarrage.
+ * les migrations, la connexion PostgreSQL et le cycle de vie HTTP sont désormais
+ * câblés explicitement par server.js au lieu de modifier globalement Express ou pg.
  */
 configureDeploymentEnvironment();
-installPoolCapture();
 
 // L'ordre est volontaire : cookie sûr -> limite précoce -> IP canonique -> logs.
 installCookieHardening();
