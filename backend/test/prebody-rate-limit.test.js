@@ -85,7 +85,14 @@ test("la clé bornée est conservée par le durcissement IP historique", () => {
   assert.equal(req.headers["x-real-ip"], "0.0.0.0");
 });
 
-test("le préchargement installe le garde-fou avant la normalisation IP", async () => {
-  const preload = await readFile(new URL("../admin-user-enhancements.js", import.meta.url), "utf8");
-  assert.match(preload, /installPreBodyRateLimit\(\);\s*installClientIpHardening\(\);/);
+test("server.js normalise l'URL puis applique le garde-fou avant la normalisation IP", async () => {
+  const server = await readFile(new URL("../server.js", import.meta.url), "utf8");
+  const normalizeIndex = server.indexOf("req.url = normalizeApiPath(req.url)");
+  const guardIndex = server.indexOf("app.use(preBodyRequestGuard);");
+  const ipIndex = server.indexOf("app.use(trustedClientIpMiddleware);");
+  const jsonIndex = server.indexOf("app.use(express.json");
+  assert.ok(normalizeIndex >= 0);
+  assert.ok(guardIndex > normalizeIndex);
+  assert.ok(ipIndex > guardIndex);
+  assert.ok(jsonIndex > ipIndex);
 });
