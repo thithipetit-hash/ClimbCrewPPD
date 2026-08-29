@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/app-icon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
+    <link rel="preload" href="/media/climbcrew-startup.mp4" as="video" type="video/mp4" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="ClimbClubCristal" />
@@ -83,7 +84,7 @@
     <script type="module">
       const root = document.getElementById("root");
       const textToRemove = "Connexion requise pour accéder à l’application.";
-            let scheduled = false;
+      let scheduled = false;
 
       const textOf = (element) => element.textContent.trim().replace(/\s+/g, " ");
       const normalizedTextOf = (element) => textOf(element).toLowerCase();
