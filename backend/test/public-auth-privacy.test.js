@@ -8,8 +8,8 @@ const requestSource = await readFile(
   new URL("../admin-users/email-association-service.js", import.meta.url),
   "utf8",
 );
-const preloadSource = await readFile(
-  new URL("../admin-user-enhancements.js", import.meta.url),
+const serverSource = await readFile(
+  new URL("../server.js", import.meta.url),
   "utf8",
 );
 
@@ -31,13 +31,16 @@ test("un cookie percent-encodé invalide ne fait pas lever le parseur de sécuri
   assert.doesNotThrow(() => parseCookies({ headers: { cookie: "ok=1; broken=%E0%A4%A" } }));
 });
 
-test("le préchargement retire un en-tête Cookie malformé avant server.js", () => {
+test("server.js retire un en-tête Cookie malformé avant les autres middlewares", () => {
   const req = { headers: { cookie: "climbcrew_session=%E0%A4%A" } };
   let nextCalled = false;
   sanitizeMalformedCookieHeader(req, {}, () => { nextCalled = true; });
   assert.equal(nextCalled, true);
   assert.equal(req.headers.cookie, undefined);
-  assert.match(preloadSource, /installCookieHardening\(\)/);
+  const cookieIndex = serverSource.indexOf("app.use(sanitizeMalformedCookieHeader);");
+  const csrfIndex = serverSource.indexOf("app.use(createCrossOriginCsrfBridge());");
+  assert.ok(cookieIndex >= 0);
+  assert.ok(csrfIndex > cookieIndex);
 });
 
 test("les mots de passe dépassant 72 octets sont refusés avant bcrypt", () => {
