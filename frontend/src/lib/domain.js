@@ -5,6 +5,7 @@ import {
   isSuccessfulLeadRealisation,
   isSuccessfulRealisation,
 } from "./realisation-mode.js";
+export { getDefaultSessionStatus as defaultSessionStatus } from "../../../backend/session-default-status.js";
 
 export const GRADES = ["4","4a","4b","4c","5a","5a+","5b","5b+","5c","5c+","6a","6a+","6b","6b+","6c","6c+","7a","7a+","7b","7c"];
 
@@ -76,16 +77,6 @@ export function todayIso() {
   if (day === 0) date.setDate(date.getDate() + 1);
 
   return toLocalIso(date);
-}
-
-/**
- * Règle de création automatique des séances :
- * - toutes les séances sont libres par défaut ;
- * - les séances du mardi midi et du jeudi midi sont encadrées.
- */
-export function defaultSessionStatus(dateStr, slot) {
-  const day = new Date(`${dateStr}T12:00:00`).getDay();
-  return slot === "midi" && (day === 2 || day === 4) ? "encadree" : "libre";
 }
 
 export function normalizePassport(value) {
