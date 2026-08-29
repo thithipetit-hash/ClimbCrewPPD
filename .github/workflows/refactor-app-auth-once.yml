@@ -1,0 +1,35 @@
+name: Refactor App Auth Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/refactor-app-auth-once.yml'
+      - 'scripts/refactor-app-auth-once.mjs'
+      - 'frontend/src/components/AuthPage.jsx'
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Extraire l'interface d'authentification
+        run: node scripts/refactor-app-auth-once.mjs
+      - name: Supprimer l'outil temporaire
+        run: git rm .github/workflows/refactor-app-auth-once.yml scripts/refactor-app-auth-once.mjs
+      - name: Commit et push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/AppCore.jsx frontend/src/components/AuthPage.jsx VERSION
+          git commit -m "refactor(frontend): extraire interface authentification"
+          git push origin HEAD:main
