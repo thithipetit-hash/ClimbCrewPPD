@@ -4,6 +4,8 @@ import Button from "./components/Button.jsx";
 import AuthPage from "./components/AuthPage.jsx";
 import AppSidebar from "./components/AppSidebar.jsx";
 import MobileBottomNav from "./components/MobileBottomNav.jsx";
+import BroadcastMessageModal from "./components/BroadcastMessageModal.jsx";
+import RealisationModal from "./components/RealisationModal.jsx";
 import FaqSection from "./sections/FaqSection.jsx";
 import Inscriptions from "./pages/Inscriptions.jsx";
 import Voies from "./pages/Voies.jsx";
@@ -1269,8 +1271,8 @@ async function deleteRealisation(realisation) {
       alert("Vous pouvez enregistrer uniquement vos propres réalisations.");
       return;
     }
-    if (!newRealisation.participantId || !newRealisation.selectedDay || !newRealisation.voieId || !newRealisation.rating) {
-      alert("Sélectionne un jour, un participant, une voie et une note de 1 à 5 étoiles.");
+    if (!newRealisation.participantId || !newRealisation.selectedDay || !newRealisation.voieId) {
+      alert("Sélectionne un jour, un participant et une voie.");
       return;
     }
 
@@ -1295,7 +1297,7 @@ async function deleteRealisation(realisation) {
       styleRealisation: newRealisation.styleRealisation,
       commentaire: newRealisation.commentaire,
       cotationProposee: newRealisation.cotationProposee,
-      rating: newRealisation.rating,
+      ...(newRealisation.rating ? { rating: newRealisation.rating } : {}),
       chute: newRealisation.chute,
       assureurId: newRealisation.chute ? newRealisation.assureurId : "",
     };
@@ -1871,196 +1873,26 @@ async function handleThemePreferenceChange(nextTheme) {
         onLogout={handleLogout}
         onClose={() => setSidebarOpen(false)}
       />
-      {pendingBroadcastMessages.length > 0 && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="broadcast-message-title">
-          <div className="modal-panel" style={{ maxWidth: 560 }}>
-            <div className="card-header">
-              <div>
-                <div className="small">Message du club</div>
-                <h2 id="broadcast-message-title" className="modal-title">
-                  {pendingBroadcastMessages[0].title}
-                </h2>
-              </div>
-            </div>
-            <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.55, margin: "18px 0" }}>
-              {pendingBroadcastMessages[0].body}
-            </div>
-            {pendingBroadcastMessages.length > 1 && (
-              <div className="small" style={{ marginBottom: 12 }}>
-                {pendingBroadcastMessages.length - 1} autre{pendingBroadcastMessages.length > 2 ? "s" : ""} message{pendingBroadcastMessages.length > 2 ? "s" : ""} à lire ensuite.
-              </div>
-            )}
-            {broadcastMessageError && <div className="error" style={{ marginBottom: 12 }}>{broadcastMessageError}</div>}
-            <div className="group" style={{ justifyContent: "flex-end" }}>
-              <Button onClick={() => acknowledgeBroadcastMessage(pendingBroadcastMessages[0].id)}>J’ai lu</Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <BroadcastMessageModal
+        messages={pendingBroadcastMessages}
+        error={broadcastMessageError}
+        onAcknowledge={acknowledgeBroadcastMessage}
+      />
 
-      {realisationModalRouteId !== null && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Enregistrer une voie réalisée">
-          <div className="modal-panel">
-            <div className="card-header">
-              <div>
-                <h2 className="modal-title">Enregistrer une voie réalisée</h2>
-                <div className="small">
-                  {realisationModalRoute ? formatRouteForRealisation(realisationModalRoute) : "Choisir une voie"}
-                </div>
-              </div>
-              <Button variant="dangerGhost" className="modal-close" onClick={closeRealisationModal} aria-label="Fermer">×</Button>
-            </div>
-
-            <div className="grid three">
-              <div>
-                <label>Jour</label>
-                <select
-                  value={newRealisation.selectedDay}
-                  onChange={(e) => {
-                    const selectedDay = e.target.value;
-                    setNewRealisation((prev) => ({
-                      ...prev,
-                      selectedDay,
-                      sessionId: "",
-                    }));
-                  }}
-                >
-                  <option value="">Choisir un jour</option>
-                  {modalAvailableDays.length === 0 ? (
-                    <option value="" disabled>Aucun jour disponible</option>
-                  ) : (
-                    modalAvailableDays.map((day) => <option key={day} value={day}>{formatDateShortFr(day)}</option>)
-                  )}
-                </select>
-                <div className="small" style={{ marginTop: 6, color: "inherit" }}>
-                  Aucun jour n’est prérempli. Si un participant est sélectionné, seuls ses jours d’inscription sont proposés.
-                </div>
-              </div>
-
-              <div>
-                <label>Participant</label>
-                <select
-                  value={newRealisation.participantId}
-                  onChange={(e) => {
-                    const participantId = e.target.value;
-                    setNewRealisation((prev) => ({
-                      ...prev,
-                      participantId,
-                      sessionId: "",
-                    }));
-                  }}
-                >
-                  <option value="">Choisir un participant</option>
-                  {modalEligibleParticipants.length === 0 ? (
-                    <option value="" disabled>Aucun participant éligible</option>
-                  ) : (
-                    modalEligibleParticipants.map((p) => <option key={p.id} value={p.id}>{fullName(p)}</option>)
-                  )}
-                </select>
-                <div className="small" style={{ marginTop: 6, color: "inherit" }}>
-                  Seuls les participants cotisants inscrits aux séances du référent ou de l’encadrant à la date choisie sont proposés.
-                </div>
-              </div>
-
-              <div>
-                <label>Voie</label>
-                <select
-                  value={newRealisation.voieId}
-                  onChange={(event) => {
-                    const voieId = event.target.value;
-                    const route = routesById[voieId];
-                    setRealisationModalRouteId(voieId);
-                    setNewRealisation((prev) => ({
-                      ...prev,
-                      voieId,
-                      styleRealisation: route?.moulinetteOnly ? "moulinette" : prev.styleRealisation,
-                      cotationProposee: route?.cotationAjustee || route?.cotationReference || "",
-                    }));
-                  }}
-                >
-                  <option value="">Choisir une voie</option>
-                  {state.routes.map((route) => (
-                    <option key={route.id} value={route.id}>{formatRouteForRealisation(route)}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label>Style</label>
-                <select value={newRealisation.styleRealisation} onChange={(e) => setNewRealisation((p) => ({ ...p, styleRealisation: e.target.value }))}>
-                  {Object.entries(STYLE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label>Cotation proposée</label>
-                <select value={newRealisation.cotationProposee} onChange={(e) => setNewRealisation((p) => ({ ...p, cotationProposee: e.target.value }))}>
-                  <option value="">Aucune</option>
-                  {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label>Cotation consensus</label>
-                <input value={realisationModalRoute ? routeAggregatesById[realisationModalRoute.id]?.consensusGrade || "Non calculée" : "Choisir une voie"} readOnly />
-              </div>
-
-              <div className="realisation-rating">
-                <label>Évaluation de la voie</label>
-                <div className="rating-stars" role="radiogroup" aria-label="Évaluation de la voie de 1 à 5 étoiles">
-                  {[1, 2, 3, 4, 5].map((rating) => (
-                    <button
-                      type="button"
-                      className={rating <= newRealisation.rating ? "rating-star selected" : "rating-star"}
-                      key={rating}
-                      onClick={() => setNewRealisation((prev) => ({ ...prev, rating }))}
-                      role="radio"
-                      aria-checked={newRealisation.rating === rating}
-                      aria-label={`${rating} étoile${rating > 1 ? "s" : ""}`}
-                    >{rating <= newRealisation.rating ? "★" : "☆"}</button>
-                  ))}
-                </div>
-              </div>
-
-              <label className="realisation-flight-toggle">
-                <input
-                  type="checkbox"
-                  checked={newRealisation.chute}
-                  onChange={(event) => setNewRealisation((prev) => ({
-                    ...prev,
-                    chute: event.target.checked,
-                    assureurId: event.target.checked ? prev.assureurId : "",
-                  }))}
-                />
-                <span>Le grimpeur a volé</span>
-              </label>
-
-              {newRealisation.chute && (
-                <div>
-                  <label>Binôme assureur</label>
-                  <select value={newRealisation.assureurId} onChange={(event) => setNewRealisation((prev) => ({ ...prev, assureurId: event.target.value }))}>
-                    <option value="">Choisir le binôme</option>
-                    {alphabeticalParticipants
-                      .filter((participant) => String(participant.id) !== String(newRealisation.participantId))
-                      .map((participant) => <option key={participant.id} value={participant.id}>{fullName(participant)}</option>)}
-                  </select>
-                </div>
-              )}
-
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <label>Commentaire</label>
-              <input value={newRealisation.commentaire} onChange={(e) => setNewRealisation((p) => ({ ...p, commentaire: e.target.value }))} />
-            </div>
-
-            <div className="modal-actions">
-              <Button variant="secondary" onClick={closeRealisationModal}>Annuler</Button>
-              <Button onClick={addRealisation} disabled={!newRealisation.selectedDay || !newRealisation.participantId || !newRealisation.voieId || !newRealisation.rating || (newRealisation.chute && !newRealisation.assureurId) || modalEligibleParticipants.length === 0}>Enregistrer</Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <RealisationModal
+        open={realisationModalRouteId !== null}
+        route={realisationModalRoute}
+        newRealisation={newRealisation}
+        setNewRealisation={setNewRealisation}
+        availableDays={modalAvailableDays}
+        eligibleParticipants={modalEligibleParticipants}
+        participants={alphabeticalParticipants}
+        routes={state.routes}
+        routesById={routesById}
+        onRouteIdChange={setRealisationModalRouteId}
+        onClose={closeRealisationModal}
+        onSubmit={addRealisation}
+      />
 
       <MobileBottomNav
         visibleTabs={visibleTabs}

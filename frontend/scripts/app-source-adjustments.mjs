@@ -1,4 +1,9 @@
 export function makeRealisationRatingOptional(code) {
+  const alreadyOptional = code.includes(
+    "if (!newRealisation.participantId || !newRealisation.selectedDay || !newRealisation.voieId) {",
+  ) && code.includes("...(newRealisation.rating ? { rating: newRealisation.rating } : {}),");
+  if (alreadyOptional) return code;
+
   const replacements = [
     [
       "if (!newRealisation.participantId || !newRealisation.selectedDay || !newRealisation.voieId || !newRealisation.rating) {",
@@ -12,14 +17,6 @@ export function makeRealisationRatingOptional(code) {
       "rating: newRealisation.rating,",
       "...(newRealisation.rating ? { rating: newRealisation.rating } : {}),",
     ],
-    [
-      "<label>Évaluation de la voie</label>",
-      "<label>Évaluation de la voie (facultative)</label>",
-    ],
-    [
-      "disabled={!newRealisation.selectedDay || !newRealisation.participantId || !newRealisation.voieId || !newRealisation.rating || (newRealisation.chute && !newRealisation.assureurId) || modalEligibleParticipants.length === 0}",
-      "disabled={!newRealisation.selectedDay || !newRealisation.participantId || !newRealisation.voieId || (newRealisation.chute && !newRealisation.assureurId) || modalEligibleParticipants.length === 0}",
-    ],
   ];
 
   let transformed = code;
@@ -29,12 +26,7 @@ export function makeRealisationRatingOptional(code) {
     }
     transformed = transformed.replace(source, replacement);
   }
-
-  const consensusBlock = /\s*<div>\s*<label>Cotation consensus<\/label>\s*<input value=\{realisationModalRoute \? routeAggregatesById\[realisationModalRoute\.id\]\?\.consensusGrade \|\| "Non calculée" : "Choisir une voie"\} readOnly \/>\s*<\/div>/;
-  if (!consensusBlock.test(transformed)) {
-    throw new Error("Le bloc Cotation consensus de la saisie de réalisation est introuvable.");
-  }
-  return transformed.replace(consensusBlock, "");
+  return transformed;
 }
 
 export function moveThemeSettingsOutOfSidebar(code) {

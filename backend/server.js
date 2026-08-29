@@ -545,6 +545,24 @@ async function ensureSchema() {
   await pool.query(`create index if not exists idx_realisations_session on realisations(session_id)`);
   await pool.query(`create index if not exists idx_realisations_voie on realisations(voie_id)`);
 
+  // Contraintes NOT VALID : les nouvelles écritures sont protégées sans bloquer
+  // le démarrage si des imports historiques contiennent encore des références orphelines.
+  await pool.query(`
+    do $
+    begin
+      if not exists (select 1 from pg_constraint where conname = 'fk_realisations_session') then
+        alter table realisations
+          add constraint fk_realisations_session
+          foreign key (session_id) references sessions(id) on delete restrict not valid;
+      end if;
+      if not exists (select 1 from pg_constraint where conname = 'fk_realisations_voie') then
+        alter table realisations
+          add constraint fk_realisations_voie
+          foreign key (voie_id) references routes(id) on delete restrict not valid;
+      end if;
+    end $;
+  `);
+
   await pool.query(`alter table users add column if not exists theme_preference text not null default 'auto'`);
 
   await pool.query(`

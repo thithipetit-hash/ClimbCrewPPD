@@ -38,12 +38,12 @@ test("la voie est présentée sur deux lignes sans répéter la corde", async ()
 
 test("les formulaires de réalisation présentent corde, cotation, ouvreur puis nom", async () => {
   const domain = await readFile(new URL("../src/lib/domain.js", import.meta.url), "utf8");
-  const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const modal = await readFile(new URL("../src/components/RealisationModal.jsx", import.meta.url), "utf8");
   // Le select de voie de la fenêtre de progression a été extrait dans pages/Progression.jsx.
   const progression = await readFile(new URL("../src/pages/Progression.jsx", import.meta.url), "utf8");
 
   assert.match(domain, /return \[rope, grade, opener, name\]\.filter\(Boolean\)\.join\(" · "\)/);
-  assert.match(source, /formatRouteForRealisation\(realisationModalRoute\)/);
+  assert.match(modal, /formatRouteForRealisation\(route\)/);
   assert.match(progression, /formatRouteForRealisation\(routeOption\)/);
 });
 

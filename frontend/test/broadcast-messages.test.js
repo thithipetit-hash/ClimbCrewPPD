@@ -17,13 +17,15 @@ test("le backend cible les comptes actifs et conserve un accusé de lecture indi
 });
 
 test("Administration Serveur diffuse et l'application affiche le prochain message", async () => {
-  const [appSource, serverAdministrationSource] = await Promise.all([
+  const [appSource, modalSource, serverAdministrationSource] = await Promise.all([
     readFile(new URL("../src/App.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/BroadcastMessageModal.jsx", import.meta.url), "utf8"),
     readFile(new URL("../src/pages/Logs.jsx", import.meta.url), "utf8"),
   ]);
   assert.match(serverAdministrationSource, /Diffuser un message/);
   assert.match(serverAdministrationSource, /\/admin\/broadcast-messages/);
   assert.match(appSource, /pendingBroadcastMessages/);
-  assert.match(appSource, /Message du club/);
-  assert.match(appSource, /J’ai lu/);
+  assert.match(appSource, /BroadcastMessageModal/);
+  assert.match(modalSource, /Message du club/);
+  assert.match(modalSource, /J’ai lu/);
 });
