@@ -45,6 +45,7 @@ import {
   updateOwnParticipantProfile,
 } from "./participant-avatar-service.js";
 import { updateSessionWithAuthorization } from "./session-authorization-service.js";
+import { updateParticipantInitiatorQualifications } from "./initiator-qualification-service.js";
 import { startAccessLogRetentionScheduler } from "./access-log-retention.js";
 import { startSecurityRetentionScheduler } from "./security-retention-service.js";
 import { safeHealthCheck } from "./maintenance-hardening.js";
@@ -87,6 +88,7 @@ export function installExplicitAdminUserRoutes(app, {
   app.get("/participants/:id/avatar", requireAuth, getParticipantCustomAvatar);
   app.get("/admin/auth/notification-preferences", requireAuth, requireAdmin, listManagedAccountNotificationPreferences);
   app.put("/admin/participants/:participantId/account-notifications", requireAuth, requireAdmin, updateManagedAccountNotificationPreference);
+  app.put("/admin/participants/:id/qualifications", requireAuth, requireAdmin, updateParticipantInitiatorQualifications);
   installBackupRoutes(app);
 }
 
