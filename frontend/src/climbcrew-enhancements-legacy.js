@@ -1,32 +1,16 @@
 /**
- * Ajustements d'interface ClimbCrew.
+ * Ajustements DOM historiques encore nécessaires à ClimbCrew.
  *
- * Ce module complète le composant React sans modifier les données métier :
- * - applique les dix ambiances visuelles proposées ;
- * - conserve les couleurs fonctionnelles des passeports et des voies ;
- * - garantit que les séances de la vue semaine restent dans leur jour ;
- * - expose le choix d'ambiance uniquement dans le menu latéral.
+ * Le thème et la FAQ sont désormais entièrement gérés par React.
+ * Ce module ne conserve plus que les compatibilités encore dépendantes du DOM :
+ * - ordre des séances dans la vue semaine ;
+ * - protection des couleurs fonctionnelles des voies ;
+ * - hachurage des inscriptions incompatibles avec une séance libre ;
+ * - navigation tactile horizontale.
  */
-const STYLE_ID = "climbcrew-ui-enhancements";
-const THEME_SELECTOR_ID = "climbcrew-look-selector";
 const SLOT_ORDER = ["midi", "soir", "matin"];
-const SUPPORTED_THEMES = new Set(["auto", "craie_ardoise", "ocean_mineral", "foret_mousse", "terre_cuite", "aurore_alpine", "lavande_nocturne", "sable_corde", "bloc_neon", "glacier", "cristal"]);
-const THEME_LABELS = {
-  "auto": "Automatique",
-  "craie_ardoise": "Craie & Ardoise",
-  "ocean_mineral": "Océan minéral",
-  "foret_mousse": "Forêt mousse",
-  "terre_cuite": "Terre cuite",
-  "aurore_alpine": "Aurore alpine",
-  "lavande_nocturne": "Lavande nocturne",
-  "sable_corde": "Sable & Corde",
-  "bloc_neon": "Bloc néon",
-  "glacier": "Glacier",
-  "cristal": "Cristal"
-};
 
 let scheduled = false;
-let pendingThemeNormalization = "";
 
 function normalize(value) {
   return String(value || "")
@@ -35,12 +19,6 @@ function normalize(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 }
-
-function setTextIfChanged(element, value) {
-  if (element && element.textContent !== value) element.textContent = value;
-}
-
-
 
 function sessionSlot(card) {
   const title = card.querySelector(":scope > .card-header h3, :scope > .card-header strong");
@@ -96,76 +74,6 @@ function preserveFunctionalRouteColors() {
   });
 }
 
-function preferredSystemTheme() {
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "lavande_nocturne" : "craie_ardoise";
-}
-
-/**
- * Le select React d'origine reste la source de vérité pour la sauvegarde API.
- * Il est masqué et piloté par un select dédié contenant les dix ambiances
- * et le mode automatique, tout en conservant la sauvegarde React.
- */
-function configureThemeSelector() {
-  const root = document.documentElement;
-  const originalSelector = document.getElementById("sidebar-theme-selector");
-  const rootTheme = SUPPORTED_THEMES.has(root.dataset.theme) ? root.dataset.theme : preferredSystemTheme();
-  const selectedTheme = SUPPORTED_THEMES.has(originalSelector?.value) ? originalSelector.value : rootTheme;
-
-  root.dataset.look = rootTheme;
-
-  if (!originalSelector) return;
-
-  const wrapper = originalSelector.closest(".sidebar-theme");
-  if (!wrapper) return;
-
-  const originalLabel = wrapper.querySelector('label[for="sidebar-theme-selector"]');
-  if (originalLabel) {
-    originalLabel.htmlFor = THEME_SELECTOR_ID;
-    setTextIfChanged(originalLabel, "Ambiance");
-  }
-
-  let visibleSelector = document.getElementById(THEME_SELECTOR_ID);
-  if (!visibleSelector) {
-    visibleSelector = document.createElement("select");
-    visibleSelector.id = THEME_SELECTOR_ID;
-    visibleSelector.className = "cc-look-selector";
-    visibleSelector.setAttribute("aria-label", "Choisir l'ambiance visuelle");
-
-    Object.entries(THEME_LABELS).forEach(([value, label]) => {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = label;
-      visibleSelector.appendChild(option);
-    });
-
-    visibleSelector.addEventListener("change", () => {
-      const nextTheme = visibleSelector.value;
-      if (!SUPPORTED_THEMES.has(nextTheme)) return;
-      originalSelector.value = nextTheme;
-      originalSelector.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    originalSelector.insertAdjacentElement("afterend", visibleSelector);
-  }
-
-  if (visibleSelector.value !== selectedTheme) visibleSelector.value = selectedTheme;
-
-  if (!SUPPORTED_THEMES.has(originalSelector.value) && pendingThemeNormalization !== selectedTheme) {
-    pendingThemeNormalization = selectedTheme;
-    requestAnimationFrame(() => {
-      const currentSelector = document.getElementById("sidebar-theme-selector");
-      if (!currentSelector || SUPPORTED_THEMES.has(currentSelector.value)) {
-        pendingThemeNormalization = "";
-        return;
-      }
-      currentSelector.value = selectedTheme;
-      currentSelector.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-  } else if (SUPPORTED_THEMES.has(originalSelector.value)) {
-    pendingThemeNormalization = "";
-  }
-}
-
 function sessionStatus(card) {
   const field = [...card.querySelectorAll(".inline-field")]
     .find((item) => normalize(item.querySelector("label")?.textContent) === "statut");
@@ -193,11 +101,6 @@ function updateHatching() {
       row.classList.toggle("passport-warning-hatched", isFree && hasNoPassport(row));
     });
   });
-}
-
-function updateFaq() {
-  // Le contenu de la FAQ est maintenant maintenu directement dans le composant React.
-  // Les sections <details> restent fermées par défaut et s'ouvrent au clic sur la question.
 }
 
 function enableHorizontalSwipe() {
@@ -241,11 +144,9 @@ function refresh() {
 
   requestAnimationFrame(() => {
     scheduled = false;
-    configureThemeSelector();
     preserveFunctionalRouteColors();
     normalizeWeekView();
     updateHatching();
-    updateFaq();
   });
 }
 
@@ -255,9 +156,6 @@ function start() {
 
   new MutationObserver(refresh)
     .observe(document.body, { childList: true, subtree: true });
-
-  new MutationObserver(refresh)
-    .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
   document.addEventListener("change", refresh, true);
 }
