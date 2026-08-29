@@ -4,15 +4,14 @@ import { installCookieHardening } from "./admin-users/cookie-hardening.js";
 import { installPreBodyRateLimit } from "./admin-users/prebody-rate-limit.js";
 import { installClientIpHardening } from "./admin-users/client-ip-hardening.js";
 import { installRateLimitLogIntegration } from "./admin-users/rate-limit-log-integration.js";
-import { installMigrationHook } from "./admin-users/migration-service.js";
 import { installInitiatorQualificationIntegration } from "./admin-users/initiator-qualification-integration.js";
 
 /**
  * Point d'entrée préchargé par Node avant server.js.
  *
- * Seules les adaptations réellement transverses restent préchargées. Les routes
- * et le cycle de vie HTTP sont désormais enregistrés explicitement par server.js
- * au lieu de surcharger express.application.get/post/put/patch/delete/listen.
+ * Seules les adaptations réellement transverses restent préchargées. Les routes,
+ * les migrations et le cycle de vie HTTP sont enregistrés explicitement par
+ * server.js au lieu de surcharger Express au démarrage.
  */
 configureDeploymentEnvironment();
 installPoolCapture();
@@ -22,5 +21,4 @@ installCookieHardening();
 installPreBodyRateLimit();
 installClientIpHardening();
 installRateLimitLogIntegration();
-installMigrationHook();
 installInitiatorQualificationIntegration();
