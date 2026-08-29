@@ -59,14 +59,17 @@ if (!explicitRoutes.includes('app.put("/sessions/:id", requireAuth, updateSessio
 if (backend.includes("legacyReplacedRoute") || fs.existsSync("backend/admin-users/express-integration.js")) {
   fail("ancien câblage Express legacy encore présent");
 }
-if (!sessionDefaultStatus.includes("export function defaultSessionStatus(date, slot)")) {
+if (!sessionDefaultStatus.includes("export function getDefaultSessionStatus(date, slot)")) {
   fail("règle canonique de statut par défaut absente");
 }
-if (!sessionAuthorization.includes('import { defaultSessionStatus } from "../session-default-status.js";')) {
+if (!sessionAuthorization.includes('import { getDefaultSessionStatus } from "../session-default-status.js";')) {
   fail("contrôleur de séances non branché sur la règle canonique de statut");
 }
 if (!sessionAuthorization.includes("const resolvedStatus = requested.status")) {
   fail("statut de séance non résolu dans le contrôleur actif");
+}
+if (!sessionAuthorization.includes("getDefaultSessionStatus(requested.date, requested.slot)")) {
+  fail("règle canonique de statut non utilisée lors de la résolution du statut");
 }
 if (!sessionAuthorization.includes("const newlyAdded =")
     || !sessionAuthorization.includes("assertLibreEligibility")) {
