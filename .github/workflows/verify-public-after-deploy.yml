@@ -1,0 +1,102 @@
+name: Verify Public After Deploy
+
+on:
+  workflow_run:
+    workflows:
+      - Validate and Deploy
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  verify_public_deployment:
+    name: Vérifier la version réellement servie
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Déterminer la cible publique
+        id: target
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          case "$HEAD_BRANCH" in
+            main) PUBLIC_BASE_URL="https://pre-climbcrew.dip-tcs.com" ;;
+            production) PUBLIC_BASE_URL="https://climbcrew.dip-tcs.com" ;;
+            *)
+              echo "Branche $HEAD_BRANCH non déployée publiquement : contrôle ignoré."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "base_url=$PUBLIC_BASE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Récupérer exactement le commit déployé
+        if: steps.target.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 1
+
+      - name: Vérifier la version exposée sur Internet
+        if: steps.target.outputs.skip != 'true'
+        shell: bash
+        env:
+          PUBLIC_BASE_URL: ${{ steps.target.outputs.base_url }}
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          EXPECTED_VERSION="$(tr -d '\r\n' < VERSION)"
+          MARKER_URL="${PUBLIC_BASE_URL}/deployment-version.json"
+          RESPONSE_FILE="$(mktemp)"
+          trap 'rm -f "$RESPONSE_FILE"' EXIT
+
+          echo "Version attendue : $EXPECTED_VERSION"
+          echo "Commit attendu : $EXPECTED_SHA"
+          echo "URL contrôlée : $MARKER_URL"
+
+          VERIFIED=false
+          for attempt in $(seq 1 24); do
+            echo "Contrôle public ${attempt}/24"
+            if curl --fail --silent --show-error --location \
+              --connect-timeout 5 --max-time 10 \
+              --header 'Cache-Control: no-cache' \
+              --output "$RESPONSE_FILE" \
+              "${MARKER_URL}?verify=${EXPECTED_SHA}"; then
+              if node - "$RESPONSE_FILE" "$EXPECTED_VERSION" "$EXPECTED_SHA" <<'NODE'
+const fs = require('fs');
+const [file, expectedVersion, expectedSha] = process.argv.slice(2);
+const marker = JSON.parse(fs.readFileSync(file, 'utf8'));
+const actualVersion = String(marker.version || '').trim();
+const actualCommit = String(marker.commit || '').trim();
+console.log(`Version servie : ${actualVersion || '(absente)'}`);
+console.log(`Commit servi : ${actualCommit || '(absent)'}`);
+if (actualVersion !== expectedVersion || actualCommit !== expectedSha) process.exit(1);
+NODE
+              then
+                VERIFIED=true
+                break
+              fi
+            fi
+            if [ "$attempt" -lt 24 ]; then sleep 5; fi
+          done
+
+          if [ "$VERIFIED" != "true" ]; then
+            echo "ERROR: le domaine public ne sert pas la version et le commit attendus."
+            cat "$RESPONSE_FILE" || true
+            exit 1
+          fi
+
+          {
+            echo "### Vérification publique du déploiement"
+            echo "- Domaine : $PUBLIC_BASE_URL"
+            echo "- Version : \`$EXPECTED_VERSION\` ✅"
+            echo "- Commit : \`$EXPECTED_SHA\` ✅"
+            echo "- deployment-version.json accessible depuis un runner GitHub public ✅"
+          } >> "$GITHUB_STEP_SUMMARY"
