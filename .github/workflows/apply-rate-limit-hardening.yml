@@ -20,7 +20,6 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-          import re
 
           server_path = Path('backend/server.js')
           source = server_path.read_text()
@@ -89,8 +88,8 @@ jobs:
           '''
           new_ip = '''function getClientIp(req) {
             // Express calcule req.ip à partir de la socket et de la configuration
-            // `trust proxy`. Ne jamais relire X-Forwarded-For ici : cela contournerait
-            // précisément la chaîne de confiance configurée par Express.
+            // `trust proxy`. Ne jamais relire manuellement l'en-tête de proxy ici :
+            // cela contournerait précisément la chaîne de confiance configurée par Express.
             return req.ip || null;
           }
           '''
