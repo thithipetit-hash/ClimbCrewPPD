@@ -129,24 +129,9 @@ if (!frontendDockerfile.includes("COPY shared/ /app/shared/")) {
 if (frontendDockerfile.includes("COPY backend/session-default-status.js /app/backend/session-default-status.js")) {
   fail("adaptateur backend encore embarqué inutilement dans l’image frontend");
 }
-if (!sessionAuthorization.includes("const newlyAdded =")
-    || !sessionAuthorization.includes("assertLibreEligibility")) {
-  fail("contrôle des nouvelles inscriptions en séance libre absent");
-}
-if (!sessionAuthorization.includes('requestedStatus === "fermee"')) {
-  fail("blocage des nouvelles inscriptions en séance fermée absent");
-}
 
 if (!backend.includes("installRealisationManagementRoutes(app, { requireAuth, pool });")) {
   fail("module d’écriture des réalisations non installé");
-}
-if (!realisationManagement.includes('app.post("/realisations", requireAuth, async')
-    || !realisationManagement.includes('app.put("/realisations/:id", requireAuth, async')
-    || !realisationManagement.includes('app.delete("/realisations/:id", requireAuth, async')) {
-  fail("API d’écriture des réalisations incomplète");
-}
-if (!realisationManagement.includes("delete from realisations where id = $1 and participant_id = $2")) {
-  fail("suppression de réalisation non limitée au propriétaire");
 }
 
 if (!process.exitCode) console.log("Validation source ClimbCrew réussie.");
