@@ -1,6 +1,6 @@
 import { getPool } from "./database.js";
 import { validateSessionPayload } from "../validation.js";
-import { getDefaultSessionStatus } from "../session-default-status.js";
+import { getDefaultSessionStatus } from "../../shared/session-default-status.js";
 
 function normalizedId(value) {
   return value === null || value === undefined || value === "" ? null : String(value);
