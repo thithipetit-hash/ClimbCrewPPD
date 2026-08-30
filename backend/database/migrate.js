@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS_DIR = fileURLToPath(new URL("./migrations/", import.meta.url));
 const MIGRATION_FILE_PATTERN = /^\d{3,}_[a-z0-9][a-z0-9_-]*\.sql$/i;
+const MIGRATION_LOCK_ID = 947_220_830;
 
 async function listMigrationFiles() {
   const entries = await readdir(MIGRATIONS_DIR, { withFileTypes: true });
@@ -22,10 +23,21 @@ async function ensureMigrationTable(client) {
   `);
 }
 
+async function acquireMigrationLock(client) {
+  await client.query("select pg_advisory_lock($1)", [MIGRATION_LOCK_ID]);
+}
+
+async function releaseMigrationLock(client) {
+  await client.query("select pg_advisory_unlock($1)", [MIGRATION_LOCK_ID]);
+}
+
 export async function runDatabaseMigrations(pool, { logger = console } = {}) {
   const client = await pool.connect();
+  let lockAcquired = false;
 
   try {
+    await acquireMigrationLock(client);
+    lockAcquired = true;
     await ensureMigrationTable(client);
 
     const appliedResult = await client.query(
@@ -67,6 +79,13 @@ export async function runDatabaseMigrations(pool, { logger = console } = {}) {
       total: files.length,
     };
   } finally {
+    if (lockAcquired) {
+      try {
+        await releaseMigrationLock(client);
+      } catch (error) {
+        logger.error?.("Impossible de libérer le verrou de migration PostgreSQL.", error);
+      }
+    }
     client.release();
   }
 }
