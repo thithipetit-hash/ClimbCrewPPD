@@ -136,12 +136,12 @@ test("HTTP réalisations : POST, PUT et DELETE appliquent l'identité authentifi
     async query(sql, params = []) {
       const normalized = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
       calls.push({ sql: normalized, params });
-      if (normalized.includes("from realisations") && normalized.includes("participant_id = $2")) {
-        return { rows: [], rowCount: 0 };
-      }
       if (normalized.startsWith("delete from realisations")) {
         const owned = params[0] === "owned" && String(params[1]) === "7";
         return { rows: [], rowCount: owned ? 1 : 0 };
+      }
+      if (normalized.includes("from realisations") && normalized.includes("participant_id = $2")) {
+        return { rows: [], rowCount: 0 };
       }
       throw new Error(`Requête PostgreSQL inattendue dans le test réalisation : ${normalized}`);
     },
