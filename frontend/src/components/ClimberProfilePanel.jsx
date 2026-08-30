@@ -1,13 +1,5 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { calculateClimberProfile } from "../lib/climber-profile.js";
-
-function scoreLabel(score) {
-  if (!Number.isFinite(score)) return "À découvrir";
-  if (score >= 80) return "Très à l'aise";
-  if (score >= 65) return "À l'aise";
-  if (score >= 50) return "En progression";
-  return "À travailler";
-}
 
 function polarPoint(index, count, radius, centerX = 260, centerY = 205) {
   const angle = (-Math.PI / 2) + (index * Math.PI * 2) / count;
