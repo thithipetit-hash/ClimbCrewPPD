@@ -27,12 +27,11 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund --registry=https://registry.npmjs.org/
 
 # Copie le frontend, la version et les modules métier partagés nécessaires au
-# bundle. Le ré-export backend reste copié temporairement pour compatibilité avec
-# l'import historique de domain.js ; la règle canonique vit désormais /shared.
+# bundle. Le frontend dépend désormais directement de /shared et n'embarque plus
+# l'adaptateur de compatibilité backend.
 COPY frontend/ ./
 COPY VERSION /app/VERSION
 COPY shared/ /app/shared/
-COPY backend/session-default-status.js /app/backend/session-default-status.js
 
 # Génère les fichiers HTML, CSS et JavaScript optimisés dans /app/frontend/dist.
 RUN npm run build
