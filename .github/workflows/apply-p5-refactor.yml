@@ -1,0 +1,31 @@
+name: Apply P5 Refactor
+
+on:
+  push:
+    branches:
+      - refactor/frontend-bootstrap-20260830-016
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/frontend-bootstrap-20260830-016
+      - name: Appliquer le refactoring App bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/refactor-app-bootstrap.mjs
+          if git diff --quiet -- frontend/src/App.jsx; then
+            echo "Transformation déjà appliquée."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/App.jsx
+          git commit -m "refactor: delegate app bootstrap to hook"
+          git push origin HEAD:refactor/frontend-bootstrap-20260830-016
