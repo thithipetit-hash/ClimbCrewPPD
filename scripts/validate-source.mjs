@@ -88,14 +88,17 @@ if (!sessionAuthorization.includes("getDefaultSessionStatus(requested.date, requ
 if (domain.includes("export function defaultSessionStatus")) {
   fail("duplication frontend de la règle de statut par défaut encore présente");
 }
-if (!domain.includes('export { getDefaultSessionStatus as defaultSessionStatus } from "../../../backend/session-default-status.js";')) {
-  fail("import frontend temporaire du statut de séance non reconnu");
+if (!domain.includes('export { getDefaultSessionStatus as defaultSessionStatus } from "../../../shared/session-default-status.js";')) {
+  fail("frontend non branché directement sur la règle partagée de statut");
+}
+if (domain.includes("../../../backend/session-default-status.js")) {
+  fail("couplage frontend vers backend/session-default-status.js encore présent");
 }
 if (!frontendDockerfile.includes("COPY shared/ /app/shared/")) {
   fail("modules métier partagés absents du contexte de build frontend Docker");
 }
-if (!frontendDockerfile.includes("COPY backend/session-default-status.js /app/backend/session-default-status.js")) {
-  fail("adaptateur backend de statut absent du contexte de build frontend Docker");
+if (frontendDockerfile.includes("COPY backend/session-default-status.js /app/backend/session-default-status.js")) {
+  fail("adaptateur backend encore embarqué inutilement dans l’image frontend");
 }
 if (!sessionAuthorization.includes("const newlyAdded =")
     || !sessionAuthorization.includes("assertLibreEligibility")) {
