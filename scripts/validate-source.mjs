@@ -49,6 +49,28 @@ const explicitRoutes = fs.readFileSync("backend/admin-users/explicit-routes.js",
 const sessionAuthorization = fs.readFileSync("backend/admin-users/session-authorization-service.js", "utf8");
 const sessionDefaultStatus = fs.readFileSync("backend/session-default-status.js", "utf8");
 const realisationManagement = fs.readFileSync("backend/realisation-management-routes.js", "utf8");
+const migrationRunner = fs.readFileSync("backend/database/migrate.js", "utf8");
+const baselineMigration = fs.readFileSync("backend/database/migrations/001_baseline.sql", "utf8");
+
+// Le schéma PostgreSQL est désormais versionné et appliqué par un runner transactionnel.
+if (backend.includes("async function ensureSchema()")) {
+  fail("DDL legacy ensureSchema encore présent dans server.js");
+}
+if (!backend.includes('import { runDatabaseMigrations } from "./database/migrate.js";')
+    || !backend.includes("await runDatabaseMigrations(pool);")) {
+  fail("démarrage backend non branché sur le runner de migrations");
+}
+if (!migrationRunner.includes("create table if not exists schema_migrations")
+    || !migrationRunner.includes('await client.query("begin")')
+    || !migrationRunner.includes('await client.query("rollback")')) {
+  fail("runner de migrations non transactionnel ou table de suivi absente");
+}
+if (!baselineMigration.includes("create table if not exists participants")
+    || !baselineMigration.includes("create table if not exists users")
+    || !baselineMigration.includes("create table if not exists routes")
+    || !baselineMigration.includes("create table if not exists realisations")) {
+  fail("migration baseline PostgreSQL incomplète");
+}
 
 // PUT /sessions/:id est désormais déclaré explicitement avec son contrôleur sécurisé.
 if (!backend.includes("installExplicitAdminUserRoutes(app")) {
