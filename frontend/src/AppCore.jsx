@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo } from "react";
 
 import Button from "./components/Button.jsx";
 import AuthPage from "./components/AuthPage.jsx";
@@ -52,108 +52,68 @@ import { normalizeAppData } from "./lib/normalize.js";
 import { APP_VERSION } from "./lib/version.js";
 import { buildCsv, csvFileSlug } from "./lib/csv.js";
 import { EMPTY_APP_DATA, useAppBusinessState } from "./hooks/useAppBusinessState.js";
+import { useAppUiState } from "./hooks/useAppUiState.js";
+import { useAuthState } from "./hooks/useAuthState.js";
+import { useParticipantEditorState } from "./hooks/useParticipantEditorState.js";
+import { useRouteEditorState } from "./hooks/useRouteEditorState.js";
+import { useRealisationEditorState } from "./hooks/useRealisationEditorState.js";
 import { PASSWORD_RULE_TEXT, isStrongPassword } from "./lib/password-policy.js";
 
 const ADMIN_CODE = import.meta.env.VITE_LEGACY_ADMIN_CODE || "";
 
 function App() {
-  const [tab, setTab] = useState("inscriptions");
-  const [viewMode, setViewMode] = useState("jour");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [statsSortField, setStatsSortField] = useState("name");
-  const [statsSortDirection, setStatsSortDirection] = useState("asc");
-  const [wallOfFameSexFilter, setWallOfFameSexFilter] = useState("all");
-  const [recentlyAddedParticipantIds, setRecentlyAddedParticipantIds] = useState([]);
+  const {
+    tab, setTab,
+    viewMode, setViewMode,
+    sidebarOpen, setSidebarOpen,
+    statsSortField, setStatsSortField,
+    statsSortDirection, setStatsSortDirection,
+    wallOfFameSexFilter, setWallOfFameSexFilter,
+    recentlyAddedParticipantIds, setRecentlyAddedParticipantIds,
+    adminInput, setAdminInput,
+    adminUnlocked, setAdminUnlocked,
+    adminError, setAdminError,
+    routeError, setRouteError,
+    importMessage, setImportMessage,
+    setSyncMessage,
+    confirmationMessage, setConfirmationMessage,
+    isSyncing, setIsSyncing,
+  } = useAppUiState({ useApi: USE_API });
   const [state, setState] = useAppBusinessState({ useApi: USE_API });
-  const [adminInput, setAdminInput] = useState("");
-  const [adminUnlocked, setAdminUnlocked] = useState(false);
-  const [adminError, setAdminError] = useState("");
-  const [routeError, setRouteError] = useState("");
-  const [importMessage, setImportMessage] = useState("");
-  const [, setSyncMessage] = useState(USE_API ? "API activée" : "Mode local");
-  const [confirmationMessage, setConfirmationMessage] = useState("");
-  const [isSyncing, setIsSyncing] = useState(false);
 
-  const [authToken, setAuthToken] = useState(() => (USE_API ? "cookie" : ""));
-  const [authUser, setAuthUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(USE_API);
-  const [authView, setAuthView] = useState("login");
-  const [authError, setAuthError] = useState("");
-  const [authMessage, setAuthMessage] = useState("");
-  const [loginForm, setLoginForm] = useState({
-    email: "",
-    password: "",
-  });
-  const [requestAccessForm, setRequestAccessForm] = useState({
-    prenom: "",
-    nom: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-    acceptTerms: false,
-  });
-  const [forgotPasswordForm, setForgotPasswordForm] = useState({
-    email: "",
-  });
-  const [resetPasswordForm, setResetPasswordForm] = useState({
-    email: "",
-    token: "",
-    password: "",
-    confirmPassword: "",
-  });
-  const [adminAuthUsers, setAdminAuthUsers] = useState([]);
-  const [adminAccessLogs, setAdminAccessLogs] = useState([]);
-  const [generatedResetToken, setGeneratedResetToken] = useState("");
-  const [pendingBroadcastMessages, setPendingBroadcastMessages] = useState([]);
-  const [broadcastMessageError, setBroadcastMessageError] = useState("");
-  const [themePreference, setThemePreference] = useState(() => localStorage.getItem(THEME_PREFERENCE_KEY) || "auto");
+  const {
+    authToken, setAuthToken,
+    authUser, setAuthUser,
+    authLoading, setAuthLoading,
+    authView, setAuthView,
+    authError, setAuthError,
+    authMessage, setAuthMessage,
+    loginForm, setLoginForm,
+    requestAccessForm, setRequestAccessForm,
+    forgotPasswordForm, setForgotPasswordForm,
+    resetPasswordForm, setResetPasswordForm,
+    adminAuthUsers, setAdminAuthUsers,
+    adminAccessLogs, setAdminAccessLogs,
+    generatedResetToken, setGeneratedResetToken,
+    pendingBroadcastMessages, setPendingBroadcastMessages,
+    broadcastMessageError, setBroadcastMessageError,
+    themePreference, setThemePreference,
+  } = useAuthState({ useApi: USE_API, themePreferenceKey: THEME_PREFERENCE_KEY });
 
-  const [newParticipant, setNewParticipant] = useState({
-    nom: "",
-    prenom: "",
-    email: "",
-    passport: "sans",
-    sexe: "",
-    cotisation: false,
-    ffme: false,
-    canEncadrer: false,
-    canReferer: false,
-    canAdmin: false,
-  });
-  const [newRoute, setNewRoute] = useState({
-    numeroCorde: "",
-    couleurPrises: "",
-    cotationReference: "",
-    nomVoie: "",
-    nomOuvreur: "",
-    moulinetteOnly: false,
-    tags: [],
-  });
-  const [editingRouteId, setEditingRouteId] = useState("");
-  const [routeEditDraft, setRouteEditDraft] = useState(null);
-  const [savingRouteId, setSavingRouteId] = useState("");
-  // Le tableau peut être regroupé soit par numéro de corde, soit par niveau de cotation.
-  const [routeSortMode, setRouteSortMode] = useState("corde");
-  const [newRealisation, setNewRealisation] = useState({
-    participantId: "",
-    selectedDay: "",
-    sessionId: "",
-    voieId: EMPTY_APP_DATA.routes?.[0]?.id || "",
-    styleRealisation: "a_vue",
-    commentaire: "",
-    cotationProposee: "",
-    rating: 0,
-    chute: false,
-    assureurId: "",
-  });
-
-  // Route sélectionnée pour le popup "Enregistrer une réalisation"
-  // depuis l'onglet Voies.
-  const [realisationModalRouteId, setRealisationModalRouteId] = useState(null);
-
-  // Filtres de consultation de la progression.
-  const [selectedRouteProgress, setSelectedRouteProgress] = useState("");
-  const [expandedRealisationIds, setExpandedRealisationIds] = useState([]);
+  const { newParticipant, setNewParticipant } = useParticipantEditorState();
+  const {
+    newRoute, setNewRoute,
+    editingRouteId, setEditingRouteId,
+    routeEditDraft, setRouteEditDraft,
+    savingRouteId, setSavingRouteId,
+    routeSortMode, setRouteSortMode,
+  } = useRouteEditorState();
+  const {
+    newRealisation, setNewRealisation,
+    realisationModalRouteId, setRealisationModalRouteId,
+    selectedRouteProgress, setSelectedRouteProgress,
+    expandedRealisationIds, setExpandedRealisationIds,
+  } = useRealisationEditorState({ defaultRouteId: EMPTY_APP_DATA.routes?.[0]?.id || "" });
 
   useEffect(() => {
     if (!confirmationMessage) return undefined;
