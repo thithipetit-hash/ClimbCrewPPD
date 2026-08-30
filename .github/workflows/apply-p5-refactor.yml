@@ -23,14 +23,16 @@ jobs:
           grep -q 'useAppBootstrap' frontend/src/App.jsx
           ! grep -q 'Recharge toutes les données depuis le backend' frontend/src/App.jsx
 
-          git update-index --no-assume-unchanged frontend/src/App.jsx || true
-          git update-index --no-skip-worktree frontend/src/App.jsx || true
-          git add -f frontend/src/App.jsx
+          APP_BLOB="$(git hash-object -w frontend/src/App.jsx)"
+          CURRENT_BLOB="$(git rev-parse HEAD:frontend/src/App.jsx)"
+          if [ "$APP_BLOB" = "$CURRENT_BLOB" ]; then
+            echo "ERROR: le blob transformé est identique au blob courant."
+            exit 1
+          fi
+          git update-index --cacheinfo 100644,"$APP_BLOB",frontend/src/App.jsx
 
           if git diff --cached --quiet -- frontend/src/App.jsx; then
-            echo "ERROR: App.jsx transformé mais aucun diff indexé."
-            git ls-files -v frontend/src/App.jsx || true
-            git check-attr -a -- frontend/src/App.jsx || true
+            echo "ERROR: aucun diff indexé après update-index."
             exit 1
           fi
 
