@@ -47,7 +47,8 @@ if (app.includes("l’ocre apparaît sur fond marron") || main.includes("l’ocr
 const backend = fs.readFileSync("backend/server.js", "utf8");
 const explicitRoutes = fs.readFileSync("backend/admin-users/explicit-routes.js", "utf8");
 const sessionAuthorization = fs.readFileSync("backend/admin-users/session-authorization-service.js", "utf8");
-const sessionDefaultStatus = fs.readFileSync("backend/session-default-status.js", "utf8");
+const backendSessionDefaultStatus = fs.readFileSync("backend/session-default-status.js", "utf8");
+const sharedSessionDefaultStatus = fs.readFileSync("shared/session-default-status.js", "utf8");
 const realisationManagement = fs.readFileSync("backend/realisation-management-routes.js", "utf8");
 
 // PUT /sessions/:id est désormais déclaré explicitement avec son contrôleur sécurisé.
@@ -63,11 +64,20 @@ if (backend.includes("legacyReplacedRoute") || fs.existsSync("backend/admin-user
 if (backend.includes("function defaultSessionStatus(")) {
   fail("ancienne copie morte de la règle de statut encore présente dans server.js");
 }
-if (!sessionDefaultStatus.includes("export function getDefaultSessionStatus(date, slot)")) {
-  fail("règle canonique de statut par défaut absente");
+
+// La règle canonique appartient désormais à /shared. Le fichier backend reste
+// uniquement un adaptateur de compatibilité pendant la réduction de dette.
+if (!sharedSessionDefaultStatus.includes("export function getDefaultSessionStatus(date, slot)")) {
+  fail("règle canonique partagée de statut par défaut absente");
+}
+if (backendSessionDefaultStatus.includes("function getDefaultSessionStatus(")) {
+  fail("la règle de statut est encore dupliquée dans backend/session-default-status.js");
+}
+if (!backendSessionDefaultStatus.includes('from "../shared/session-default-status.js"')) {
+  fail("ré-export backend non branché sur la règle partagée");
 }
 if (!sessionAuthorization.includes('import { getDefaultSessionStatus } from "../session-default-status.js";')) {
-  fail("contrôleur de séances non branché sur la règle canonique de statut");
+  fail("contrôleur de séances non branché sur l’adaptateur de statut");
 }
 if (!sessionAuthorization.includes("const resolvedStatus = requested.status")) {
   fail("statut de séance non résolu dans le contrôleur actif");
@@ -79,10 +89,13 @@ if (domain.includes("export function defaultSessionStatus")) {
   fail("duplication frontend de la règle de statut par défaut encore présente");
 }
 if (!domain.includes('export { getDefaultSessionStatus as defaultSessionStatus } from "../../../backend/session-default-status.js";')) {
-  fail("frontend non branché sur la règle canonique backend de statut");
+  fail("import frontend temporaire du statut de séance non reconnu");
+}
+if (!frontendDockerfile.includes("COPY shared/ /app/shared/")) {
+  fail("modules métier partagés absents du contexte de build frontend Docker");
 }
 if (!frontendDockerfile.includes("COPY backend/session-default-status.js /app/backend/session-default-status.js")) {
-  fail("helper canonique de statut absent du contexte de build frontend Docker");
+  fail("adaptateur backend de statut absent du contexte de build frontend Docker");
 }
 if (!sessionAuthorization.includes("const newlyAdded =")
     || !sessionAuthorization.includes("assertLibreEligibility")) {

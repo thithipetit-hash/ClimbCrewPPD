@@ -40,12 +40,13 @@ services:
       - ./backups:/backups
 
   # ---------------------------------------------------------------------------
-  # API Node/Express.
+  # API Node/Express. Le contexte est la racine du dépôt afin que l'image puisse
+  # embarquer à la fois backend/ et les règles métier communes de shared/.
   # ---------------------------------------------------------------------------
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.prod
+      context: .
+      dockerfile: backend/Dockerfile.prod
     image: climbcrew-backend:prod
     container_name: climbcrew-backend
     restart: unless-stopped
