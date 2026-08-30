@@ -25,7 +25,7 @@ jobs:
     name: Vérifier la sauvegarde PostgreSQL
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: self-hosted
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Contrôler les outils et le répertoire
@@ -44,7 +44,7 @@ jobs:
           docker exec climbcrew-backend sh -lc 'test -d /backups && test -w /backups'
           echo "Outils PostgreSQL et répertoire /backups : OK"
 
-      - name: Vérifier le dump journalier après 03h00
+      - name: Vérifier et restaurer le dump journalier après 03h00
         shell: bash
         run: |
           set -euo pipefail
@@ -79,7 +79,57 @@ jobs:
 
           docker exec climbcrew-backend pg_restore --list "/backups/${FILE_NAME}" >/dev/null
           SIZE="$(stat -c %s "$HOST_FILE")"
-          echo "Sauvegarde journalière vérifiée : ${FILE_NAME} (${SIZE} octets)"
+
+          RESTORE_CONTAINER="climbcrew-backup-restore-check-${GITHUB_RUN_ID}"
+          RESTORE_PASSWORD="climbcrew-restore-check"
+          cleanup() {
+            docker rm -f "$RESTORE_CONTAINER" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run -d --rm \
+            --name "$RESTORE_CONTAINER" \
+            -e POSTGRES_PASSWORD="$RESTORE_PASSWORD" \
+            -e POSTGRES_DB=climbcrew_restore_check \
+            postgres:16-alpine >/dev/null
+
+          READY=false
+          for attempt in $(seq 1 30); do
+            if docker exec "$RESTORE_CONTAINER" pg_isready -U postgres -d climbcrew_restore_check >/dev/null 2>&1; then
+              READY=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$READY" != "true" ]; then
+            echo "ERROR: PostgreSQL temporaire non prêt"
+            docker logs "$RESTORE_CONTAINER" || true
+            exit 1
+          fi
+
+          docker cp "$HOST_FILE" "$RESTORE_CONTAINER:/tmp/backup.dump"
+          docker exec \
+            -e PGPASSWORD="$RESTORE_PASSWORD" \
+            "$RESTORE_CONTAINER" \
+            pg_restore --exit-on-error --no-owner --no-privileges \
+              -U postgres -d climbcrew_restore_check /tmp/backup.dump
+
+          for table in participants sessions realisations routes; do
+            EXISTS="$(docker exec -e PGPASSWORD="$RESTORE_PASSWORD" "$RESTORE_CONTAINER" \
+              psql -U postgres -d climbcrew_restore_check -Atqc \
+              "select to_regclass('public.${table}') is not null")"
+            if [ "$EXISTS" != "t" ]; then
+              echo "ERROR: table attendue absente après restauration : ${table}"
+              exit 1
+            fi
+          done
+
+          docker exec -e PGPASSWORD="$RESTORE_PASSWORD" "$RESTORE_CONTAINER" \
+            psql -U postgres -d climbcrew_restore_check -v ON_ERROR_STOP=1 -Atqc \
+            "select count(*) from participants; select count(*) from sessions; select count(*) from realisations; select count(*) from routes;" \
+            >/dev/null
+
+          echo "Sauvegarde journalière restaurée et vérifiée : ${FILE_NAME} (${SIZE} octets)"
 
           if [ "$LOCAL_WEEKDAY" = "1" ]; then
             if [ -f "${HOST_FILE}.mailed" ]; then
@@ -94,6 +144,8 @@ jobs:
             echo "- Dump : \`${FILE_NAME}\`"
             echo "- Taille : ${SIZE} octets"
             echo "- Intégrité pg_restore : OK"
+            echo "- Restauration PostgreSQL temporaire : OK"
+            echo "- Tables essentielles : participants, sessions, realisations, routes : OK"
             if [ "$LOCAL_WEEKDAY" = "1" ]; then
               if [ -f "${HOST_FILE}.mailed" ]; then
                 echo "- E-mail du lundi : OK"
