@@ -38,7 +38,7 @@ export default [
       "no-unsafe-optional-chaining": "error",
       "use-isnan": "error",
       "valid-typeof": "error",
-      "no-debugger": "warn",
+      "no-debugger": "error",
       "no-unused-vars": [
         "warn",
         {
