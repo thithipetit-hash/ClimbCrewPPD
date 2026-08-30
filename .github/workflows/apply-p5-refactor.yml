@@ -19,10 +19,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "Avant : $(sha256sum frontend/src/App.jsx)"
+          grep -n "useAppBootstrap\|Recharge toutes les données" frontend/src/App.jsx || true
           node scripts/refactor-app-bootstrap.mjs
+          echo "Après : $(sha256sum frontend/src/App.jsx)"
+          grep -n "useAppBootstrap\|Recharge toutes les données" frontend/src/App.jsx || true
+          git status --short frontend/src/App.jsx
+          git diff -- frontend/src/App.jsx | head -200 || true
           if git diff --quiet -- frontend/src/App.jsx; then
-            echo "Transformation déjà appliquée."
-            exit 0
+            echo "ERROR: la transformation n'a produit aucune modification alors que App.jsx n'est pas encore refactoré."
+            exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
