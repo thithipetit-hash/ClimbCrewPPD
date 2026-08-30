@@ -1,9 +1,8 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import Button from "../components/Button.jsx";
 
 export default function Parametres({
   USE_API,
-  authUser,
   changePassword,
   requestEmailChange,
   themePreference,
