@@ -45,6 +45,10 @@ if (app.includes("l’ocre apparaît sur fond marron") || main.includes("l’ocr
 }
 
 const backend = fs.readFileSync("backend/server.js", "utf8");
+const runtimeConfig = fs.readFileSync("backend/config/runtime-config.js", "utf8");
+const httpStack = fs.readFileSync("backend/middleware/http-stack.js", "utf8");
+const runtimeHelpers = fs.readFileSync("backend/security/runtime-helpers.js", "utf8");
+const applicationBootstrap = fs.readFileSync("backend/bootstrap/application-bootstrap.js", "utf8");
 const explicitRoutes = fs.readFileSync("backend/admin-users/explicit-routes.js", "utf8");
 const sessionAuthorization = fs.readFileSync("backend/admin-users/session-authorization-service.js", "utf8");
 const sharedSessionDefaultStatus = fs.readFileSync("shared/session-default-status.js", "utf8");
@@ -55,9 +59,30 @@ const baselineMigration = fs.readFileSync("backend/database/migrations/001_basel
 if (backend.includes("async function ensureSchema()")) {
   fail("DDL legacy ensureSchema encore présent dans server.js");
 }
-if (!backend.includes('import { runDatabaseMigrations } from "./database/migrate.js";')
-    || !backend.includes("await runDatabaseMigrations(pool);")) {
-  fail("démarrage backend non branché sur le runner de migrations");
+if (!applicationBootstrap.includes('import { runDatabaseMigrations } from "../database/migrate.js";')
+    || !applicationBootstrap.includes("await runDatabaseMigrations(pool);")) {
+  fail("bootstrap backend non branché sur le runner de migrations");
+}
+if (!backend.includes('import { createRuntimeConfig, createDatabasePool } from "./config/runtime-config.js";')
+    || !backend.includes('import { installHttpStack } from "./middleware/http-stack.js";')
+    || !backend.includes('from "./bootstrap/application-bootstrap.js";')) {
+  fail("server.js n'est pas réduit à son rôle de composition");
+}
+if (backend.includes("app.set(\"trust proxy\"") || backend.includes("res.setHeader(\"Content-Security-Policy\"")) {
+  fail("configuration HTTP transversale encore présente dans server.js");
+}
+if (!runtimeConfig.includes("export function createRuntimeConfig")
+    || !runtimeConfig.includes("export function createDatabasePool")) {
+  fail("configuration runtime ou pool PostgreSQL non externalisés");
+}
+if (!httpStack.includes("export function installHttpStack")
+    || !httpStack.includes("Content-Security-Policy")
+    || !httpStack.includes("writeRateLimit")) {
+  fail("pile middleware HTTP externalisée incomplète");
+}
+if (!runtimeHelpers.includes("export function hashToken")
+    || !runtimeHelpers.includes("export function createCookieWriters")) {
+  fail("helpers de sécurité runtime non externalisés");
 }
 if (!migrationRunner.includes("create table if not exists schema_migrations")
     || !migrationRunner.includes('await client.query("begin")')

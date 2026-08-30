@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const serverSource = await readFile(new URL("../server.js", import.meta.url), "utf8");
+const httpStackSource = await readFile(new URL("../middleware/http-stack.js", import.meta.url), "utf8");
 const preloadSource = await readFile(new URL("../deployment-bootstrap.js", import.meta.url), "utf8");
 const routesSource = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
 
@@ -11,9 +12,10 @@ test("le préchargement ne surcharge plus les méthodes de routage Express", () 
   assert.doesNotMatch(preloadSource, /express\.application\.(?:get|post|put|patch|delete|listen)\s*=/);
 });
 
-test("server.js installe explicitement les contrôleurs modernes", () => {
+test("server.js installe explicitement les contrôleurs modernes et la pile HTTP", () => {
   assert.match(serverSource, /installExplicitAdminUserRoutes\(app/);
-  assert.match(serverSource, /app\.use\(createCrossOriginCsrfBridge\(\)\)/);
+  assert.match(serverSource, /installHttpStack\(app, config, \{/);
+  assert.match(httpStackSource, /app\.use\(createCrossOriginCsrfBridge\(\)\)/);
   assert.doesNotMatch(serverSource, /legacyReplacedRoute/);
 });
 

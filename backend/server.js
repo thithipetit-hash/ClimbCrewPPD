@@ -1,9 +1,5 @@
 import "dotenv/config";
 import express from "express";
-import cors from "cors";
-import pg from "pg";
-import bcrypt from "bcryptjs";
-import crypto from "node:crypto";
 import fs from "node:fs";
 import { readFile } from "node:fs/promises";
 import { installRouteManagementRoutes } from "./route-management-routes.js";
@@ -18,217 +14,43 @@ import { installAdminAccountDeleteRoute } from "./admin-account-delete-route.js"
 import { createAuthMiddleware } from "./auth-middleware.js";
 import { installDatabaseMaintenanceRoutes } from "./database-maintenance-routes.js";
 import { runDatabaseMigrations } from "./database/migrate.js";
-import { createCrossOriginCsrfBridge } from "./deployment-compatibility.js";
 import {
   installExplicitAdminUserRoutes,
   initializeAdminUserEnhancements,
   startAdminUserSchedulers,
 } from "./admin-users/explicit-routes.js";
 import { blockLegacyFileImportInProduction } from "./admin-users/maintenance-hardening.js";
-import { sanitizeMalformedCookieHeader } from "./admin-users/cookie-hardening.js";
-import { preBodyRequestGuard } from "./admin-users/prebody-rate-limit.js";
-import { trustedClientIpMiddleware } from "./admin-users/client-ip-hardening.js";
-import { rateLimitLogMiddleware } from "./admin-users/rate-limit-log-integration.js";
+import { createRuntimeConfig, createDatabasePool } from "./config/runtime-config.js";
+import { installHttpStack } from "./middleware/http-stack.js";
+import {
+  nowPlus,
+  hashToken,
+  randomToken,
+  cleanEmail,
+  getCookie,
+  createRequestTokenReader,
+  isSafeMethod,
+  constantTimeEqual,
+  createCookieWriters,
+  isStrongPassword,
+  serializeUser,
+  getClientIp,
+} from "./security/runtime-helpers.js";
+import {
+  createDefaultAdminInitializer,
+  startApplication,
+} from "./bootstrap/application-bootstrap.js";
 
+const config = createRuntimeConfig();
+const pool = createDatabasePool(config);
 const app = express();
-app.disable("x-powered-by");
 
-// Un cookie percent-encodé invalide ne doit jamais atteindre les parseurs legacy.
-app.use(sanitizeMalformedCookieHeader);
-
-// Le pont CSRF est désormais un middleware Express explicite. Il était auparavant
-// injecté implicitement en surchargeant express.application.use.
-app.use(createCrossOriginCsrfBridge());
-
-const { Pool } = pg;
-
-const DATABASE_URL = process.env.DATABASE_URL;
-const PORT = Number(process.env.PORT || 3000);
-
-const CORS_ORIGINS = (process.env.CORS_ORIGIN || process.env.FRONTEND_ORIGIN || "http://localhost:5173")
-  .split(",")
-  .map((origin) => origin.trim().replace(/\/$/, ""))
-  .filter(Boolean);
-const SETUP_TOKEN = process.env.SETUP_TOKEN || "";
-const FIRST_ADMIN_EMAIL = process.env.FIRST_ADMIN_EMAIL || "";
-const FIRST_ADMIN_PASSWORD = process.env.FIRST_ADMIN_PASSWORD || "";
-const IS_PRODUCTION = process.env.NODE_ENV === "production";
-const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "climbcrew_session";
-const CSRF_COOKIE_NAME = process.env.CSRF_COOKIE_NAME || "climbcrew_csrf";
-const COOKIE_SAMESITE = (process.env.COOKIE_SAMESITE || "lax").toLowerCase();
-const SECURE_COOKIES = String(process.env.SECURE_COOKIES || (IS_PRODUCTION ? "true" : "false")).toLowerCase() === "true";
-const ALLOW_WEAK_FIRST_ADMIN_PASSWORD = !IS_PRODUCTION && String(process.env.ALLOW_WEAK_FIRST_ADMIN_PASSWORD || process.env.DEV_ADMIN_ENABLED || "false").toLowerCase() === "true";
-const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || (IS_PRODUCTION ? 12 : 10));
-const TRUST_PROXY = Number(process.env.TRUST_PROXY || 1);
-
-const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * Number(process.env.SESSION_DURATION_DAYS || 7);
-const RESET_TOKEN_DURATION_MS = 1000 * 60 * 60; // 1 heure
-const MAX_JSON_BODY_SIZE = process.env.MAX_JSON_BODY_SIZE || "1mb";
-const WRITE_RATE_LIMIT_PER_MINUTE = Number(process.env.WRITE_RATE_LIMIT_PER_MINUTE || 120);
-
-if (!DATABASE_URL) {
-  console.error("DATABASE_URL is missing.");
-  process.exit(1);
-}
-
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: String(process.env.PG_SSL || "false").toLowerCase() === "true"
-    ? { rejectUnauthorized: String(process.env.PG_SSL_REJECT_UNAUTHORIZED || "true").toLowerCase() !== "false" }
-    : false,
+const getRequestToken = createRequestTokenReader(config.sessionCookieName);
+const { setCsrfCookie, clearSessionCookie } = createCookieWriters(config);
+const { authRateLimit, resetRateLimit } = installHttpStack(app, config, {
+  isSafeMethod,
+  getClientIp,
 });
-
-app.set("trust proxy", TRUST_PROXY);
-
-app.use((req, res, next) => {
-  req.requestId = crypto.randomUUID();
-  res.setHeader("X-Request-Id", req.requestId);
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Referrer-Policy", "no-referrer");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  res.setHeader("Cross-Origin-Resource-Policy", "same-site");
-  res.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
-  res.setHeader("Cache-Control", "no-store");
-  if (SECURE_COOKIES || IS_PRODUCTION) {
-    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  }
-  next();
-});
-
-// Compatibilité robuste avec les reverse proxies locaux.
-// Le frontend appelle /api/..., l'ancienne application utilisait /...,
-// et certaines versions intermédiaires ont utilisé /api/v1/...
-// Cette normalisation évite les erreurs du type "Cannot GET /api/..." ou "Cannot GET /v1/...".
-function normalizeApiPath(url) {
-  const value = String(url || "/");
-  const queryIndex = value.indexOf("?");
-  const path = queryIndex === -1 ? value : value.slice(0, queryIndex);
-  const query = queryIndex === -1 ? "" : value.slice(queryIndex);
-
-  let normalizedPath = path;
-
-  if (normalizedPath === "/api") normalizedPath = "/";
-  else if (normalizedPath.startsWith("/api/")) normalizedPath = normalizedPath.slice(4);
-
-  if (normalizedPath === "/v1") normalizedPath = "/";
-  else if (normalizedPath.startsWith("/v1/")) normalizedPath = normalizedPath.slice(3);
-
-  if (!normalizedPath.startsWith("/")) normalizedPath = `/${normalizedPath}`;
-  return `${normalizedPath}${query}`;
-}
-
-app.use((req, _res, next) => {
-  req.url = normalizeApiPath(req.url);
-  next();
-});
-
-// Les garde-fous transverses sont désormais enregistrés explicitement, après
-// normalisation de l'URL et avant CORS / express.json / limiteurs historiques.
-app.use(preBodyRequestGuard);
-app.use(trustedClientIpMiddleware);
-app.use(rateLimitLogMiddleware);
-
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin) return callback(null, true);
-    const normalizedOrigin = origin.replace(/\/$/, "");
-    if (CORS_ORIGINS.includes(normalizedOrigin)) return callback(null, true);
-    return callback(new Error("Origine CORS non autorisée"));
-  },
-  credentials: true,
-}));
-app.use(express.json({ limit: MAX_JSON_BODY_SIZE }));
-
-function nowPlus(ms) {
-  return new Date(Date.now() + ms).toISOString();
-}
-
-function hashToken(rawToken) {
-  return crypto.createHash("sha256").update(rawToken).digest("hex");
-}
-
-function randomToken(size = 24) {
-  return crypto.randomBytes(size).toString("hex");
-}
-
-function cleanEmail(value = "") {
-  return String(value || "").trim().toLowerCase();
-}
-
-function parseCookies(req) {
-  const header = req.headers.cookie || "";
-  return Object.fromEntries(
-    header
-      .split(";")
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .map((part) => {
-        const separator = part.indexOf("=");
-        if (separator === -1) return [part, ""];
-        return [part.slice(0, separator), decodeURIComponent(part.slice(separator + 1))];
-      })
-  );
-}
-
-function getCookie(req, name) {
-  return parseCookies(req)[name] || "";
-}
-
-function getRequestToken(req) {
-  // Le jeton de session est stocké en cookie HttpOnly. Le bearer token reste accepté
-  // uniquement pour compatibilité avec d'anciens scripts locaux.
-  const authHeader = req.headers.authorization || "";
-  const match = authHeader.match(/^Bearer\s+(.+)$/i);
-  if (match?.[1]) return match[1];
-  return getCookie(req, SESSION_COOKIE_NAME) || "";
-}
-
-function isSafeMethod(method) {
-  return ["GET", "HEAD", "OPTIONS"].includes(String(method || "GET").toUpperCase());
-}
-
-function constantTimeEqual(a, b) {
-  const left = Buffer.from(String(a || ""));
-  const right = Buffer.from(String(b || ""));
-  if (left.length !== right.length) return false;
-  return crypto.timingSafeEqual(left, right);
-}
-
-function setSessionCookie(res, rawToken, expiresAt) {
-  res.cookie(SESSION_COOKIE_NAME, rawToken, {
-    httpOnly: true,
-    secure: SECURE_COOKIES,
-    sameSite: COOKIE_SAMESITE,
-    expires: new Date(expiresAt),
-    path: "/",
-  });
-}
-
-function setCsrfCookie(res, rawToken, expiresAt) {
-  res.cookie(CSRF_COOKIE_NAME, rawToken, {
-    httpOnly: false,
-    secure: SECURE_COOKIES,
-    sameSite: COOKIE_SAMESITE,
-    expires: new Date(expiresAt),
-    path: "/",
-  });
-}
-
-function clearSessionCookie(res) {
-  res.clearCookie(SESSION_COOKIE_NAME, {
-    httpOnly: true,
-    secure: SECURE_COOKIES,
-    sameSite: COOKIE_SAMESITE,
-    path: "/",
-  });
-  res.clearCookie(CSRF_COOKIE_NAME, {
-    httpOnly: false,
-    secure: SECURE_COOKIES,
-    sameSite: COOKIE_SAMESITE,
-    path: "/",
-  });
-}
 
 function requireSetupAccess(req, res, next) {
   if (req.query.setupToken || req.query.token) {
@@ -239,92 +61,16 @@ function requireSetupAccess(req, res, next) {
   }
 
   const providedToken = req.headers["x-setup-token"];
-  if (!SETUP_TOKEN) {
+  if (!config.setupToken) {
     return res.status(503).json({
       ok: false,
       error: "SETUP_TOKEN n'est pas configuré côté serveur. Ajoute cette variable d'environnement avant d'utiliser cette route.",
     });
   }
-  if (!constantTimeEqual(providedToken, SETUP_TOKEN)) {
+  if (!constantTimeEqual(providedToken, config.setupToken)) {
     return res.status(403).json({ ok: false, error: "Jeton de maintenance invalide" });
   }
   next();
-}
-
-const rateLimitBuckets = new Map();
-const RATE_LIMIT_CLEANUP_INTERVAL_MS = 60 * 1000;
-let nextRateLimitCleanupAt = 0;
-
-function cleanupExpiredRateLimitBuckets(now = Date.now()) {
-  if (now < nextRateLimitCleanupAt) return;
-  for (const [key, bucket] of rateLimitBuckets.entries()) {
-    if (!bucket || bucket.resetAt <= now) rateLimitBuckets.delete(key);
-  }
-  nextRateLimitCleanupAt = now + RATE_LIMIT_CLEANUP_INTERVAL_MS;
-}
-
-function rateLimit({ keyPrefix, windowMs, max }) {
-  return (req, res, next) => {
-    const now = Date.now();
-    cleanupExpiredRateLimitBuckets(now);
-    const key = `${keyPrefix}:${getClientIp(req) || "unknown"}`;
-    const current = rateLimitBuckets.get(key) || { count: 0, resetAt: now + windowMs };
-    if (current.resetAt <= now) {
-      current.count = 0;
-      current.resetAt = now + windowMs;
-    }
-    current.count += 1;
-    rateLimitBuckets.set(key, current);
-    if (current.count > max) {
-      return res.status(429).json({ error: "Trop de tentatives. Réessaie plus tard." });
-    }
-    next();
-  };
-}
-
-const authRateLimit = rateLimit({ keyPrefix: "auth", windowMs: 15 * 60 * 1000, max: 20 });
-const resetRateLimit = rateLimit({ keyPrefix: "reset", windowMs: 60 * 60 * 1000, max: 10 });
-const writeRateLimit = rateLimit({ keyPrefix: "write", windowMs: 60 * 1000, max: WRITE_RATE_LIMIT_PER_MINUTE });
-
-app.use((req, res, next) => {
-  if (isSafeMethod(req.method)) return next();
-  return writeRateLimit(req, res, next);
-});
-
-function isStrongPassword(value) {
-  return typeof value === "string"
-    && value.length >= 8
-    && /[a-z]/.test(value)
-    && /[A-Z]/.test(value)
-    && /\d/.test(value)
-    && /[^A-Za-z0-9]/.test(value);
-}
-
-function serializeUser(row) {
-  if (!row) return null;
-  return {
-    id: String(row.id),
-    participantId: row.participant_id ? String(row.participant_id) : null,
-    email: row.email,
-    prenom: row.prenom,
-    nom: row.nom,
-    role: row.role,
-    status: row.status,
-    created_at: row.created_at,
-    approved_at: row.approved_at,
-    revoked_at: row.revoked_at,
-    revoked_reason: row.revoked_reason,
-    last_login_at: row.last_login_at,
-    must_reset_password: row.must_reset_password,
-    theme_preference: row.theme_preference || 'auto',
-  };
-}
-
-function getClientIp(req) {
-  // Express calcule req.ip à partir de la socket et de la configuration
-  // `trust proxy`. Ne jamais relire manuellement l'en-tête de proxy ici :
-  // cela contournerait précisément la chaîne de confiance configurée par Express.
-  return req.ip || null;
 }
 
 async function logAccess({ userId = null, eventType, success = true, req, details = null }) {
@@ -348,38 +94,12 @@ async function logAccess({ userId = null, eventType, success = true, req, detail
   }
 }
 
-async function ensureDefaultAdmin() {
-  const activeAdmins = await pool.query(`select id from users where role = 'admin' and status = 'active' limit 1`);
-  if (activeAdmins.rowCount > 0) return;
-
-  const email = cleanEmail(FIRST_ADMIN_EMAIL);
-  if (!email || !FIRST_ADMIN_PASSWORD) {
-    console.warn("Aucun administrateur actif et FIRST_ADMIN_EMAIL / FIRST_ADMIN_PASSWORD non configurés. Aucun compte admin par défaut n'a été créé.");
-    return;
-  }
-
-  if (!ALLOW_WEAK_FIRST_ADMIN_PASSWORD && !isStrongPassword(FIRST_ADMIN_PASSWORD)) {
-    throw new Error("FIRST_ADMIN_PASSWORD doit respecter la règle de mot de passe fort.");
-  }
-
-  const passwordHash = await bcrypt.hash(FIRST_ADMIN_PASSWORD, BCRYPT_ROUNDS);
-
-  await pool.query(
-    `
-      insert into users (email, prenom, nom, password_hash, role, status, approved_at, must_reset_password)
-      values ($1, $2, $3, $4, 'admin', 'active', now(), false)
-      on conflict (email) do update set
-        password_hash = excluded.password_hash,
-        role = 'admin',
-        status = 'active',
-        approved_at = coalesce(users.approved_at, now()),
-        must_reset_password = false
-    `,
-    [email, "ClimbCrew", "Admin", passwordHash]
-  );
-
-  console.log(`Compte administrateur initial créé : ${email}. Change le mot de passe à la première utilisation.`);
-}
+const ensureDefaultAdmin = createDefaultAdminInitializer({
+  pool,
+  config,
+  cleanEmail,
+  isStrongPassword,
+});
 
 const { requireAuth, requireAdmin } = createAuthMiddleware({
   pool,
@@ -387,19 +107,17 @@ const { requireAuth, requireAdmin } = createAuthMiddleware({
   getRequestToken,
   isSafeMethod,
   getCookie,
-  csrfCookieName: CSRF_COOKIE_NAME,
+  csrfCookieName: config.csrfCookieName,
   constantTimeEqual,
   serializeUser,
 });
 
-// Les remplacements historiques sont maintenant de vraies routes Express.
 installExplicitAdminUserRoutes(app, {
   requireAuth,
   requireAdmin,
   authRateLimit,
   resetRateLimit,
 });
-
 installBroadcastMessageRoutes(app, { requireAuth, requireAdmin, pool });
 installEvolutionRequestRoutes(app, { requireAuth, requireAdmin, pool });
 installRealisationManagementRoutes(app, { requireAuth, pool });
@@ -414,7 +132,7 @@ installDatabaseMaintenanceRoutes(app, {
   runMigrations: () => runDatabaseMigrations(pool),
   ensureDefaultAdmin,
   pool,
-  firstAdminEmail: FIRST_ADMIN_EMAIL,
+  firstAdminEmail: config.firstAdminEmail,
 });
 
 installAuthSessionRoutes(app, {
@@ -422,7 +140,7 @@ installAuthSessionRoutes(app, {
   pool,
   randomToken,
   nowPlus,
-  sessionDurationMs: SESSION_DURATION_MS,
+  sessionDurationMs: config.sessionDurationMs,
   setCsrfCookie,
   serializeUser,
   logAccess,
@@ -436,14 +154,7 @@ installSessionReadRoutes(app, { requireAuth, requireAdmin, pool });
 
 /**
  * Importe un export JSON legacy dans la base PostgreSQL.
- *
- * Format accepté :
- * - payload direct contenant participants/sessions/ropes/routes/realisations ;
- * - ou objet enveloppe { data: payload } envoyé par le frontend.
- *
  * L'import remplace les données métier legacy sans supprimer les comptes utilisateurs.
- * Les identifiants historiques de participants (p1, p2...) sont convertis vers les id
- * PostgreSQL tout en conservant les liens sessions/réalisations.
  */
 app.post("/import-data", blockLegacyFileImportInProduction, requireSetupAccess, async (req, res) => {
   const importFilePath = new URL("./import-data.json", import.meta.url);
@@ -549,7 +260,6 @@ app.post("/import-data", blockLegacyFileImportInProduction, requireSetupAccess, 
       const mappedEncadrantId = session.encadrantId
         ? participantIdMap.get(String(session.encadrantId)) || null
         : null;
-
       const mappedReferentId = session.referentId
         ? participantIdMap.get(String(session.referentId)) || null
         : null;
@@ -586,7 +296,6 @@ app.post("/import-data", blockLegacyFileImportInProduction, requireSetupAccess, 
     }
 
     await client.query("commit");
-
     res.json({
       ok: true,
       message: "Import terminé",
@@ -603,28 +312,14 @@ app.post("/import-data", blockLegacyFileImportInProduction, requireSetupAccess, 
   }
 });
 
-async function cleanupExpiredSecurityData() {
-  await pool.query("update user_sessions set revoked_at = now() where revoked_at is null and expires_at <= now()");
-  await pool.query("update password_reset_tokens set used_at = now() where used_at is null and expires_at <= now()");
-}
-
-async function start() {
-  await runDatabaseMigrations(pool);
-  await initializeAdminUserEnhancements();
-  await ensureDefaultAdmin();
-  await cleanupExpiredSecurityData();
-
-  app.listen(PORT, () => {
-    console.log(`ClimbCrew API listening on port ${PORT}`);
-  });
-
-  startAdminUserSchedulers().catch((error) => {
-    console.error("Erreur de démarrage des services utilisateurs :", error);
-    process.exitCode = 1;
-  });
-}
-
-start().catch((error) => {
+startApplication({
+  app,
+  pool,
+  port: config.port,
+  initializeAdminUserEnhancements,
+  ensureDefaultAdmin,
+  startAdminUserSchedulers,
+}).catch((error) => {
   console.error("Erreur au démarrage :", error);
   process.exit(1);
 });

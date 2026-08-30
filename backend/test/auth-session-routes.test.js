@@ -11,7 +11,7 @@ const [serverSource, authSessionSource, explicitRoutesSource] = await Promise.al
 test("server.js délègue les opérations d'une session déjà authentifiée", () => {
   assert.match(explicitRoutesSource, /app\.post\("\/auth\/login", authRateLimit, secureLogin\)/);
   assert.match(serverSource, /installAuthSessionRoutes\(app, \{/);
-  assert.match(serverSource, /sessionDurationMs: SESSION_DURATION_MS/);
+  assert.match(serverSource, /sessionDurationMs: config\.sessionDurationMs/);
   assert.match(explicitRoutesSource, /app\.post\("\/auth\/request-access", authRateLimit, requestAccessByEmailOnly\)/);
 
   for (const legacyHandler of [
