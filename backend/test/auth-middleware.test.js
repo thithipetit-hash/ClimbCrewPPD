@@ -37,7 +37,7 @@ test("requireAdmin exige toujours le rôle admin", () => {
 
 test("server.js installe le middleware extrait sans conserver l'ancienne implémentation", () => {
   assert.match(serverSource, /const \{ requireAuth, requireAdmin \} = createAuthMiddleware\(\{/);
-  assert.match(serverSource, /csrfCookieName: CSRF_COOKIE_NAME/);
+  assert.match(serverSource, /csrfCookieName: config\.csrfCookieName/);
   assert.equal(serverSource.includes("async function loadSessionFromToken(rawToken)"), false);
   assert.equal(serverSource.includes("async function requireAuth(req, res, next)"), false);
   assert.equal(serverSource.includes("function requireAdmin(req, res, next)"), false);
