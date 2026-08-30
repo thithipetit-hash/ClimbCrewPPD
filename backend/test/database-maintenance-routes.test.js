@@ -27,7 +27,7 @@ test("db-status reste protégé et expose l'état structurel et les migrations",
 test("server.js délègue les routes de maintenance au module dédié", () => {
   assert.match(serverSource, /installDatabaseMaintenanceRoutes\(app, \{/);
   assert.match(serverSource, /runMigrations: \(\) => runDatabaseMigrations\(pool\)/);
-  assert.match(serverSource, /firstAdminEmail: FIRST_ADMIN_EMAIL/);
+  assert.match(serverSource, /firstAdminEmail: config\.firstAdminEmail/);
   assert.equal(serverSource.includes('app.get("/setup-db", requireSetupAccess, async'), false);
   assert.equal(serverSource.includes('app.get("/db-status", requireSetupAccess, async'), false);
 });
