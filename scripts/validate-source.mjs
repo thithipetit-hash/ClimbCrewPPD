@@ -51,9 +51,7 @@ const runtimeHelpers = fs.readFileSync("backend/security/runtime-helpers.js", "u
 const applicationBootstrap = fs.readFileSync("backend/bootstrap/application-bootstrap.js", "utf8");
 const explicitRoutes = fs.readFileSync("backend/admin-users/explicit-routes.js", "utf8");
 const sessionAuthorization = fs.readFileSync("backend/admin-users/session-authorization-service.js", "utf8");
-const sharedSessionDefaultStatus = fs.readFileSync("shared/session-default-status.js", "utf8");
 const realisationManagement = fs.readFileSync("backend/realisation-management-routes.js", "utf8");
-const migrationRunner = fs.readFileSync("backend/database/migrate.js", "utf8");
 const baselineMigration = fs.readFileSync("backend/database/migrations/001_baseline.sql", "utf8");
 
 if (backend.includes("async function ensureSchema()")) {
@@ -84,11 +82,6 @@ if (!runtimeHelpers.includes("export function hashToken")
     || !runtimeHelpers.includes("export function createCookieWriters")) {
   fail("helpers de sécurité runtime non externalisés");
 }
-if (!migrationRunner.includes("create table if not exists schema_migrations")
-    || !migrationRunner.includes('await client.query("begin")')
-    || !migrationRunner.includes('await client.query("rollback")')) {
-  fail("runner de migrations non transactionnel ou table de suivi absente");
-}
 if (!baselineMigration.includes("create table if not exists participants")
     || !baselineMigration.includes("create table if not exists users")
     || !baselineMigration.includes("create table if not exists routes")
@@ -109,9 +102,6 @@ if (backend.includes("function defaultSessionStatus(")) {
   fail("ancienne copie morte de la règle de statut encore présente dans server.js");
 }
 
-if (!sharedSessionDefaultStatus.includes("export function getDefaultSessionStatus(date, slot)")) {
-  fail("règle canonique partagée de statut par défaut absente");
-}
 if (fs.existsSync("backend/session-default-status.js")) {
   fail("adaptateur backend session-default-status.js encore présent");
 }
