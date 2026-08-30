@@ -38,7 +38,7 @@ export function createRuntimeConfig(env = process.env) {
     maxJsonBodySize: env.MAX_JSON_BODY_SIZE || "1mb",
     writeRateLimitPerMinute: Number(env.WRITE_RATE_LIMIT_PER_MINUTE || 120),
     pgSsl: envBoolean(env.PG_SSL, false),
-    pgSslRejectUnauthorized: !envBoolean(env.PG_SSL_REJECT_UNAUTHORIZED, false),
+    pgSslRejectUnauthorized: String(env.PG_SSL_REJECT_UNAUTHORIZED || "true").toLowerCase() !== "false",
   };
 }
 
