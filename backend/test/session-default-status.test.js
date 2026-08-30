@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getDefaultSessionStatus } from "../session-default-status.js";
+import { getDefaultSessionStatus } from "../../shared/session-default-status.js";
 
 test("mardi midi et jeudi midi sont encadrés par défaut", () => {
   assert.equal(getDefaultSessionStatus("2026-09-01", "midi"), "encadree");

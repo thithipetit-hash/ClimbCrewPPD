@@ -47,11 +47,9 @@ if (app.includes("l’ocre apparaît sur fond marron") || main.includes("l’ocr
 const backend = fs.readFileSync("backend/server.js", "utf8");
 const explicitRoutes = fs.readFileSync("backend/admin-users/explicit-routes.js", "utf8");
 const sessionAuthorization = fs.readFileSync("backend/admin-users/session-authorization-service.js", "utf8");
-const backendSessionDefaultStatus = fs.readFileSync("backend/session-default-status.js", "utf8");
 const sharedSessionDefaultStatus = fs.readFileSync("shared/session-default-status.js", "utf8");
 const realisationManagement = fs.readFileSync("backend/realisation-management-routes.js", "utf8");
 
-// PUT /sessions/:id est désormais déclaré explicitement avec son contrôleur sécurisé.
 if (!backend.includes("installExplicitAdminUserRoutes(app")) {
   fail("module de routes utilisateurs explicites non installé");
 }
@@ -65,19 +63,14 @@ if (backend.includes("function defaultSessionStatus(")) {
   fail("ancienne copie morte de la règle de statut encore présente dans server.js");
 }
 
-// La règle canonique appartient désormais à /shared. Le fichier backend reste
-// uniquement un adaptateur de compatibilité pendant la réduction de dette.
 if (!sharedSessionDefaultStatus.includes("export function getDefaultSessionStatus(date, slot)")) {
   fail("règle canonique partagée de statut par défaut absente");
 }
-if (backendSessionDefaultStatus.includes("function getDefaultSessionStatus(")) {
-  fail("la règle de statut est encore dupliquée dans backend/session-default-status.js");
+if (fs.existsSync("backend/session-default-status.js")) {
+  fail("adaptateur backend session-default-status.js encore présent");
 }
-if (!backendSessionDefaultStatus.includes('from "../shared/session-default-status.js"')) {
-  fail("ré-export backend non branché sur la règle partagée");
-}
-if (!sessionAuthorization.includes('import { getDefaultSessionStatus } from "../session-default-status.js";')) {
-  fail("contrôleur de séances non branché sur l’adaptateur de statut");
+if (!sessionAuthorization.includes('import { getDefaultSessionStatus } from "../../shared/session-default-status.js";')) {
+  fail("contrôleur de séances non branché directement sur la règle partagée");
 }
 if (!sessionAuthorization.includes("const resolvedStatus = requested.status")) {
   fail("statut de séance non résolu dans le contrôleur actif");
@@ -108,7 +101,6 @@ if (!sessionAuthorization.includes('requestedStatus === "fermee"')) {
   fail("blocage des nouvelles inscriptions en séance fermée absent");
 }
 
-// Les écritures de réalisations sont maintenant installées depuis un module dédié.
 if (!backend.includes("installRealisationManagementRoutes(app, { requireAuth, pool });")) {
   fail("module d’écriture des réalisations non installé");
 }
