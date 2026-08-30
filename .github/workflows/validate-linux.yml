@@ -57,6 +57,9 @@ jobs:
       - name: Validate source consistency
         run: node scripts/validate-source.mjs
 
+      - name: Run ESLint
+        run: npx --yes eslint@10.9.1 --config eslint.config.mjs frontend backend scripts shared
+
       - name: Validate backend syntax
         run: node --check backend/server.js
 

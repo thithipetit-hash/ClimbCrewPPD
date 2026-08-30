@@ -3,6 +3,7 @@
   "private": true,
   "version": "3.0.0-linux",
   "scripts": {
+    "lint": "npx --yes eslint@10.9.1 --config eslint.config.mjs frontend backend scripts shared",
     "prod:config": "docker compose --env-file .env.production -f docker-compose.prod.yml config",
     "prod:build": "docker compose --env-file .env.production -f docker-compose.prod.yml build",
     "prod:up": "docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build",
