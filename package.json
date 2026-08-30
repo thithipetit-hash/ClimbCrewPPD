@@ -3,7 +3,7 @@
   "private": true,
   "version": "3.0.0-linux",
   "scripts": {
-    "lint": "npx --yes eslint@10.9.1 --config eslint.config.mjs frontend backend scripts shared",
+    "lint": "eslint --config eslint.config.mjs frontend backend scripts shared",
     "prod:config": "docker compose --env-file .env.production -f docker-compose.prod.yml config",
     "prod:build": "docker compose --env-file .env.production -f docker-compose.prod.yml build",
     "prod:up": "docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build",
@@ -12,5 +12,8 @@
     "prod:setup-db": "bash deploy/scripts/setup-db.sh .env.production",
     "prod:health": "bash deploy/scripts/healthcheck.sh .env.production",
     "validate:import": "node tools/validate-import-data.mjs ./backend/import-data.json"
+  },
+  "devDependencies": {
+    "eslint": "10.9.1"
   }
 }
