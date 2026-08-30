@@ -27,7 +27,7 @@ function createRateLimiter({ keyPrefix, windowMs, max, getClientIp }) {
   const cleanupIntervalMs = 60 * 1000;
   let nextCleanupAt = 0;
 
-  function cleanup(now) {
+  function cleanupExpiredRateLimitBuckets(now) {
     if (now < nextCleanupAt) return;
     for (const [key, bucket] of buckets.entries()) {
       if (!bucket || bucket.resetAt <= now) buckets.delete(key);
@@ -37,7 +37,7 @@ function createRateLimiter({ keyPrefix, windowMs, max, getClientIp }) {
 
   return (req, res, next) => {
     const now = Date.now();
-    cleanup(now);
+    cleanupExpiredRateLimitBuckets(now);
     const key = `${keyPrefix}:${getClientIp(req) || "unknown"}`;
     const current = buckets.get(key) || { count: 0, resetAt: now + windowMs };
     if (current.resetAt <= now) {
