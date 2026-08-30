@@ -3,6 +3,8 @@
 # =============================================================================
 # Render utilise le runtime Node défini dans render.yaml. Ce Dockerfile reste
 # dédié au déploiement Docker Compose sur Linux et conserve donc son comportement.
+# Son contexte Docker est maintenant la racine du dépôt afin d'embarquer les
+# règles métier communes placées dans /shared.
 
 # Node 24 correspond à la version utilisée pour construire et exécuter l'API.
 FROM node:24-alpine
@@ -23,11 +25,13 @@ RUN apk add --no-cache postgresql16-client
 WORKDIR /app
 
 # Reproduction exacte des dépendances validées en CI grâce au lockfile.
-COPY package.json package-lock.json ./
+COPY backend/package.json backend/package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund --registry=https://registry.npmjs.org/
 
-# Copie du code du backend après l'installation des dépendances.
-COPY . .
+# Copie du code backend et des règles métier communes. Le ré-export
+# /app/session-default-status.js résout ../shared vers /shared.
+COPY backend/ ./
+COPY shared/ /shared/
 
 # Exécution avec l'utilisateur non-root fourni par l'image Node.
 # Impact visuel : aucun ; cette mesure limite les conséquences d'une faille API.
