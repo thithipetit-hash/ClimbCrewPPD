@@ -1,5 +1,3 @@
-import React from "react";
-
 export default function MobileBottomNav({ visibleTabs, activeTab, onSelectTab }) {
   return (
     <nav className="mobile-bottom-nav" aria-label="Navigation mobile ClimbClubCristal">
