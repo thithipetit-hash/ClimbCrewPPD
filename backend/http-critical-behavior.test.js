@@ -140,6 +140,15 @@ test("HTTP réalisations : POST, PUT et DELETE appliquent l'identité authentifi
         const owned = params[0] === "owned" && String(params[1]) === "7";
         return { rows: [], rowCount: owned ? 1 : 0 };
       }
+      if (normalized.includes("select id from routes where id = $1")) {
+        return { rows: [{ id: params[0] }], rowCount: 1 };
+      }
+      if (normalized.includes("from sessions s") && normalized.includes("session_participants")) {
+        return { rows: [{ date: "2026-09-01", cotisation: true }], rowCount: 1 };
+      }
+      if (normalized.startsWith("insert into realisations")) {
+        return { rows: [], rowCount: 1 };
+      }
       if (normalized.includes("from realisations") && normalized.includes("participant_id = $2")) {
         return { rows: [], rowCount: 0 };
       }
@@ -152,11 +161,28 @@ test("HTTP réalisations : POST, PUT et DELETE appliquent l'identité authentifi
   installRealisationManagementRoutes(app, { requireAuth: testAuth, pool });
 
   await withHttpServer(app, async (baseUrl) => {
-    const postResponse = await fetch(
+    const unauthenticatedPost = await fetch(
       `${baseUrl}/realisations`,
       jsonRequest("POST", { participantId: "999" }, "none"),
     );
-    assert.equal(postResponse.status, 403);
+    assert.equal(unauthenticatedPost.status, 403);
+
+    const authenticatedPost = await fetch(
+      `${baseUrl}/realisations`,
+      jsonRequest("POST", {
+        id: "real-1",
+        participantId: "999",
+        sessionId: "session-1",
+        voieId: "route-1",
+        dateRealisation: "2026-09-01",
+        styleRealisation: "a_vue",
+        cotationProposee: "6a",
+        commentaire: "test propriétaire",
+        chute: false,
+      }),
+    );
+    assert.equal(authenticatedPost.status, 200);
+    assert.equal((await authenticatedPost.json()).participantId, "7");
 
     const putResponse = await fetch(
       `${baseUrl}/realisations/other`,
@@ -173,6 +199,9 @@ test("HTTP réalisations : POST, PUT et DELETE appliquent l'identité authentifi
     assert.equal(foreignDelete.status, 403);
     assert.match((await foreignDelete.json()).error, /ne vous appartient pas/i);
   });
+
+  const insertCall = calls.find((call) => call.sql.startsWith("insert into realisations"));
+  assert.equal(String(insertCall?.params?.[1]), "7");
 
   const deleteCalls = calls.filter((call) => call.sql.startsWith("delete from realisations"));
   assert.deepEqual(deleteCalls.map((call) => call.params), [["owned", "7"], ["other", "7"]]);
