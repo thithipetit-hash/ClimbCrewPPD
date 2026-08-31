@@ -21,6 +21,7 @@ import "./styles/badges.css";
 import "./styles/badges-image-fix.css";
 import "./styles/climber-profile.css";
 import "./styles/mobile-bottom-nav.css";
+import "./styles/mobile-session-compact.css";
 import "./styles/startup-video.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(

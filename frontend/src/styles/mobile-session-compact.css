@@ -1,0 +1,157 @@
+/* Compaction mobile dédiée à la page Inscriptions.
+ * Le scope .inscriptions-page évite tout impact sur les autres onglets.
+ */
+@media (max-width: 700px) {
+  .inscriptions-page .toolbar {
+    margin-top: 4px;
+    padding: 4px;
+  }
+
+  .inscriptions-page .toolbar-row {
+    gap: 4px;
+  }
+
+  .inscriptions-page .date-nav {
+    grid-template-columns: 32px minmax(0, 1fr) 32px;
+    width: 100%;
+  }
+
+  .inscriptions-page .date-nav .nav-symbol,
+  .inscriptions-page .date-nav .date-input {
+    min-height: 32px;
+    height: 32px;
+  }
+
+  .inscriptions-page .date-nav .nav-symbol {
+    width: 32px;
+    min-width: 32px;
+    padding: 0;
+    font-size: 16px;
+  }
+
+  .inscriptions-page .date-nav .date-input {
+    padding: 2px 6px;
+    font-size: 12px;
+  }
+
+  .inscriptions-page .view-toggle {
+    width: 100%;
+    padding: 2px;
+    gap: 3px;
+  }
+
+  .inscriptions-page .view-toggle button {
+    flex: 1 1 0;
+    min-height: 30px;
+    height: 30px;
+    padding: 2px 6px;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .inscriptions-page .stack {
+    gap: 4px;
+  }
+
+  .inscriptions-page .session-card {
+    margin-top: 2px;
+    padding: 5px;
+    border-radius: 12px;
+  }
+
+  .inscriptions-page .session-card > .card-header {
+    min-height: 22px;
+    margin-bottom: 2px;
+  }
+
+  .inscriptions-page .session-card > .card-header h3 {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .inscriptions-page .session-card > .card-header .badge {
+    min-width: 46px;
+    padding: 1px 5px;
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .inscriptions-page .session-card .session-form-row {
+    gap: 2px;
+    margin-bottom: 3px;
+  }
+
+  .inscriptions-page .session-card .inline-field {
+    grid-template-columns: 68px minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .inscriptions-page .session-card .inline-field label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .inscriptions-page .session-card .inline-field select {
+    min-height: 30px;
+    height: 30px;
+    padding: 2px 6px;
+    border-radius: 9px;
+    font-size: 12px;
+  }
+
+  .inscriptions-page .session-participant-list {
+    gap: 1px;
+  }
+
+  .inscriptions-page .session-participant-list .participant-row {
+    min-height: 24px;
+    height: 24px;
+    padding: 1px 2px 1px 5px;
+    border-radius: 999px;
+    line-height: 1;
+  }
+
+  .inscriptions-page .session-participant-list .participant-identity {
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .inscriptions-page .session-participant-list .participant-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .inscriptions-page .session-participant-list .passport-dot {
+    width: 10px;
+    min-width: 10px;
+    height: 10px;
+    flex-basis: 10px;
+  }
+
+  .inscriptions-page .session-participant-list .remove-button {
+    width: 22px;
+    min-width: 22px;
+    min-height: 22px;
+    height: 22px;
+    padding: 0;
+    font-size: 15px;
+    line-height: 1;
+  }
+
+  .inscriptions-page .muted-box {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+
+  .inscriptions-page .week-day-card,
+  .inscriptions-page .week-day-sessions {
+    gap: 4px;
+  }
+}
