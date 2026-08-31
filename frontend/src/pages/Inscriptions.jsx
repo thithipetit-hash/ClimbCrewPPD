@@ -85,7 +85,7 @@ export default function Inscriptions({
   }
 
   return (
-    <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div className="inscriptions-page" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div className="toolbar">
         <div className="toolbar-row">
           <div className="group date-nav">
