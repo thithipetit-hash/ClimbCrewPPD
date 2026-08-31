@@ -32,6 +32,7 @@ updates:
         patterns:
           - "*"
 
+  # Root tooling (currently ESLint and future repository-level dev dependencies).
   - package-ecosystem: npm
     directory: /
     schedule:
