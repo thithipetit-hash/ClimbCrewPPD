@@ -41,6 +41,7 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             backend/package-lock.json
             frontend/package-lock.json
 
@@ -57,8 +58,11 @@ jobs:
       - name: Validate source consistency
         run: node scripts/validate-source.mjs
 
+      - name: Install root tooling
+        run: npm ci --no-audit --no-fund
+
       - name: Run ESLint
-        run: npx --yes eslint@10.9.1 --config eslint.config.mjs frontend backend scripts shared
+        run: npm run lint
 
       - name: Validate backend syntax
         run: node --check backend/server.js
