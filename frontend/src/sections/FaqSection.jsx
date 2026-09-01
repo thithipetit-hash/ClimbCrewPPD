@@ -38,42 +38,56 @@ export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, a
       <details className="faq-item">
         <summary><strong>A quoi sert ClimbClubCristal ?</strong></summary>
         <div className="small">
-          ClimbClubCristal permet de gérer les séances en vues Jour et Semaine, les inscriptions, les participants, les voies et la progression des grimpeurs du site SAE de Cristal. Une séance peut être Libre, Encadrée, Passeport, Challenge, Renouvellement ou Fermée. Le bandeau supérieur indique toujours la page active.
+          ClimbClubCristal permet de gérer les séances en vues Jour et Semaine, les inscriptions, les participants, les voies, les profils et la progression des grimpeurs du site SAE de Cristal. Une séance peut être Libre, Encadrée, Passeport, Challenge, Renouvellement ou Fermée. Le bandeau supérieur indique toujours la page active.
+        </div>
+      </details>
+
+      <details className="faq-item">
+        <summary><strong>Qui peut changer le statut d'une séance ?</strong></summary>
+        <div className="small">
+          Un référent ou un encadrant peut passer une séance en « Libre ». Pour choisir un autre statut — Fermée, Encadrée, Passeport, Challenge ou Renouvellement — il faut être encadrant. Un administrateur qui n'est ni référent ni encadrant ne contourne pas cette règle métier. La création des séances reste gérée par l'administration.
         </div>
       </details>
 
       <details className="faq-item">
         <summary><strong>Comment enregistrer une voie réalisée ?</strong></summary>
         <div className="small">
-          Dans l'onglet Voies, le bouton « Réalisation » ouvre la saisie. Dans Progression, le bouton « Nouvelle réalisation » permet également d'enregistrer une voie pour le compte connecté. Si un jour est choisi, seuls les participants cotisants inscrits ce jour-là sont proposés. Si un participant est choisi, seuls ses jours d'inscription sont proposés. La saisie ne distingue pas les créneaux midi et soir.
+          Dans l'onglet Voies, le bouton « Réalisation » ouvre la saisie. Dans Profil, lorsque votre propre profil est affiché, le bouton « Nouvelle réalisation » permet également d'enregistrer une voie pour le compte connecté. Seules vos propres réalisations peuvent être ajoutées, modifiées ou supprimées. La personne doit être cotisante et inscrite à une séance le jour choisi. La saisie ne distingue pas les créneaux midi et soir.
         </div>
       </details>
 
       <details className="faq-item">
-        <summary><strong>Quel grimpeur est affiché par défaut dans Progression ?</strong></summary>
+        <summary><strong>Quel grimpeur est affiché par défaut dans Profil ?</strong></summary>
         <div className="small">
-          Lors de l'ouverture de Progression, si aucune voie ni aucun grimpeur n'a encore été sélectionné, l'application affiche automatiquement le grimpeur associé au compte connecté. Il reste possible de consulter ensuite un autre grimpeur ou une voie à l'aide des listes de sélection.
+          À l'ouverture de l'onglet Profil, l'application affiche automatiquement le grimpeur associé au compte connecté. La liste « Grimpeur affiché » permet ensuite de consulter un autre grimpeur. Les actions personnelles — visibilité du profil, personnalisation, modification ou suppression de réalisations et export theCrag — restent disponibles uniquement lorsque votre propre profil est affiché.
+        </div>
+      </details>
+
+      <details className="faq-item">
+        <summary><strong>Que voit-on lorsqu'on consulte le profil d'un autre grimpeur ?</strong></summary>
+        <div className="small">
+          Si son profil est public, l'onglet Profil affiche son avatar, ses statistiques, ses badges, son CPR, son évolution et ses réalisations enregistrées. Si le grimpeur a choisi un profil privé, ces informations détaillées ne sont pas affichées aux autres utilisateurs. Le propriétaire du profil continue à voir et gérer ses propres informations.
         </div>
       </details>
 
       <details className="faq-item">
         <summary><strong>Comment sont présentés les participants et les voies ?</strong></summary>
         <div className="small">
-          Pour un participant, la bille placée à gauche du nom indique la couleur du passeport. Le cadre est vert si la cotisation est réglée et rouge sinon ; il est plein avec une licence FFME et en pointillés sans licence. En séance Libre, un fond hachuré signale une personne déjà inscrite sans passeport requis. Pour une voie, le fond reprend la couleur des prises et un cadre rouge indique une voie uniquement en moulinette.
+          Pour un participant, la bille placée à gauche du nom indique la couleur du passeport. Le cadre est vert si la cotisation est réglée et rouge sinon ; il est plein avec une licence FFME et en pointillés sans licence. Dans les statistiques, la catégorie des grimpeurs sans passeport est affichée « Sans ». En séance Libre, un fond hachuré signale une personne déjà inscrite sans passeport requis. Pour une voie, le fond reprend la couleur des prises et un cadre rouge indique une voie uniquement en moulinette.
         </div>
       </details>
 
       <details className="faq-item">
         <summary><strong>Comment fonctionnent les avatars et l'image de profil ?</strong></summary>
         <div className="small">
-          Chaque grimpeur peut choisir un avatar parmi plusieurs animaux, personnages, fruits et objets. L’avatar évolue visuellement selon le niveau récent calculé par l’application. Dans « Mon profil », un clic sur l'image ouvre les choix de personnalisation : avatar, sexe et image personnelle. Une image personnelle peut remplacer l'avatar ; les formats PNG, JPEG et WebP sont acceptés jusqu'à 5 Mo, puis l'image est recadrée au centre et convertie automatiquement en WebP carré 512 × 512. Il est toujours possible de revenir à l'avatar. Ces représentations sont proposées à titre purement ludique : elles ne portent aucun jugement sur les personnes et n’ont aucune intention offensante, discriminatoire ou stéréotypée. Le choix d’un avatar ou d'une image ne modifie ni les droits, ni les statistiques, ni le classement du grimpeur.
+          Chaque grimpeur peut choisir un avatar parmi plusieurs animaux, personnages, fruits et objets. L’avatar évolue visuellement selon le niveau récent calculé par l’application. Dans « Profil », lorsque votre propre profil est affiché, un clic sur l'image ouvre les choix de personnalisation : avatar, sexe et image personnelle. Une image personnelle peut remplacer l'avatar ; les formats PNG, JPEG et WebP sont acceptés jusqu'à 5 Mo, puis l'image est recadrée au centre et convertie automatiquement en WebP carré 512 × 512. Il est toujours possible de revenir à l'avatar. Ces représentations sont proposées à titre purement ludique : elles ne portent aucun jugement sur les personnes et n’ont aucune intention offensante, discriminatoire ou stéréotypée. Le choix d’un avatar ou d'une image ne modifie ni les droits, ni les statistiques, ni le classement du grimpeur.
         </div>
       </details>
 
       <details className="faq-item">
         <summary><strong>A quoi sert le choix du sexe dans le profil ?</strong></summary>
         <div className="small">
-          Le sexe peut être défini comme Homme, Femme ou Non précisé depuis la personnalisation ouverte en cliquant sur l'image de profil. Cette information sert notamment à choisir la variante visuelle de certains avatars et au filtre du Tableau d’honneur lorsqu'il est utilisé. Elle ne modifie pas le calcul du CPR, des points ou des réalisations.
+          Le sexe peut être défini comme Homme, Femme ou Non précisé depuis la personnalisation ouverte en cliquant sur l'image de votre profil. Cette information sert notamment à choisir la variante visuelle de certains avatars et au filtre du Tableau d’honneur lorsqu'il est utilisé. Elle ne modifie pas le calcul du CPR, des points ou des réalisations.
         </div>
       </details>
 
@@ -143,7 +157,7 @@ export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, a
       <details className="faq-item">
         <summary><strong>Comment exporter ses réalisations vers theCrag ?</strong></summary>
         <div className="small">
-          Dans « Mon profil », le bouton « Exporter pour theCrag » est placé en bas de page. Il génère un fichier CSV contenant les réalisations du grimpeur connecté dans un format adapté à l'import vers theCrag. Le bouton n'est actif que lorsque des réalisations sont disponibles.
+          Dans « Profil », lorsque votre propre profil est affiché, le bouton « Exporter pour theCrag » est placé en bas de page. Il génère un fichier CSV contenant les réalisations du grimpeur connecté dans un format adapté à l'import vers theCrag. Le bouton n'est actif que lorsque des réalisations sont disponibles et n'est pas proposé lors de la consultation du profil d'un autre grimpeur.
         </div>
       </details>
 
