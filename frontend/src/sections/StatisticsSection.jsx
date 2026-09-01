@@ -3,7 +3,7 @@ import Button from "../components/Button.jsx";
 import { fullName } from "../lib/domain.js";
 
 const PASSPORT_STATISTICS = [
-  ["sans", "Sans passeport"],
+  ["sans", "Sans"],
   ["jaune", "Jaune"],
   ["orange", "Orange"],
   ["vert", "Vert"],
