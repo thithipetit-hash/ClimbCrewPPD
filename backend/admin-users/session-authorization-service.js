@@ -20,8 +20,9 @@ function symmetricDifference(left, right) {
 /**
  * Politique d'autorisation indépendante de PostgreSQL, afin d'être testable.
  *
- * - administrateur : gestion complète de la séance ;
- * - référent ou encadrant : peut changer le type/statut de la séance ;
+ * - administrateur : gestion complète de la séance hors changement de statut, qui reste soumis aux qualifications métier ;
+ * - référent : peut uniquement passer une séance au statut libre ;
+ * - encadrant : peut passer une séance à libre ou à tout autre statut ;
  * - membre standard : peut uniquement s'inscrire ou se désinscrire lui-même ;
  * - une séance fermée refuse toute nouvelle inscription non administrateur ;
  * - création d'une séance : administrateur uniquement.
@@ -45,8 +46,29 @@ export function evaluateSessionMutation({
       : { allowed: false, status: 403, error: "Seul un administrateur peut créer une séance." };
   }
 
+  const requestedStatus = requestedSession.status || existingSession.status;
+  const statusChanged = requestedStatus !== existingSession.status;
+  const canChangeRequestedStatus = requestedStatus === "libre"
+    ? Boolean(canEncadrer || canReferer)
+    : Boolean(canEncadrer);
+
+  if (statusChanged && !canChangeRequestedStatus) {
+    return {
+      allowed: false,
+      status: 403,
+      error: requestedStatus === "libre"
+        ? "Seuls les référents ou encadrants peuvent passer une séance au statut libre."
+        : "Seuls les encadrants peuvent passer une séance dans un autre statut.",
+    };
+  }
+
   if (isAdmin) {
-    return { allowed: true, canManageAll: true, canChangeStatus: true };
+    return {
+      allowed: true,
+      canManageAll: true,
+      canChangeStatus: canChangeRequestedStatus,
+      statusChanged,
+    };
   }
 
   if (
@@ -59,17 +81,6 @@ export function evaluateSessionMutation({
       allowed: false,
       status: 403,
       error: "La date, le créneau, l’encadrant et le référent ne peuvent être modifiés que par un administrateur.",
-    };
-  }
-
-  const requestedStatus = requestedSession.status || existingSession.status;
-  const statusChanged = requestedStatus !== existingSession.status;
-  const canChangeStatus = Boolean(canEncadrer || canReferer);
-  if (statusChanged && !canChangeStatus) {
-    return {
-      allowed: false,
-      status: 403,
-      error: "Seuls les référents ou encadrants peuvent changer le type de séance.",
     };
   }
 
@@ -103,15 +114,14 @@ export function evaluateSessionMutation({
   return {
     allowed: true,
     canManageAll: false,
-    canChangeStatus,
+    canChangeStatus: canChangeRequestedStatus,
     statusChanged,
     actorJoins,
     actorLeaves,
   };
 }
 
-async function loadActorPrivileges(client, participantId, isAdmin) {
-  if (isAdmin) return { canEncadrer: true, canReferer: true };
+async function loadActorPrivileges(client, participantId) {
   const id = Number(participantId);
   if (!Number.isInteger(id) || id <= 0) return { canEncadrer: false, canReferer: false };
 
@@ -160,7 +170,7 @@ export async function updateSessionWithAuthorization(req, res) {
       : { rows: [] };
     const previousParticipantIds = participantsResult.rows.map((row) => String(row.participant_id));
 
-    const privileges = await loadActorPrivileges(client, actorParticipantId, isAdmin);
+    const privileges = await loadActorPrivileges(client, actorParticipantId);
     const policy = evaluateSessionMutation({
       existingSession: existing,
       requestedSession: requested,
