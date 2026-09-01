@@ -53,8 +53,7 @@ export const ROUTE_TAGS = [
 export const TABS = [
   { key: "inscriptions", label: "Inscriptions" },
   { key: "voies", label: "Voies" },
-  { key: "progression", label: "Progression" },
-  { key: "mon_profil", label: "Mon Profil" },
+  { key: "mon_profil", label: "Profil" },
   { key: "statistiques", label: "Statistiques" },
   { key: "wall_of_fame", label: "Tableau d’honneur" },
   { key: "faq", label: "FAQ" },
