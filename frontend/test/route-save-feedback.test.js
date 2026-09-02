@@ -18,7 +18,7 @@ test("les vidéos d'une voie sont gérées depuis Modifier et accessibles par le
   const voies = await readFile(new URL("../src/pages/Voies.jsx", import.meta.url), "utf8");
 
   assert.match(voies, /Vidéos de la voie/);
-  assert.match(voies, /Une URL par ligne/);
+  assert.match(voies, /Une URL externe par ligne/);
   assert.match(voies, /videoUrls/);
   assert.match(voies, /Voir les vidéos de cette voie/);
   assert.match(voies, /Voir la vidéo/);

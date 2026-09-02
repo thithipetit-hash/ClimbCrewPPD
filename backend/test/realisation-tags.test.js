@@ -14,9 +14,9 @@ test("une caractéristique de voie inconnue est refusée", () => {
   );
 });
 
-test("une voie est limitée à trois caractéristiques", () => {
+test("une voie est limitée à cinq caractéristiques", () => {
   assert.throws(
-    () => validateRoutePayload({ tags: ["dalle", "technique", "physique", "continuite"] }, { partial: true }),
+    () => validateRoutePayload({ tags: ["dalle", "devers", "physique", "technique", "a_doigts", "continuite"] }, { partial: true }),
     ValidationError,
   );
 });

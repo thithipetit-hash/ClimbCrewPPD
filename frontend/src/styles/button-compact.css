@@ -1,0 +1,17 @@
+/* Réduit l'espace vertical autour du texte des boutons dans toute l'application. */
+button {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.menu-button,
+.nav-symbol {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+/* Conserve les boutons de suppression circulaires sans modifier leur géométrie. */
+.remove-button {
+  padding-top: 0;
+  padding-bottom: 0;
+}

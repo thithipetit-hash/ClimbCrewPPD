@@ -197,8 +197,8 @@ export function validateRoutePayload(payload = {}, { partial = false } = {}) {
     if (tags.some((tag) => !ROUTE_TAGS.includes(tag))) {
       throw new ValidationError("Une caractéristique de voie est invalide.", { tags: "invalid_enum" });
     }
-    if (tags.length > 3) {
-      throw new ValidationError("Une voie ne peut avoir que trois caractéristiques maximum.", {
+    if (tags.length > 5) {
+      throw new ValidationError("Une voie ne peut avoir que cinq caractéristiques maximum.", {
         tags: "too_many_items",
       });
     }

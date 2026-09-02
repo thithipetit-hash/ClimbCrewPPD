@@ -63,7 +63,7 @@ export default function Voies({
   function videoDraftText(route) {
     const local = videoDraftByRouteId[route.id];
     if (local && Object.hasOwn(local, "draft")) return local.draft;
-    return effectiveVideoUrls(route).join("\n");
+    return effectiveVideoUrls(route).filter((url) => !isLocalVideoUrl(url)).join("\n");
   }
 
   function updateVideoDraft(route, draft) {
@@ -86,9 +86,12 @@ export default function Voies({
         : [...effectiveVideoUrls(route), result.url].filter(Boolean);
       setVideoDraftByRouteId((current) => ({
         ...current,
-        [route.id]: { draft: savedUrls.join("\n"), savedUrls },
+        [route.id]: {
+          draft: savedUrls.filter((url) => !isLocalVideoUrl(url)).join("\n"),
+          savedUrls,
+        },
       }));
-      setVideoSaveStatus(`Vidéo locale « ${file.name} » chargée.`);
+      setVideoSaveStatus("Vidéo chargée.");
     } catch (error) {
       setVideoSaveStatus(error.message || "Chargement de la vidéo impossible.");
     } finally {
@@ -97,7 +100,9 @@ export default function Voies({
   }
 
   async function saveRouteVideos(route, { silent = false } = {}) {
-    const videoUrls = parseVideoUrls(videoDraftText(route));
+    const localVideoUrls = effectiveVideoUrls(route).filter(isLocalVideoUrl);
+    const externalVideoUrls = parseVideoUrls(videoDraftText(route)).filter((url) => !isLocalVideoUrl(url));
+    const videoUrls = [...new Set([...localVideoUrls, ...externalVideoUrls])];
     if (videoUrls.length > 10) {
       setVideoSaveStatus("10 vidéos maximum par voie.");
       return false;
@@ -110,7 +115,13 @@ export default function Voies({
         body: JSON.stringify({ videoUrls }),
       });
       const savedUrls = Array.isArray(updated.videoUrls) ? updated.videoUrls : videoUrls;
-      setVideoDraftByRouteId((current) => ({ ...current, [route.id]: { draft: savedUrls.join("\n"), savedUrls } }));
+      setVideoDraftByRouteId((current) => ({
+        ...current,
+        [route.id]: {
+          draft: savedUrls.filter((url) => !isLocalVideoUrl(url)).join("\n"),
+          savedUrls,
+        },
+      }));
       if (!silent) setVideoSaveStatus(`${savedUrls.length} lien${savedUrls.length > 1 ? "s" : ""} vidéo enregistré${savedUrls.length > 1 ? "s" : ""}.`);
       return true;
     } catch (error) {
@@ -143,7 +154,7 @@ export default function Voies({
             {videoUrls.map((url, index) => (
               <div className="subcard" key={`${url}-${index}`}>
                 <div className="card-header">
-                  <div><strong>Vidéo {index + 1}</strong><div className="small" style={{ overflowWrap: "anywhere" }}>{url}</div></div>
+                  <div><strong>Vidéo {index + 1}</strong>{!isLocalVideoUrl(url) && <div className="small" style={{ overflowWrap: "anywhere" }}>{url}</div>}</div>
                   <div className="group">
                     {isLocalVideoUrl(url) ? (
                       <a className="pill" href={downloadableVideoUrl(url)} download style={{ textDecoration: "none" }}>Télécharger</a>
@@ -206,6 +217,7 @@ export default function Voies({
                   {group.routes.map((route) => {
                     const routeRating = routeRatingsById[route.id] || { average: 0, count: 0 };
                     const videoCount = effectiveVideoUrls(route).length;
+                    const videoInputId = `route-video-upload-${route.id}`;
                     return (
                       <div className={`route-card ${route.moulinetteOnly ? "moulinette-only" : ""}`} key={route.id} style={getRouteCardStyle(route.couleurPrises)}>
                         {adminUnlocked && editingRouteId === route.id && routeEditDraft ? (
@@ -219,19 +231,16 @@ export default function Voies({
                               <div><label className="checkbox-field"><input type="checkbox" checked={routeEditDraft.moulinetteOnly} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, moulinetteOnly: event.target.checked }))} /><span>Moulinette uniquement</span></label></div>
                             </div>
                             <div className="realisation-tags" style={{ marginTop: 8 }}>
-                              <label>Caractéristiques de la voie <span className="small">({routeEditDraft.tags.length}/3 sélectionnées)</span></label>
-                              <div className="tag-selector" aria-label="Modifier les caractéristiques de la voie">{ROUTE_TAGS.map((tag) => { const selected = routeEditDraft.tags.includes(tag.value); const limitReached = routeEditDraft.tags.length >= 3; return <button type="button" className={selected ? "tag-option selected" : "tag-option"} aria-pressed={selected} disabled={!selected && limitReached} key={tag.value} onClick={() => setRouteEditDraft((prev) => ({ ...prev, tags: selected ? prev.tags.filter((value) => value !== tag.value) : [...prev.tags, tag.value] }))}>{selected && <span aria-hidden="true">✓ </span>}{tag.label}</button>; })}</div>
+                              <label>Caractéristiques de la voie <span className="small">({routeEditDraft.tags.length}/5 sélectionnées)</span></label>
+                              <div className="tag-selector" aria-label="Modifier les caractéristiques de la voie">{ROUTE_TAGS.map((tag) => { const selected = routeEditDraft.tags.includes(tag.value); const limitReached = routeEditDraft.tags.length >= 5; return <button type="button" className={selected ? "tag-option selected" : "tag-option"} aria-pressed={selected} disabled={!selected && limitReached} key={tag.value} onClick={() => setRouteEditDraft((prev) => ({ ...prev, tags: selected ? prev.tags.filter((value) => value !== tag.value) : [...prev.tags, tag.value] }))}>{selected && <span aria-hidden="true">✓ </span>}{tag.label}</button>; })}</div>
                             </div>
                             <div style={{ marginTop: 10 }}>
                               <label htmlFor={`route-videos-${route.id}`}>Vidéos de la voie</label>
                               <textarea id={`route-videos-${route.id}`} rows={4} value={videoDraftText(route)} onChange={(event) => updateVideoDraft(route, event.target.value)} placeholder={"https://youtu.be/...\nhttps://www.youtube.com/watch?v=..."} />
-                              <div className="small">Une URL par ligne · 10 vidéos maximum. Les utilisateurs y accèdent en cliquant sur le titre de la voie.</div>
+                              <div className="small">Une URL externe par ligne · 10 vidéos maximum. Les vidéos chargées depuis l’appareil restent associées sans afficher leur chemin technique.</div>
                               <div className="group" style={{ marginTop: 8 }}>
-                                <label className="secondary" style={{ cursor: "pointer" }}>
-                                  {videoUploadingRouteId === route.id ? "Chargement…" : "Charger une vidéo locale"}
-                                  <input type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" style={{ display: "none" }} disabled={videoUploadingRouteId === route.id} onChange={(event) => { const file = event.target.files?.[0]; uploadLocalVideo(route, file); event.target.value = ""; }} />
-                                </label>
-                                <span className="small">MP4, WebM, OGG ou MOV · 50 Mo maximum</span>
+                                <input id={videoInputId} type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime" style={{ display: "none" }} disabled={videoUploadingRouteId === route.id} onChange={(event) => { const file = event.target.files?.[0]; uploadLocalVideo(route, file); event.target.value = ""; }} />
+                                <Button type="button" variant="secondary" disabled={videoUploadingRouteId === route.id} onClick={() => document.getElementById(videoInputId)?.click()}>{videoUploadingRouteId === route.id ? "Chargement…" : "Charger une vidéo"}</Button>
                               </div>
                               {videoSaveStatus && <div className="small" style={{ marginTop: 4 }}>{videoSaveStatus}</div>}
                             </div>
