@@ -16,6 +16,7 @@ import "./badge-faq-ui.js";
 import "./climber-profile-ui.js";
 import "./styles/climbcrew-enhancements.css";
 import "./styles/index.css";
+import "./styles/button-compact.css";
 import "./styles/session-status-colors.css";
 import "./styles/badges.css";
 import "./styles/badges-image-fix.css";
