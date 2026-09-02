@@ -15,3 +15,10 @@ button {
   padding-top: 0;
   padding-bottom: 0;
 }
+
+/* L'édition d'une voie ne propose plus de saisie d'URL vidéo : seul le chargement local reste visible. */
+label[for^="route-videos-"],
+textarea[id^="route-videos-"],
+label[for^="route-videos-"] + textarea + .small {
+  display: none;
+}
