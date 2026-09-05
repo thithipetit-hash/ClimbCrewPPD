@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { authApiFetch } from "../lib/api.js";
+import { apiFetch } from "../lib/api.js";
 
 function formatDate(value) {
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -12,7 +12,7 @@ const STATUS_OPTIONS = [
   { value: "trop_creatif", label: "Trop créatif" },
 ];
 
-export default function DemandesEvolution({ USE_API, authToken, authUser }) {
+export default function DemandesEvolution({ USE_API, authUser }) {
   const [requests, setRequests] = useState([]);
   const [draft, setDraft] = useState({ title: "", description: "" });
   const [commentDrafts, setCommentDrafts] = useState({});
@@ -28,7 +28,7 @@ export default function DemandesEvolution({ USE_API, authToken, authUser }) {
     }
     try {
       setError("");
-      setRequests(await authApiFetch("/evolution-requests", authToken));
+      setRequests(await apiFetch("/evolution-requests"));
     } catch (requestError) {
       setError(requestError.message || "Chargement impossible");
     } finally {
@@ -36,13 +36,13 @@ export default function DemandesEvolution({ USE_API, authToken, authUser }) {
     }
   }
 
-  useEffect(() => { loadRequests(); }, [USE_API, authToken]);
+  useEffect(() => { loadRequests(); }, [USE_API, authUser?.id]);
 
   async function submitRequest(event) {
     event.preventDefault();
     try {
       setError("");
-      await authApiFetch("/evolution-requests", authToken, {
+      await apiFetch("/evolution-requests", {
         method: "POST",
         body: JSON.stringify(draft),
       });
@@ -55,7 +55,7 @@ export default function DemandesEvolution({ USE_API, authToken, authUser }) {
 
   async function vote(request) {
     const value = request.myVote === 1 ? 0 : 1;
-    await authApiFetch(`/evolution-requests/${request.id}/vote`, authToken, {
+    await apiFetch(`/evolution-requests/${request.id}/vote`, {
       method: "PUT",
       body: JSON.stringify({ value }),
     });
@@ -64,7 +64,7 @@ export default function DemandesEvolution({ USE_API, authToken, authUser }) {
 
   async function voteDown(request) {
     const value = request.myVote === -1 ? 0 : -1;
-    await authApiFetch(`/evolution-requests/${request.id}/vote`, authToken, {
+    await apiFetch(`/evolution-requests/${request.id}/vote`, {
       method: "PUT",
       body: JSON.stringify({ value }),
     });
@@ -75,7 +75,7 @@ export default function DemandesEvolution({ USE_API, authToken, authUser }) {
     event.preventDefault();
     const body = String(commentDrafts[requestId] || "").trim();
     if (!body) return;
-    await authApiFetch(`/evolution-requests/${requestId}/comments`, authToken, {
+    await apiFetch(`/evolution-requests/${requestId}/comments`, {
       method: "POST",
       body: JSON.stringify({ body }),
     });
@@ -84,7 +84,7 @@ export default function DemandesEvolution({ USE_API, authToken, authUser }) {
   }
 
   async function updateStatus(requestId, status) {
-    await authApiFetch(`/admin/evolution-requests/${requestId}/status`, authToken, {
+    await apiFetch(`/admin/evolution-requests/${requestId}/status`, {
       method: "PUT",
       body: JSON.stringify({ status }),
     });

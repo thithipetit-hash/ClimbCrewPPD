@@ -27,17 +27,6 @@ export const STYLE_LABELS = {
   test: "Essai / test",
 };
 
-export const THECRAG_STYLE_BY_CLIMBCREW = {
-  a_vue: "Onsight",
-  flash: "Flash",
-  en_tete: "Redpoint",
-  moulinette: "Top rope",
-  avec_repos: "Dog",
-  travaillee: "Redpoint",
-  projet: "Attempt",
-  non_enchainee: "Attempt",
-  test: "Attempt",
-};
 
 export const ROUTE_TAGS = [
   { value: "dalle", label: "Dalle" },

@@ -92,7 +92,7 @@ function FaqItem({ title, content }) {
   );
 }
 
-export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, authToken, authUser }) {
+export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, authUser }) {
   const [activeSection, setActiveSection] = useState("aide");
 
   return (
@@ -131,7 +131,7 @@ export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, a
       )}
 
       {activeSection === "evolutions" && (
-        <DemandesEvolution USE_API={USE_API} authToken={authToken} authUser={authUser} />
+        <DemandesEvolution USE_API={USE_API} authUser={authUser} />
       )}
     </div>
   );

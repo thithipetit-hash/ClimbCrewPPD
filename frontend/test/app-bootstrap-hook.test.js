@@ -7,16 +7,16 @@ const hook = fs.readFileSync(new URL("../src/hooks/useAppBootstrap.js", import.m
 
 test("App délègue le bootstrap API et authentification", () => {
   assert.match(app, /useAppBootstrap\(/);
-  assert.doesNotMatch(app, /authApiFetch\("\/auth\/me"/);
-  assert.doesNotMatch(app, /authApiFetch\("\/auth\/broadcast-messages\/pending"/);
+  assert.doesNotMatch(app, /authApiFetch|authToken|setAuthToken/);
   assert.doesNotMatch(app, /Recharge toutes les données depuis le backend/);
 });
 
-test("le hook de bootstrap centralise chargement, identité et messages", () => {
+test("le hook de bootstrap centralise chargement, identité et messages via le cookie HttpOnly", () => {
   assert.match(hook, /apiFetch\("\/participants"/);
   assert.match(hook, /apiFetch\("\/sessions"/);
   assert.match(hook, /apiFetch\("\/routes"/);
-  assert.match(hook, /authApiFetch\("\/auth\/me"/);
-  assert.match(hook, /authApiFetch\("\/auth\/broadcast-messages\/pending"/);
+  assert.match(hook, /apiFetch\("\/auth\/me"/);
+  assert.match(hook, /apiFetch\("\/auth\/broadcast-messages\/pending"/);
+  assert.doesNotMatch(hook, /authApiFetch|authToken|setAuthToken/);
   assert.match(hook, /return \{ reloadApiState \}/);
 });

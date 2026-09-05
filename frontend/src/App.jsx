@@ -19,7 +19,7 @@ import Statistiques from "./pages/Statistiques.jsx";
 import WallOfFame from "./pages/WallOfFame.jsx";
 
 import { THEME_OPTIONS, THEME_PREFERENCE_KEY, resolveThemePreference } from "./lib/theme.js";
-import { ROPE_NUMBERS, ROUTE_COLORS, STYLE_LABELS, ROUTE_TAGS, THECRAG_STYLE_BY_CLIMBCREW, TABS } from "./lib/ui-config.js";
+import { ROPE_NUMBERS, ROUTE_COLORS, STYLE_LABELS, ROUTE_TAGS, TABS } from "./lib/ui-config.js";
 import {
   MAX_PARTICIPANTS,
   fullName,
@@ -46,7 +46,7 @@ import {
   calculateRouteAggregates,
   calculateWallOfFameCategories,
 } from "./lib/domain.js";
-import { USE_API, apiFetch, authApiFetch, downloadFile } from "./lib/api.js";
+import { USE_API, apiFetch, downloadFile } from "./lib/api.js";
 import { normalizeAppData } from "./lib/normalize.js";
 import { APP_VERSION } from "./lib/version.js";
 import { buildCsv, csvFileSlug } from "./lib/csv.js";
@@ -59,6 +59,14 @@ import { useRouteEditorState } from "./hooks/useRouteEditorState.js";
 import { useRealisationEditorState } from "./hooks/useRealisationEditorState.js";
 import { PASSWORD_RULE_TEXT, isStrongPassword } from "./lib/password-policy.js";
 import { buildRouteDisplayGroups } from "./lib/route-display-groups.js";
+import { theCragStyleForRealisation } from "./lib/thecrag.js";
+import {
+  buildRealisationDraft,
+  buildRealisationPayload,
+  getParticipantSessionDays,
+  isManagedSession,
+  resolveSessionIdForRealisation,
+} from "./lib/realisation-workflow.js";
 
 const ADMIN_CODE = import.meta.env.VITE_LEGACY_ADMIN_CODE || "";
 
@@ -83,7 +91,6 @@ function App() {
   const [state, setState] = useAppBusinessState({ useApi: USE_API });
 
   const {
-    authToken, setAuthToken,
     authUser, setAuthUser,
     authLoading, setAuthLoading,
     authView, setAuthView,
@@ -150,9 +157,7 @@ function App() {
 
   const { reloadApiState } = useAppBootstrap({
     useApi: USE_API,
-    authToken,
     authUserId: authUser?.id,
-    setAuthToken,
     setAuthUser,
     setAuthLoading,
     setThemePreference,
@@ -182,7 +187,7 @@ function App() {
     if (canManageAccountsAndLogs && ["administration", "gestion_comptes", "logs"].includes(tab)) {
       loadAdminAccessData();
     }
-  }, [tab, canManageAccountsAndLogs, authToken]);
+  }, [tab, canManageAccountsAndLogs, authUser?.id]);
 
   const participantsById = useMemo(
     () => Object.fromEntries(state.participants.map((p) => [p.id, p])),
@@ -217,12 +222,6 @@ function App() {
     });
   }, [state.sessions]);
 
-  function isManagedSession(session) {
-    if (["passeport", "challenge", "renouvellement"].includes(session.status)) return true;
-    return (session.status === "encadree" && Boolean(session.encadrantId))
-      || (session.status === "libre" && Boolean(session.referentId));
-  }
-
   const modalAllAvailableDays = useMemo(() => {
     return [...new Set(
       sortedSessionsByDate
@@ -231,27 +230,16 @@ function App() {
     )];
   }, [sortedSessionsByDate]);
 
-  function getParticipantSessionDays(participantId) {
-    if (!participantId) return [];
-
-    return [...new Set(
-      state.sessions
-        .filter(isManagedSession)
-        .filter((session) => session.participantIds?.includes(participantId))
-        .map((session) => session.date)
-    )].sort((a, b) => b.localeCompare(a));
-  }
-
   const modalAllEligibleParticipants = useMemo(() => {
     return [...state.participants]
       .filter((participant) => Boolean(participant.cotisation))
-      .filter((participant) => getParticipantSessionDays(participant.id).length > 0)
+      .filter((participant) => getParticipantSessionDays(state.sessions, participant.id).length > 0)
       .sort((a, b) => fullName(a).localeCompare(fullName(b), "fr"));
   }, [state.participants, state.sessions]);
 
   const modalAvailableDays = useMemo(() => {
     if (!newRealisation.participantId) return modalAllAvailableDays;
-    return getParticipantSessionDays(newRealisation.participantId);
+    return getParticipantSessionDays(state.sessions, newRealisation.participantId);
   }, [newRealisation.participantId, modalAllAvailableDays, state.sessions]);
 
   const modalEligibleParticipants = useMemo(() => {
@@ -990,18 +978,6 @@ function App() {
       });
   }
 
-  function resolveSessionIdForRealisation(participantId, selectedDay) {
-    if (!participantId || !selectedDay) return "";
-
-    const matchingSessions = state.sessions
-      .filter((session) => session.date === selectedDay)
-      .filter(isManagedSession)
-      .filter((session) => session.participantIds?.includes(participantId))
-      .sort((a, b) => a.slot.localeCompare(b.slot));
-
-    return matchingSessions[0]?.id || "";
-  }
-
   async function syncRealisationPatch(realisationId, patch) {
     try {
       await updateRealisationInApi(realisationId, patch);
@@ -1042,22 +1018,19 @@ function App() {
     requestedParticipantId = myParticipantId || "";
     const requestedParticipant = participantsById[requestedParticipantId];
     const latestRegisteredDay = requestedParticipant?.cotisation
-      ? getParticipantSessionDays(requestedParticipantId)[0] || ""
+      ? getParticipantSessionDays(state.sessions, requestedParticipantId)[0] || ""
       : "";
     const defaultParticipantId = latestRegisteredDay ? requestedParticipantId : "";
 
-    setNewRealisation((prev) => ({
-      ...prev,
+    setNewRealisation((previous) => buildRealisationDraft({
+      previous,
+      route,
+      routeId,
       participantId: defaultParticipantId,
       selectedDay: latestRegisteredDay,
       sessionId: defaultParticipantId && latestRegisteredDay
-        ? resolveSessionIdForRealisation(defaultParticipantId, latestRegisteredDay) || ""
+        ? resolveSessionIdForRealisation(state.sessions, defaultParticipantId, latestRegisteredDay)
         : "",
-      voieId: routeId || "",
-      styleRealisation: route?.moulinetteOnly ? "moulinette" : (prev.styleRealisation || "a_vue"),
-      cotationProposee: route?.cotationAjustee || route?.cotationReference || "",
-      commentaire: "",
-      rating: 0,
     }));
 
     setRealisationModalRouteId(routeId || "");
@@ -1070,18 +1043,18 @@ function App() {
 
 async function persistRealisationToApi(realisation) {
   if (!USE_API) return realisation;
-  if (!authToken) {
+  if (!authUser) {
     throw new Error("Connexion requise pour enregistrer une réalisation.");
   }
-  return await authApiFetch("/realisations", authToken, {
+  return await apiFetch("/realisations", {
     method: "POST",
     body: JSON.stringify(realisation),
   });
 }
 
 async function updateRealisationInApi(realisationId, patch) {
-  if (!USE_API || !authToken) return;
-  await authApiFetch(`/realisations/${realisationId}`, authToken, {
+  if (!USE_API || !authUser) return;
+  await apiFetch(`/realisations/${realisationId}`, {
     method: "PUT",
     body: JSON.stringify(patch),
   });
@@ -1110,7 +1083,7 @@ async function deleteRealisation(realisation) {
 
   try {
     if (USE_API) {
-      await authApiFetch(`/realisations/${encodeURIComponent(realisation.id)}`, authToken, {
+      await apiFetch(`/realisations/${encodeURIComponent(realisation.id)}`, {
         method: "DELETE",
       });
     }
@@ -1137,25 +1110,17 @@ async function deleteRealisation(realisation) {
       return;
     }
 
-    const sessionId = resolveSessionIdForRealisation(newRealisation.participantId, newRealisation.selectedDay);
+    const sessionId = resolveSessionIdForRealisation(state.sessions, newRealisation.participantId, newRealisation.selectedDay);
     if (!sessionId) {
       alert("Le participant doit être inscrit à au moins une séance ce jour-là pour enregistrer une réalisation.");
       return;
     }
 
-    const realisation = {
-      id: `realisation-${Date.now()}`,
-      participantId: newRealisation.participantId,
+    const realisation = buildRealisationPayload({
+      draft: newRealisation,
       sessionId,
-      voieId: newRealisation.voieId,
-      dateRealisation: `${newRealisation.selectedDay}T12:00:00`,
-      styleRealisation: newRealisation.styleRealisation,
-      commentaire: newRealisation.commentaire,
-      cotationProposee: newRealisation.cotationProposee,
-      ...(newRealisation.rating ? { rating: newRealisation.rating } : {}),
-      chute: newRealisation.chute,
-      assureurId: newRealisation.chute ? newRealisation.assureurId : "",
-    };
+      route: routesById[newRealisation.voieId],
+    });
 
     try {
       const savedRealisation = await persistRealisationToApi(realisation);
@@ -1179,12 +1144,12 @@ async function deleteRealisation(realisation) {
   }
 
   async function loadAdminAccessData() {
-    if (!authToken || authUser?.role !== "admin") return;
+    if (authUser?.role !== "admin") return;
 
     try {
       const [usersResponse, logsResponse] = await Promise.all([
-        authApiFetch("/admin/auth/users", authToken),
-        authApiFetch("/admin/auth/logs", authToken),
+        apiFetch("/admin/auth/users"),
+        apiFetch("/admin/auth/logs"),
       ]);
 
       setAdminAuthUsers(usersResponse.users || []);
@@ -1199,10 +1164,10 @@ async function handleThemePreferenceChange(nextTheme) {
   const previousTheme = themePreference;
   setThemePreference(nextTheme);
 
-  if (!USE_API || !authToken || !authUser) return;
+  if (!USE_API || !authUser) return;
 
   try {
-    const data = await authApiFetch("/auth/theme", authToken, {
+    const data = await apiFetch("/auth/theme", {
       method: "PUT",
       body: JSON.stringify({ theme_preference: nextTheme }),
     });
@@ -1227,7 +1192,6 @@ async function handleThemePreferenceChange(nextTheme) {
         body: JSON.stringify(loginForm),
       });
 
-      setAuthToken("cookie");
       setAuthUser(data.user);
       if (data.user?.theme_preference) {
         setThemePreference(data.user.theme_preference);
@@ -1246,11 +1210,10 @@ async function handleThemePreferenceChange(nextTheme) {
 
   async function handleLogout() {
     try {
-      await authApiFetch("/auth/logout", authToken, { method: "POST" });
+      await apiFetch("/auth/logout", { method: "POST" });
     } catch (error) {
       console.error(error);
     } finally {
-      setAuthToken("");
       setAuthUser(null);
       setAdminUnlocked(false);
       setGeneratedResetToken("");
@@ -1265,7 +1228,7 @@ async function handleThemePreferenceChange(nextTheme) {
     if (!USE_API || authUser?.role !== "admin") {
       throw new Error("Connexion administrateur requise.");
     }
-    return authApiFetch("/admin/broadcast-messages", authToken, {
+    return apiFetch("/admin/broadcast-messages", {
       method: "POST",
       body: JSON.stringify({ title, body }),
     });
@@ -1274,7 +1237,7 @@ async function handleThemePreferenceChange(nextTheme) {
   async function acknowledgeBroadcastMessage(messageId) {
     try {
       setBroadcastMessageError("");
-      await authApiFetch(`/auth/broadcast-messages/${messageId}/read`, authToken, { method: "POST" });
+      await apiFetch(`/auth/broadcast-messages/${messageId}/read`, { method: "POST" });
       setPendingBroadcastMessages((messages) => messages.filter(
         (message) => String(message.id) !== String(messageId)
       ));
@@ -1284,14 +1247,14 @@ async function handleThemePreferenceChange(nextTheme) {
   }
 
   async function changePassword(currentPassword, newPassword) {
-    return authApiFetch("/auth/change-password", authToken, {
+    return apiFetch("/auth/change-password", {
       method: "POST",
       body: JSON.stringify({ currentPassword, newPassword }),
     });
   }
 
   async function requestEmailChange(newEmail, currentPassword) {
-    return authApiFetch("/auth/change-email/request", authToken, {
+    return apiFetch("/auth/change-email/request", {
       method: "POST",
       body: JSON.stringify({ newEmail, currentPassword }),
     });
@@ -1396,7 +1359,7 @@ async function handleThemePreferenceChange(nextTheme) {
 
   async function approveAccessRequest(userId) {
     try {
-      await authApiFetch(`/admin/auth/users/${userId}/approve`, authToken, { method: "POST" });
+      await apiFetch(`/admin/auth/users/${userId}/approve`, { method: "POST" });
       await loadAdminAccessData();
       setConfirmationMessage("Compte approuvé.");
     } catch (error) {
@@ -1406,7 +1369,7 @@ async function handleThemePreferenceChange(nextTheme) {
 
   async function revokeUserAccess(userId) {
     try {
-      await authApiFetch(`/admin/auth/users/${userId}/revoke`, authToken, {
+      await apiFetch(`/admin/auth/users/${userId}/revoke`, {
         method: "POST",
         body: JSON.stringify({ reason: "Révocation / répudiation par administrateur" }),
       });
@@ -1423,7 +1386,7 @@ async function handleThemePreferenceChange(nextTheme) {
     )) return;
 
     try {
-      await authApiFetch(`/admin/auth/users/${user.id}`, authToken, { method: "DELETE" });
+      await apiFetch(`/admin/auth/users/${user.id}`, { method: "DELETE" });
       await loadAdminAccessData();
       setConfirmationMessage("Compte supprimé.");
     } catch (error) {
@@ -1433,7 +1396,7 @@ async function handleThemePreferenceChange(nextTheme) {
 
   async function reactivateUserAccess(userId) {
     try {
-      await authApiFetch(`/admin/auth/users/${userId}/reactivate`, authToken, { method: "POST" });
+      await apiFetch(`/admin/auth/users/${userId}/reactivate`, { method: "POST" });
       await loadAdminAccessData();
     } catch (error) {
       setAuthError(String(error.message || error));
@@ -1442,7 +1405,7 @@ async function handleThemePreferenceChange(nextTheme) {
 
   async function generatePasswordResetToken(userId) {
     try {
-      const response = await authApiFetch(`/admin/auth/users/${userId}/reset-token`, authToken, { method: "POST" });
+      const response = await apiFetch(`/admin/auth/users/${userId}/reset-token`, { method: "POST" });
       setGeneratedResetToken(`Code de réinitialisation temporaire : ${response.resetToken} (valable jusqu’à ${response.expiresAt})`);
       await loadAdminAccessData();
     } catch (error) {
@@ -1477,9 +1440,9 @@ async function handleThemePreferenceChange(nextTheme) {
     });
     const filename = `climbcrew_export_${APP_VERSION}.json`;
 
-    if (USE_API && authToken) {
+    if (USE_API && authUser?.role === "admin") {
       try {
-        const payload = await authApiFetch("/admin/export-data", authToken);
+        const payload = await apiFetch("/admin/export-data");
         const versionedPayload = buildVersionedExport(payload.data || payload);
         downloadFile(filename, JSON.stringify(versionedPayload, null, 2));
         setImportMessage(`Export API version ${APP_VERSION} réussi.`);
@@ -1519,7 +1482,7 @@ async function handleThemePreferenceChange(nextTheme) {
           routeName,
           route?.cotationAjustee || route?.cotationReference || "",
           realisation.dateRealisation?.slice(0, 10) || "",
-          THECRAG_STYLE_BY_CLIMBCREW[realisation.styleRealisation] || "Attempt",
+          theCragStyleForRealisation(realisation, route),
           details,
         ];
       });
@@ -1540,8 +1503,8 @@ async function handleThemePreferenceChange(nextTheme) {
         ? ` (version source ${importedApplicationVersion})`
         : " (ancien export sans version applicative)";
 
-      if (USE_API && authToken) {
-        const result = await authApiFetch("/admin/import-data", authToken, {
+      if (USE_API && authUser?.role === "admin") {
+        const result = await apiFetch("/admin/import-data", {
           method: "POST",
           body: JSON.stringify({ data: parsed }),
         });
@@ -1952,7 +1915,7 @@ async function handleThemePreferenceChange(nextTheme) {
         )}
 
         {tab === "faq" && (
-          <FaqSection APP_VERSION={APP_VERSION} canAccessAdminTabs={canAccessAdminTabs} USE_API={USE_API} authToken={authToken} authUser={authUser} />
+          <FaqSection APP_VERSION={APP_VERSION} canAccessAdminTabs={canAccessAdminTabs} USE_API={USE_API} authUser={authUser} />
         )}
 
 

@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 export function useAuthState({ useApi, themePreferenceKey }) {
-  const [authToken, setAuthToken] = useState(() => (useApi ? "cookie" : ""));
   const [authUser, setAuthUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(useApi);
   const [authView, setAuthView] = useState("login");
@@ -23,7 +22,7 @@ export function useAuthState({ useApi, themePreferenceKey }) {
   const [themePreference, setThemePreference] = useState(() => localStorage.getItem(themePreferenceKey) || "auto");
 
   return {
-    authToken, setAuthToken, authUser, setAuthUser, authLoading, setAuthLoading,
+    authUser, setAuthUser, authLoading, setAuthLoading,
     authView, setAuthView, authError, setAuthError, authMessage, setAuthMessage,
     loginForm, setLoginForm, requestAccessForm, setRequestAccessForm,
     forgotPasswordForm, setForgotPasswordForm, resetPasswordForm, setResetPasswordForm,

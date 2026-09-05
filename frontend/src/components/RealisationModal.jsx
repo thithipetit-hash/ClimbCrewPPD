@@ -5,7 +5,6 @@ import {
   REALISATION_CRITERION_LABELS,
   REALISATION_MODE_LABELS,
 } from "../lib/realisation-mode.js";
-import { setPendingRealisationMode } from "../lib/realisation-request-mode.js";
 
 export default function RealisationModal({
   open,
@@ -42,10 +41,6 @@ export default function RealisationModal({
     });
   }, [open, forcedMoulinette, setNewRealisation]);
 
-  React.useEffect(() => {
-    if (!open) return;
-    setPendingRealisationMode(selectedMode);
-  }, [open, selectedMode]);
 
   if (!open) return null;
 

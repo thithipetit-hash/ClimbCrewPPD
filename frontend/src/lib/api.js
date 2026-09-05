@@ -1,5 +1,3 @@
-import { enrichRealisationCreateOptions } from "./realisation-request-mode.js";
-
 export const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 export const USE_API = Boolean(API_BASE);
 
@@ -122,8 +120,7 @@ async function performApiFetch(path, options = {}) {
 }
 
 export async function apiFetch(path, options = {}) {
-  const preparedOptions = enrichRealisationCreateOptions(path, options);
-  const method = String(preparedOptions.method || "GET").toUpperCase();
+  const method = String(options.method || "GET").toUpperCase();
 
   // Au démarrage, App peut demander les mêmes données une première fois pendant
   // la vidéo d'introduction puis une seconde fois lorsque /auth/me se termine.
@@ -133,7 +130,7 @@ export async function apiFetch(path, options = {}) {
     const existingRequest = inFlightGetRequests.get(requestKey);
     if (existingRequest) return existingRequest;
 
-    const request = performApiFetch(path, preparedOptions)
+    const request = performApiFetch(path, options)
       .finally(() => {
         if (inFlightGetRequests.get(requestKey) === request) {
           inFlightGetRequests.delete(requestKey);
@@ -144,7 +141,7 @@ export async function apiFetch(path, options = {}) {
     return request;
   }
 
-  return performApiFetch(path, preparedOptions);
+  return performApiFetch(path, options);
 }
 
 export async function apiUpload(path, file, options = {}) {
@@ -168,9 +165,6 @@ export async function apiUpload(path, file, options = {}) {
   return response.json();
 }
 
-export async function authApiFetch(path, _token, options = {}) {
-  return apiFetch(path, options);
-}
 
 export function downloadFile(filename, content, type = "application/json;charset=utf-8;") {
   const blob = new Blob([content], { type });
