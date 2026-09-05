@@ -62,6 +62,115 @@ jobs:
           PY
       - name: Appliquer la migration
         run: node scripts/apply-frontend-polish-005.mjs
+      - name: Aligner les tests avec l'architecture finale
+        shell: bash
+        run: |
+          cat > frontend/test/app-bootstrap-hook.test.js <<'EOF'
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+
+          const app = fs.readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+          const hook = fs.readFileSync(new URL("../src/hooks/useAppBootstrap.js", import.meta.url), "utf8");
+
+          test("App délègue le bootstrap API et authentification", () => {
+            assert.match(app, /useAppBootstrap\(/);
+            assert.doesNotMatch(app, /authApiFetch|authToken|setAuthToken/);
+            assert.doesNotMatch(app, /Recharge toutes les données depuis le backend/);
+          });
+
+          test("le hook de bootstrap centralise chargement, identité et messages via le cookie HttpOnly", () => {
+            assert.match(hook, /apiFetch\("\/participants"/);
+            assert.match(hook, /apiFetch\("\/sessions"/);
+            assert.match(hook, /apiFetch\("\/routes"/);
+            assert.match(hook, /apiFetch\("\/auth\/me"/);
+            assert.match(hook, /apiFetch\("\/auth\/broadcast-messages\/pending"/);
+            assert.doesNotMatch(hook, /authApiFetch|authToken|setAuthToken/);
+            assert.match(hook, /return \{ reloadApiState \}/);
+          });
+          EOF
+
+          cat > frontend/test/optional-realisation-rating.test.js <<'EOF'
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { readFile } from "node:fs/promises";
+
+          test("l'évaluation d'une réalisation reste facultative après extraction du payload", async () => {
+            const [appSource, modalSource, workflowSource] = await Promise.all([
+              readFile(new URL("../src/App.jsx", import.meta.url), "utf8"),
+              readFile(new URL("../src/components/RealisationModal.jsx", import.meta.url), "utf8"),
+              readFile(new URL("../src/lib/realisation-workflow.js", import.meta.url), "utf8"),
+            ]);
+            assert.match(appSource, /if \(!newRealisation\.participantId \|\| !newRealisation\.selectedDay \|\| !newRealisation\.voieId\) \{/);
+            assert.doesNotMatch(appSource, /!newRealisation\.voieId \|\| !newRealisation\.rating/);
+            assert.match(appSource, /buildRealisationPayload\(\{/);
+            assert.match(workflowSource, /rating >= 1 && rating <= 5 \? \{ rating \} : \{\}/);
+            assert.match(appSource, /<RealisationModal/);
+            assert.match(modalSource, /Évaluation de la voie \(facultative\)/);
+            assert.doesNotMatch(modalSource, /Cotation consensus/);
+            assert.doesNotMatch(modalSource, /!newRealisation\.rating/);
+          });
+          EOF
+
+          cat > frontend/test/realisation-mode-react.test.js <<'EOF'
+          import test from "node:test";
+          import assert from "node:assert/strict";
+          import { access, readFile } from "node:fs/promises";
+
+          import { buildRealisationPayload } from "../src/lib/realisation-workflow.js";
+
+          const legacyUiUrl = new URL("../src/realisation-mode-ui.js", import.meta.url);
+          const requestBridgeUrl = new URL("../src/lib/realisation-request-mode.js", import.meta.url);
+          const mainUrl = new URL("../src/main.jsx", import.meta.url);
+          const modalUrl = new URL("../src/components/RealisationModal.jsx", import.meta.url);
+          const progressionUrl = new URL("../src/pages/Progression.jsx", import.meta.url);
+          const profileUrl = new URL("../src/pages/Profil.jsx", import.meta.url);
+          const hookUrl = new URL("../src/hooks/useRealisationEditorState.js", import.meta.url);
+          const appUrl = new URL("../src/App.jsx", import.meta.url);
+
+          const [mainSource, modalSource, progressionSource, profileSource, hookSource, appSource] = await Promise.all([
+            readFile(mainUrl, "utf8"),
+            readFile(modalUrl, "utf8"),
+            readFile(progressionUrl, "utf8"),
+            readFile(profileUrl, "utf8"),
+            readFile(hookUrl, "utf8"),
+            readFile(appUrl, "utf8"),
+          ]);
+
+          test("le POST d'une nouvelle réalisation transporte directement le mode choisi", () => {
+            const payload = buildRealisationPayload({
+              draft: { participantId: "p1", selectedDay: "2026-09-05", voieId: "v1", modeRealisation: "moulinette", styleRealisation: "a_vue" },
+              sessionId: "s1",
+              now: () => 1,
+            });
+            assert.equal(payload.modeRealisation, "moulinette");
+            assert.equal(payload.styleRealisation, "a_vue");
+          });
+
+          test("le mode et le critère sont rendus et transportés directement par React", async () => {
+            await assert.rejects(access(legacyUiUrl));
+            await assert.rejects(access(requestBridgeUrl));
+            assert.equal(mainSource.includes("realisation-mode-ui.js"), false);
+            assert.match(hookSource, /modeRealisation: "en_tete"/);
+            assert.match(modalSource, /<label>Mode<\/label>/);
+            assert.match(modalSource, /<label>Critère<\/label>/);
+            assert.doesNotMatch(modalSource, /setPendingRealisationMode|realisation-request-mode/);
+            assert.match(appSource, /buildRealisationPayload\(\{/);
+            assert.match(progressionSource, /getRealisationMode\(realisation, route\)/);
+            assert.match(profileSource, /getRealisationMode\(realisation, route\)/);
+            assert.doesNotMatch(`${modalSource}\n${progressionSource}\n${profileSource}`, /MutationObserver|window\.location\.reload|querySelectorAll/);
+          });
+          EOF
+
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("frontend/test/ui-density.test.js")
+          source = path.read_text()
+          source = source.replace('/@media \\(max-width:700px\\)/', '/@media \\(max-width:700px\\)/')
+          # Rewrite explicitly to avoid regexp escaping ambiguity.
+          source = source.replace('assert.match(css, /@media (max-width:700px)/);', 'assert.match(css, /@media \\(max-width:700px\\)/);')
+          path.write_text(source)
+          PY
       - name: Vérifier le frontend
         working-directory: frontend
         run: |
