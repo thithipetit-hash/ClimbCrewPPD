@@ -29,6 +29,7 @@ const removedFrontendLayers = [
   "participant-qualification-ui.js",
   "participant-account-notification-ui.js",
   "admin-user-management/index.js",
+  "lib/realisation-request-mode.js",
 ];
 
 const [appSource, mainSource, authPageSource, viteConfig, routeGrouping] = await Promise.all([
@@ -113,5 +114,5 @@ test("la soumission des écrans d'accès appartient au composant React", () => {
 
 test("App.jsx ne peut plus regrossir au-delà du budget obtenu après extraction", async () => {
   const info = await stat(appUrl);
-  assert.ok(info.size <= 72_000, `App.jsx fait ${info.size} octets : extraire un bloc métier avant d'ajouter du code au monolithe`);
+  assert.ok(info.size <= 70_000, `App.jsx fait ${info.size} octets : extraire un bloc métier avant d'ajouter du code au monolithe`);
 });

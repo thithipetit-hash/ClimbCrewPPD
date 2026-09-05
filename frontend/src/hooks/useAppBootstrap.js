@@ -1,12 +1,10 @@
 import { useCallback, useEffect } from "react";
 
-import { apiFetch, authApiFetch } from "../lib/api.js";
+import { apiFetch } from "../lib/api.js";
 
 export function useAppBootstrap({
   useApi,
-  authToken,
   authUserId,
-  setAuthToken,
   setAuthUser,
   setAuthLoading,
   setThemePreference,
@@ -69,7 +67,7 @@ export function useAppBootstrap({
     (async () => {
       try {
         setAuthLoading(true);
-        const data = await authApiFetch("/auth/me", authToken);
+        const data = await apiFetch("/auth/me");
         if (!isMounted) return;
         setAuthUser(data.user);
         if (data.user?.theme_preference) {
@@ -82,7 +80,6 @@ export function useAppBootstrap({
       } catch {
         if (!isMounted) return;
         setAuthUser(null);
-        setAuthToken("");
       } finally {
         if (isMounted) setAuthLoading(false);
       }
@@ -92,11 +89,9 @@ export function useAppBootstrap({
       isMounted = false;
     };
   }, [
-    authToken,
     reloadApiState,
     setAdminUnlocked,
     setAuthLoading,
-    setAuthToken,
     setAuthUser,
     setThemePreference,
     useApi,
@@ -109,7 +104,7 @@ export function useAppBootstrap({
     }
 
     let isMounted = true;
-    authApiFetch("/auth/broadcast-messages/pending", authToken)
+    apiFetch("/auth/broadcast-messages/pending")
       .then((data) => {
         if (isMounted) setPendingBroadcastMessages(Array.isArray(data.messages) ? data.messages : []);
       })
@@ -119,7 +114,6 @@ export function useAppBootstrap({
 
     return () => { isMounted = false; };
   }, [
-    authToken,
     authUserId,
     setBroadcastMessageError,
     setPendingBroadcastMessages,

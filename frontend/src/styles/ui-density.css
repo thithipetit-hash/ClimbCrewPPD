@@ -1,0 +1,57 @@
+/* Échelle visuelle canonique : compacte, homogène et lisible. */
+:root {
+  --cc-font-body:14px;
+  --cc-font-control:13px;
+  --cc-font-small:12px;
+  --cc-font-label:12px;
+  --cc-font-h1:20px;
+  --cc-font-h2:17px;
+  --cc-font-h3:15px;
+  --cc-control-height:34px;
+  --cc-space-1:3px;
+  --cc-space-2:5px;
+  --cc-space-3:7px;
+}
+
+html, body, .app { font-size:var(--cc-font-body)!important; line-height:1.22!important; }
+.app h1 { font-size:var(--cc-font-h1)!important; line-height:1.08!important; margin:0 0 var(--cc-space-1)!important; }
+.app h2 { font-size:var(--cc-font-h2)!important; line-height:1.12!important; margin:0 0 var(--cc-space-1)!important; }
+.app h3 { font-size:var(--cc-font-h3)!important; line-height:1.12!important; margin:0 0 var(--cc-space-1)!important; }
+.app :where(label,.label) { font-size:var(--cc-font-label)!important; line-height:1.12!important; font-weight:600; }
+.app :where(.small,.muted,.auth-helper-text,.auth-subtitle) { font-size:var(--cc-font-small)!important; line-height:1.18!important; }
+.app :where(button,input,select,textarea) {
+  min-height:var(--cc-control-height)!important;
+  height:auto;
+  padding:5px 8px!important;
+  font-size:var(--cc-font-control)!important;
+  line-height:1.15!important;
+}
+.app textarea { min-height:64px!important; }
+.app :where(.toolbar,.card) { margin-top:var(--cc-space-2)!important; padding:var(--cc-space-3)!important; }
+.app :where(.subcard,.stat,.modal-panel,.muted-box) { padding:6px 7px!important; }
+.app :where(.grid,.stack,.group,.card-header,.session-form-row) { gap:var(--cc-space-2)!important; }
+.app .card-header { margin-bottom:var(--cc-space-1)!important; }
+.app .participant-row { min-height:26px!important; padding:2px 5px!important; }
+.app .session-participant-list { gap:2px 5px!important; }
+.app .session-participant-list .participant-row { min-height:26px!important; padding:2px 3px 2px 5px!important; }
+.app :where(.badge,.pill) { padding:2px 5px!important; font-size:11px!important; line-height:1.08!important; }
+.app .faq-item { padding:4px 0!important; }
+.app .modal-panel { max-height:92vh; overflow:auto; }
+.app .modal-actions { gap:6px!important; margin-top:7px!important; }
+.app .realisation-rating .rating-star { width:34px!important; min-width:34px!important; height:34px!important; min-height:34px!important; font-size:21px!important; }
+.app .route-card { padding:5px 7px!important; }
+.app .route-card button { min-height:32px!important; padding:4px 7px!important; }
+.app .stat strong { font-size:15px; }
+
+@media (max-width:700px) {
+  :root { --cc-font-body:13.5px; --cc-font-control:13px; --cc-control-height:36px; }
+  .app h1 { font-size:18px!important; }
+  .app h2 { font-size:16px!important; }
+  .app h3 { font-size:14.5px!important; }
+  .app :where(.toolbar,.card) { padding:6px!important; margin-top:4px!important; }
+  .app :where(.menu-button,.nav-symbol,.remove-button,.modal-close,.bottom-tab) { min-height:40px!important; }
+  .app .session-card :where(select,input,button) { min-height:36px!important; }
+  .app .route-card button { min-height:34px!important; }
+  .app .mobile-bottom-nav { gap:2px!important; padding:3px!important; }
+  .app .bottom-tab { padding:4px 5px!important; font-size:12px!important; }
+}
