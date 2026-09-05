@@ -3,6 +3,7 @@ import Button from "../components/Button.jsx";
 import ClimberProfilePanel from "../components/ClimberProfilePanel.jsx";
 import ParticipantBadges from "../components/ParticipantBadges.jsx";
 import ProfileGecko from "../components/ProfileGecko.jsx";
+import RealisationVideoAnalysis from "../components/RealisationVideoAnalysis.jsx";
 import CprEvolutionChart from "../sections/CprEvolutionChart.jsx";
 import { apiFetch } from "../lib/api.js";
 import {
@@ -287,6 +288,13 @@ export default function Profil({
                             />
                           </div>
                         </div>
+
+                        <RealisationVideoAnalysis
+                          realisation={realisation}
+                          route={route}
+                          editable={isOwnProfile}
+                          onUpdate={(patch) => updateOwnRealisation(realisation.id, patch)}
+                        />
                       </details>
                     );
                   })}
