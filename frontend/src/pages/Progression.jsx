@@ -89,9 +89,7 @@ export default function Progression({
           >
             <option value="">Choisir une voie</option>
             {routes.map((route) => (
-              <option key={route.id} value={route.id}>
-                {formatRouteForRealisation(route)}
-              </option>
+              <option key={route.id} value={route.id}>{formatRouteForRealisation(route)}</option>
             ))}
           </select>
         </div>
@@ -99,9 +97,7 @@ export default function Progression({
 
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card-header progression-entry-actions">
-          <Button onClick={() => openRealisationModal("", myParticipantId)} disabled={!myParticipantId}>
-            Nouvelle réalisation
-          </Button>
+          <Button onClick={() => openRealisationModal("", myParticipantId)} disabled={!myParticipantId}>Nouvelle réalisation</Button>
         </div>
       </div>
 
@@ -130,9 +126,7 @@ export default function Progression({
       )}
 
       {selectedParticipantProgress && selectedParticipant?.profilePublic !== false && (
-        <div className="card" style={{ marginTop: 12 }}>
-          <CprEvolutionChart realisations={selectedParticipantRealisations} routesById={routesById} />
-        </div>
+        <div className="card" style={{ marginTop: 12 }}><CprEvolutionChart realisations={selectedParticipantRealisations} routesById={routesById} /></div>
       )}
 
       {(selectedParticipantProgress || selectedRouteProgress) && <div className="card" style={{ marginTop: 12 }}>
@@ -160,9 +154,9 @@ export default function Progression({
             const criterionRealisation = getRealisationCriterion(realisation);
             const forcedMoulinette = Boolean(route?.moulinetteOnly);
             const modeLabel = REALISATION_MODE_LABELS[modeRealisation] || modeRealisation;
-            const criterionLabel = criterionRealisation
-              ? REALISATION_CRITERION_LABELS[criterionRealisation]
-              : "Critère non précisé (historique)";
+            const criterionLabel = criterionRealisation ? REALISATION_CRITERION_LABELS[criterionRealisation] : "Critère non précisé (historique)";
+            const routeVideoUrls = Array.isArray(route?.videoUrls) ? route.videoUrls : [];
+            const selectedVideoUrls = Array.isArray(realisation.videoUrls) ? realisation.videoUrls : [];
             return (
               <details className="subcard editable-realisation-card progression-realisation-card" key={realisation.id} open={expandedRealisationIds.includes(realisation.id)} onToggle={(event) => setRealisationExpanded(realisation.id, event.currentTarget.open)}>
                 <summary className="card-header realisation-summary progression-realisation-summary">
@@ -172,47 +166,58 @@ export default function Progression({
                   </div>
                   <div className="group progression-realisation-actions">
                     {isIncludedInCpr && <span className="pill">Prise en compte dans le CPR</span>}
-                    {canEditRealisation && (
-                      <Button
-                        variant="remove"
-                        className="progression-realisation-remove"
-                        title="Supprimer cette réalisation"
-                        aria-label="Supprimer cette réalisation"
-                        onClick={(event) => { event.preventDefault(); event.stopPropagation(); deleteRealisation(realisation); }}
-                      >
-                        ×
-                      </Button>
-                    )}
+                    {selectedVideoUrls.length > 0 && <span className="pill">{selectedVideoUrls.length} vidéo{selectedVideoUrls.length > 1 ? "s" : ""}</span>}
+                    {canEditRealisation && <Button variant="remove" className="progression-realisation-remove" title="Supprimer cette réalisation" aria-label="Supprimer cette réalisation" onClick={(event) => { event.preventDefault(); event.stopPropagation(); deleteRealisation(realisation); }}>×</Button>}
                   </div>
                 </summary>
                 <div className="grid three">
                   <div><label>Séance</label><select value={realisation.sessionId} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { sessionId: event.target.value })}>{availableSessionsForRealisation.length === 0 ? <option value="">Aucune séance inscrite</option> : availableSessionsForRealisation.map((sessionOption) => <option key={sessionOption.id} value={sessionOption.id}>{formatDateShortFr(sessionOption.date)} · {sessionOption.slot}</option>)}</select></div>
-                  <div><label>Voie</label><select value={realisation.voieId} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { voieId: event.target.value })}>{routes.map((routeOption) => <option key={routeOption.id} value={routeOption.id}>{formatRouteForRealisation(routeOption)}</option>)}</select></div>
+                  <div><label>Voie</label><select value={realisation.voieId} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { voieId: event.target.value, videoUrls: [] })}>{routes.map((routeOption) => <option key={routeOption.id} value={routeOption.id}>{formatRouteForRealisation(routeOption)}</option>)}</select></div>
                   <div className="realisation-mode-field" data-context="existing">
                     <label>Mode</label>
-                    <select
-                      className="realisation-mode-select"
-                      aria-label="Mode de réalisation"
-                      value={modeRealisation}
-                      disabled={!canEditRealisation || forcedMoulinette}
-                      onChange={(event) => updateRealisation(realisation.id, { modeRealisation: event.target.value })}
-                    >
+                    <select className="realisation-mode-select" aria-label="Mode de réalisation" value={modeRealisation} disabled={!canEditRealisation || forcedMoulinette} onChange={(event) => updateRealisation(realisation.id, { modeRealisation: event.target.value })}>
                       {Object.entries(REALISATION_MODE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                     </select>
                     {forcedMoulinette && <div className="small">Cette voie est configurée en moulinette uniquement.</div>}
                   </div>
-                  <div>
-                    <label>Critère</label>
-                    <select value={criterionRealisation} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { styleRealisation: event.target.value })}>
-                      {!criterionRealisation && <option value="" disabled>Non précisé (historique)</option>}
-                      {Object.entries(REALISATION_CRITERION_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                    </select>
-                  </div>
+                  <div><label>Critère</label><select value={criterionRealisation} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { styleRealisation: event.target.value })}>{!criterionRealisation && <option value="" disabled>Non précisé (historique)</option>}{Object.entries(REALISATION_CRITERION_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
                   <div><label>Cotation proposée</label><select value={realisation.cotationProposee || ""} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { cotationProposee: event.target.value })}><option value="">Aucune</option>{GRADES.map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select></div>
                   {displayedRating && <div><label>Évaluation</label><div className="pill" aria-label={`Évaluation ${Number(realisation.rating)} sur 5`}>{displayedRating}</div></div>}
                 </div>
                 <div style={{ marginTop: 8 }}><label>Commentaire</label><input value={realisation.commentaire || ""} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { commentaire: event.target.value })} /></div>
-                {route && <VideoTechnicalAnalysis videoUrls={route.videoUrls || []} />}
+
+                <div className="subcard" style={{ marginTop: 10 }}>
+                  <strong>Vidéos de cette réalisation</strong>
+                  {routeVideoUrls.length === 0 ? (
+                    <div className="small" style={{ marginTop: 6 }}>Aucune vidéo n’est encore associée à cette voie.</div>
+                  ) : (
+                    <div className="stack" style={{ marginTop: 8 }}>
+                      {routeVideoUrls.map((url, index) => {
+                        const checked = selectedVideoUrls.includes(url);
+                        const limitReached = selectedVideoUrls.length >= 3;
+                        return (
+                          <label className="checkbox-field" key={url}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={!canEditRealisation || (!checked && limitReached)}
+                              onChange={(event) => {
+                                const next = event.target.checked
+                                  ? [...selectedVideoUrls, url].slice(0, 3)
+                                  : selectedVideoUrls.filter((item) => item !== url);
+                                updateRealisation(realisation.id, { videoUrls: next });
+                              }}
+                            />
+                            <span>Vidéo {index + 1}{/^\/routes\//.test(url) ? " · chargée dans ClimbCrew" : " · lien externe"}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="small" style={{ marginTop: 6 }}>Jusqu’à 3 vidéos peuvent être rattachées précisément à ce passage.</div>
+                </div>
+
+                <VideoTechnicalAnalysis videoUrls={selectedVideoUrls} />
               </details>
             );
           })}
