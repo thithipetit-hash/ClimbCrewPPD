@@ -1,5 +1,10 @@
+import crypto from "node:crypto";
+import express from "express";
 import { validateRealisationPayload } from "./validation.js";
 import { assertRealisationIntegrity } from "./realisation-integrity.js";
+
+const LOCAL_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+const LOCAL_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/ogg", "video/quicktime"]);
 
 function normalizeVideoUrls(value) {
   if (value === undefined) return undefined;
@@ -55,6 +60,27 @@ function rowToIntegrityCandidate(row, patch, participantId) {
 }
 
 export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
+  let videoSchemaReady = false;
+  async function ensureVideoSchema() {
+    if (videoSchemaReady) return;
+    await pool.query(`
+      alter table routes
+      add column if not exists video_urls text[] not null default '{}'
+    `);
+    await pool.query(`
+      create table if not exists route_videos (
+        id text primary key,
+        route_id text not null references routes(id) on delete cascade,
+        file_name text not null default 'video',
+        mime_type text not null,
+        content bytea not null,
+        created_at timestamptz not null default now()
+      )
+    `);
+    await pool.query(`create index if not exists idx_route_videos_route on route_videos(route_id)`);
+    videoSchemaReady = true;
+  }
+
   app.post("/realisations", requireAuth, async (req, res) => {
     try {
       const participantId = req.auth?.user?.participantId;
@@ -87,6 +113,135 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
       res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
     }
   });
+
+  app.post(
+    "/realisations/:id/videos",
+    requireAuth,
+    express.raw({ type: ["video/*", "application/octet-stream"], limit: LOCAL_VIDEO_MAX_BYTES }),
+    async (req, res) => {
+      const participantId = req.auth?.user?.participantId;
+      if (!participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
+
+      const mimeType = String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+      if (!LOCAL_VIDEO_TYPES.has(mimeType)) {
+        return res.status(400).json({ error: "Format vidéo refusé. Utilisez MP4, WebM, OGG ou MOV." });
+      }
+      if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+        return res.status(400).json({ error: "Fichier vidéo vide." });
+      }
+      if (req.body.length > LOCAL_VIDEO_MAX_BYTES) {
+        return res.status(413).json({ error: "Vidéo trop volumineuse. Maximum 50 Mo." });
+      }
+
+      let client;
+      try {
+        await ensureVideoSchema();
+        client = await pool.connect();
+        await client.query("begin");
+
+        const realisationResult = await client.query(
+          `
+            select voie_id, video_urls
+            from realisations
+            where id = $1 and participant_id = $2
+            for update
+          `,
+          [req.params.id, participantId],
+        );
+        if (!realisationResult.rowCount) {
+          const error = new Error("Cette réalisation ne vous appartient pas");
+          error.status = 403;
+          throw error;
+        }
+
+        const realisation = realisationResult.rows[0];
+        const currentRealisationUrls = Array.isArray(realisation.video_urls)
+          ? realisation.video_urls.map(String)
+          : [];
+        if (currentRealisationUrls.length >= 3) {
+          const error = new Error("Trois vidéos maximum peuvent être associées à une réalisation.");
+          error.status = 400;
+          throw error;
+        }
+
+        const routeResult = await client.query(
+          `select video_urls from routes where id = $1 for update`,
+          [realisation.voie_id],
+        );
+        if (!routeResult.rowCount) {
+          const error = new Error("Voie introuvable");
+          error.status = 404;
+          throw error;
+        }
+        const currentRouteUrls = Array.isArray(routeResult.rows[0].video_urls)
+          ? routeResult.rows[0].video_urls.map(String)
+          : [];
+        if (currentRouteUrls.length >= 10) {
+          const error = new Error("10 vidéos maximum par voie.");
+          error.status = 400;
+          throw error;
+        }
+
+        const videoId = crypto.randomUUID();
+        let fileName = "video";
+        try {
+          fileName = decodeURIComponent(String(req.headers["x-file-name"] || "video"));
+        } catch {
+          fileName = "video";
+        }
+        fileName = fileName.replace(/[\r\n]/g, "").slice(0, 180) || "video";
+        const url = `/routes/${encodeURIComponent(realisation.voie_id)}/videos/${videoId}`;
+
+        await client.query(
+          `insert into route_videos (id, route_id, file_name, mime_type, content) values ($1,$2,$3,$4,$5)`,
+          [videoId, realisation.voie_id, fileName, mimeType, req.body],
+        );
+        const updatedRoute = await client.query(
+          `update routes set video_urls = array_append(video_urls, $2), updated_at = now() where id = $1 returning video_urls`,
+          [realisation.voie_id, url],
+        );
+        const nextRealisationUrls = [...currentRealisationUrls, url];
+        await client.query(
+          `update realisations set video_urls = $3::jsonb, updated_at = now() where id = $1 and participant_id = $2`,
+          [req.params.id, participantId, JSON.stringify(nextRealisationUrls)],
+        );
+        await client.query(
+          `
+            insert into access_logs (user_id, event_type, success, ip_address, user_agent, details)
+            values ($1, 'realisation_video_upload', true, $2, $3, $4::jsonb)
+          `,
+          [
+            req.auth?.user?.id || null,
+            req.ip || null,
+            req.headers["user-agent"] || null,
+            JSON.stringify({
+              realisation_id: req.params.id,
+              route_id: realisation.voie_id,
+              video_id: videoId,
+              file_name: fileName,
+              size_bytes: req.body.length,
+            }),
+          ],
+        );
+
+        await client.query("commit");
+        return res.status(201).json({
+          url,
+          videoUrls: nextRealisationUrls,
+          routeVideoUrls: Array.isArray(updatedRoute.rows[0]?.video_urls)
+            ? updatedRoute.rows[0].video_urls.map(String)
+            : [...currentRouteUrls, url],
+        });
+      } catch (error) {
+        if (client) {
+          try { await client.query("rollback"); } catch { /* transaction déjà terminée */ }
+        }
+        return res.status(error.status || 500).json({ error: error.message || "Chargement de la vidéo impossible." });
+      } finally {
+        client?.release();
+      }
+    },
+  );
 
   app.put("/realisations/:id", requireAuth, async (req, res) => {
     try {
