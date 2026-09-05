@@ -1,3 +1,5 @@
+import { USE_API, apiFetch } from "./api.js";
+
 export const VIDEO_ANALYSIS_RULES_STORAGE_KEY = "climbcrew.videoAnalysisRules.v1";
 
 export const DEFAULT_VIDEO_ANALYSIS_RULES = Object.freeze({
@@ -7,6 +9,7 @@ export const DEFAULT_VIDEO_ANALYSIS_RULES = Object.freeze({
   pauseMinSeconds: 2.5,
   longPauseMinSeconds: 5,
   bentArmAngleDegrees: 120,
+  bentArmMinSeconds: 2,
   lockOffAngleDegrees: 100,
   lockOffMinSeconds: 1,
   footAdjustmentSpeedTorsoPerSecond: 0.12,
@@ -23,6 +26,7 @@ export const VIDEO_ANALYSIS_RULE_DEFINITIONS = Object.freeze([
   { key: "pauseMinSeconds", label: "Durée minimale d’une immobilité", unit: "s", min: 1, max: 8, step: 0.5 },
   { key: "longPauseMinSeconds", label: "Durée d’une longue immobilité", unit: "s", min: 2, max: 15, step: 0.5 },
   { key: "bentArmAngleDegrees", label: "Angle considéré comme bras fléchi", unit: "°", min: 80, max: 150, step: 5 },
+  { key: "bentArmMinSeconds", label: "Durée bras fléchi prolongé", unit: "s", min: 0.5, max: 8, step: 0.5 },
   { key: "lockOffAngleDegrees", label: "Angle lock-off marqué", unit: "°", min: 60, max: 130, step: 5 },
   { key: "lockOffMinSeconds", label: "Durée minimale lock-off", unit: "s", min: 0.5, max: 5, step: 0.5 },
   { key: "footAdjustmentSpeedTorsoPerSecond", label: "Vitesse mini. ajustement pied", unit: "torse/s", min: 0.04, max: 0.8, step: 0.02 },
@@ -56,7 +60,7 @@ export function loadVideoAnalysisRules() {
   }
 }
 
-export function saveVideoAnalysisRules(rules) {
+function cacheRules(rules) {
   const normalized = normalizeVideoAnalysisRules(rules);
   if (typeof window !== "undefined") {
     window.localStorage.setItem(VIDEO_ANALYSIS_RULES_STORAGE_KEY, JSON.stringify(normalized));
@@ -64,10 +68,22 @@ export function saveVideoAnalysisRules(rules) {
   return normalized;
 }
 
-export function resetVideoAnalysisRules() {
-  const defaults = { ...DEFAULT_VIDEO_ANALYSIS_RULES };
-  if (typeof window !== "undefined") {
-    window.localStorage.removeItem(VIDEO_ANALYSIS_RULES_STORAGE_KEY);
-  }
-  return defaults;
+export async function fetchVideoAnalysisRules() {
+  if (!USE_API) return loadVideoAnalysisRules();
+  const result = await apiFetch("/video-analysis/rules");
+  return cacheRules(result?.rules || {});
+}
+
+export async function saveVideoAnalysisRules(rules) {
+  const normalized = normalizeVideoAnalysisRules(rules);
+  if (!USE_API) return cacheRules(normalized);
+  const result = await apiFetch("/admin/video-analysis/rules", {
+    method: "PUT",
+    body: JSON.stringify({ rules: normalized }),
+  });
+  return cacheRules(result?.rules || normalized);
+}
+
+export async function resetVideoAnalysisRules() {
+  return saveVideoAnalysisRules({ ...DEFAULT_VIDEO_ANALYSIS_RULES });
 }
