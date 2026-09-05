@@ -1,3 +1,5 @@
+import { getPool } from "./admin-users/database.js";
+
 const DEFAULT_RULES = Object.freeze({
   sampleFps: 4,
   minVisibility: 0.5,
@@ -58,8 +60,8 @@ function normalizeRules(candidate = {}) {
   return rules;
 }
 
-async function readRules(pool) {
-  const result = await pool.query(
+async function readRules() {
+  const result = await getPool().query(
     "select rules, updated_at from video_analysis_settings where id = 1 limit 1",
   );
   if (result.rowCount === 0) {
@@ -71,10 +73,10 @@ async function readRules(pool) {
   };
 }
 
-export function installVideoAnalysisSettingsRoutes(app, { requireAuth, requireAdmin, pool }) {
+export function installVideoAnalysisSettingsRoutes(app, { requireAuth, requireAdmin }) {
   app.get("/video-analysis/rules", requireAuth, async (_req, res) => {
     try {
-      res.json(await readRules(pool));
+      res.json(await readRules());
     } catch (error) {
       res.status(error.status || 500).json({ error: error.message || String(error) });
     }
@@ -83,7 +85,7 @@ export function installVideoAnalysisSettingsRoutes(app, { requireAuth, requireAd
   app.put("/admin/video-analysis/rules", requireAuth, requireAdmin, async (req, res) => {
     try {
       const rules = normalizeRules(req.body?.rules || req.body || {});
-      const result = await pool.query(
+      const result = await getPool().query(
         `
           insert into video_analysis_settings (id, rules, updated_at)
           values (1, $1::jsonb, now())
