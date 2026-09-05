@@ -1,7 +1,10 @@
 import React from "react";
 import Button from "./Button.jsx";
-import { STYLE_LABELS } from "../lib/ui-config.js";
 import { GRADES, formatDateShortFr, formatRouteForRealisation, fullName } from "../lib/domain.js";
+import {
+  REALISATION_CRITERION_LABELS,
+  REALISATION_MODE_LABELS,
+} from "../lib/realisation-mode.js";
 
 export default function RealisationModal({
   open,
@@ -17,6 +20,24 @@ export default function RealisationModal({
   onClose,
   onSubmit,
 }) {
+  const forcedMoulinette = Boolean(route?.moulinetteOnly);
+
+  React.useEffect(() => {
+    if (!open) return;
+    setNewRealisation((prev) => {
+      const modeRealisation = forcedMoulinette
+        ? "moulinette"
+        : (prev.modeRealisation || "en_tete");
+      const styleRealisation = REALISATION_CRITERION_LABELS[prev.styleRealisation]
+        ? prev.styleRealisation
+        : "a_vue";
+      if (prev.modeRealisation === modeRealisation && prev.styleRealisation === styleRealisation) {
+        return prev;
+      }
+      return { ...prev, modeRealisation, styleRealisation };
+    });
+  }, [open, forcedMoulinette, setNewRealisation]);
+
   if (!open) return null;
 
   const eligibleParticipantIds = new Set(eligibleParticipants.map((participant) => String(participant.id)));
@@ -24,6 +45,9 @@ export default function RealisationModal({
     eligibleParticipantIds.has(String(participant.id))
     && String(participant.id) !== String(newRealisation.participantId)
   ));
+  const selectedMode = forcedMoulinette
+    ? "moulinette"
+    : (newRealisation.modeRealisation || "en_tete");
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Enregistrer une voie réalisée">
@@ -92,7 +116,12 @@ export default function RealisationModal({
                 setNewRealisation((prev) => ({
                   ...prev,
                   voieId,
-                  styleRealisation: selectedRoute?.moulinetteOnly ? "moulinette" : prev.styleRealisation,
+                  modeRealisation: selectedRoute?.moulinetteOnly
+                    ? "moulinette"
+                    : (prev.modeRealisation || "en_tete"),
+                  styleRealisation: REALISATION_CRITERION_LABELS[prev.styleRealisation]
+                    ? prev.styleRealisation
+                    : "a_vue",
                   cotationProposee: selectedRoute?.cotationAjustee || selectedRoute?.cotationReference || "",
                 }));
               }}
@@ -104,10 +133,38 @@ export default function RealisationModal({
             </select>
           </div>
 
+          <div className="realisation-mode-field" data-context="new">
+            <label>Mode</label>
+            <select
+              className="realisation-mode-select"
+              aria-label="Mode de réalisation"
+              value={selectedMode}
+              disabled={forcedMoulinette}
+              onChange={(event) => setNewRealisation((prev) => ({
+                ...prev,
+                modeRealisation: event.target.value,
+              }))}
+            >
+              {Object.entries(REALISATION_MODE_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+            {forcedMoulinette && (
+              <div className="small" style={{ marginTop: 6, color: "inherit" }}>
+                Cette voie est configurée en moulinette uniquement.
+              </div>
+            )}
+          </div>
+
           <div>
-            <label>Style</label>
-            <select value={newRealisation.styleRealisation} onChange={(event) => setNewRealisation((prev) => ({ ...prev, styleRealisation: event.target.value }))}>
-              {Object.entries(STYLE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            <label>Critère</label>
+            <select
+              value={REALISATION_CRITERION_LABELS[newRealisation.styleRealisation] ? newRealisation.styleRealisation : "a_vue"}
+              onChange={(event) => setNewRealisation((prev) => ({ ...prev, styleRealisation: event.target.value }))}
+            >
+              {Object.entries(REALISATION_CRITERION_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
             </select>
           </div>
 
