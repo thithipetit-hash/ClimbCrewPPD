@@ -8,16 +8,13 @@ ClimbCrew est une application de gestion de club d'escalade composée de :
 - une authentification par cookie sécurisé ;
 - une messagerie SMTP pour les demandes de compte et la récupération du mot de passe.
 
-## Deux modes de déploiement compatibles
+## Déploiement
 
-Le dépôt prend en charge deux environnements sans mélanger leurs configurations :
+Le déploiement de référence utilise un serveur Linux avec Docker Compose et un reverse proxy HTTPS.
 
 | Environnement | Fichier principal | Frontend | Backend | PostgreSQL |
 |---|---|---|---|---|
 | Serveur Linux | `docker-compose.prod.yml` | Nginx Docker | Node Docker | Docker local |
-| Render | `render.yaml` | Static Site | Web Service Node | Render Postgres |
-
-Le déploiement Linux reste la cible de production historique. Render permet une simulation ou un hébergement séparé en utilisant les mêmes sources.
 
 ## Architecture Linux
 
@@ -34,20 +31,6 @@ Reverse proxy HTTPS du serveur Linux
 Le certificat TLS est géré par le reverse proxy du serveur. ClimbCrew n'expose pas directement PostgreSQL et n'embarque aucun certificat.
 
 **Impact visuel :** le frontend et l'API partagent le même domaine. Les changements de page, les chargements de données et les actions d'administration restent donc transparents pour le navigateur.
-
-## Architecture Render
-
-```text
-ClimbCrew-frontend : React/Vite statique
-          ↓ requêtes HTTPS avec cookies
-ClimbCrew-api : Node/Express
-          ↓ connexion privée Render
-ClimbCrew-db : PostgreSQL
-```
-
-Le fichier `render.yaml` relie automatiquement les trois ressources. L'adresse publique réelle du backend est injectée dans le build Vite sans suffixe Render codé en dur.
-
-Le détail de la configuration, des contrôles CORS/CSRF et du diagnostic se trouve dans [`deploy/README-render.md`](deploy/README-render.md).
 
 ## Organisation des commentaires dans le code
 
@@ -103,7 +86,7 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_REQUIRE_TLS=true
 SMTP_USER=climbcrew@example.com
-SMTP_PASSWORD=CHANGE_ME
+SMTP_PASSWORD=CHANGE_ME_SMTP_PASSWORD
 EMAIL_FROM_NAME=ClimbCrew
 EMAIL_FROM_ADDRESS=climbcrew@example.com
 EMAIL_REPLY_TO=club@example.com
@@ -143,24 +126,6 @@ npm run prod:logs
 npm run prod:health
 ```
 
-## Déploiement Render
-
-Le Blueprint est défini dans `render.yaml`. Dans Render :
-
-1. créer ou rattacher un Blueprint au dépôt ;
-2. vérifier les ressources `ClimbCrew-api`, `ClimbCrew-frontend` et `ClimbCrew-db` ;
-3. renseigner `FIRST_ADMIN_EMAIL` et `FIRST_ADMIN_PASSWORD` ;
-4. synchroniser puis vérifier `/health` sur le backend.
-
-Render fournit lui-même `PORT`. Le backend utilise automatiquement cette valeur et ne doit pas recevoir un port fixe depuis le tableau de bord.
-
-Les tests de compatibilité peuvent être exécutés depuis le dossier backend :
-
-```bash
-cd backend
-npm test
-```
-
 ## Reverse proxy HTTPS Linux
 
 Adapter le fichier :
@@ -178,9 +143,8 @@ Le reverse proxy doit envoyer :
 
 - ne jamais versionner `.env.production` ;
 - conserver `SECURE_COOKIES=true` en production HTTPS ;
-- utiliser `COOKIE_SAMESITE=lax` sur Linux sous un même domaine ;
-- utiliser `COOKIE_SAMESITE=none` lorsque frontend et API Render sont séparés ;
-- conserver `TRUST_PROXY=1` derrière le reverse proxy Linux ou Render ;
+- utiliser `COOKIE_SAMESITE=lax` sous un même domaine ;
+- conserver `TRUST_PROXY=1` derrière le reverse proxy Linux ;
 - utiliser des secrets longs et uniques ;
 - ne pas exposer directement PostgreSQL ni le backend Linux ;
 - sauvegarder régulièrement le volume `climbcrew_pgdata` ;
