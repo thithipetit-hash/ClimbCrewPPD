@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
+import { readdir } from "node:fs/promises";
 import test from "node:test";
 import { runDatabaseMigrations } from "./migrate.js";
+
+async function migrationFiles() {
+  const entries = await readdir(new URL("./migrations/", import.meta.url), { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && /^\d{3,}_[a-z0-9][a-z0-9_-]*\.sql$/i.test(entry.name))
+    .map((entry) => entry.name)
+    .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+}
 
 function createPool({ applied = [] } = {}) {
   const queries = [];
@@ -34,28 +43,32 @@ function createPool({ applied = [] } = {}) {
   };
 }
 
-test("applique la migration baseline une seule fois et la trace", async () => {
+test("applique toutes les migrations absentes une seule fois et les trace", async () => {
+  const expectedMigrations = await migrationFiles();
   const pool = createPool();
   const logger = { info() {}, error() {} };
 
   const result = await runDatabaseMigrations(pool, { logger });
 
-  assert.deepEqual(result.executed, ["001_baseline.sql"]);
-  assert.equal(result.total, 1);
-  assert.ok(pool.appliedVersions.has("001_baseline.sql"));
+  assert.deepEqual(result.executed, expectedMigrations);
+  assert.equal(result.total, expectedMigrations.length);
+  for (const version of expectedMigrations) {
+    assert.ok(pool.appliedVersions.has(version), `${version} doit être tracée`);
+  }
   assert.ok(pool.queries.some(({ text }) => text === "begin"));
   assert.ok(pool.queries.some(({ text }) => text === "commit"));
   assert.ok(pool.queries.some(({ text }) => text.includes("create table if not exists participants")));
 });
 
-test("n'exécute pas une migration déjà enregistrée", async () => {
-  const pool = createPool({ applied: ["001_baseline.sql"] });
+test("n'exécute aucune migration lorsqu'elles sont toutes déjà enregistrées", async () => {
+  const expectedMigrations = await migrationFiles();
+  const pool = createPool({ applied: expectedMigrations });
   const logger = { info() {}, error() {} };
 
   const result = await runDatabaseMigrations(pool, { logger });
 
   assert.deepEqual(result.executed, []);
-  assert.deepEqual(result.applied, ["001_baseline.sql"]);
+  assert.deepEqual(result.applied, expectedMigrations);
   assert.equal(pool.queries.some(({ text }) => text === "begin"), false);
 });
 
