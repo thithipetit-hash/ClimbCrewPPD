@@ -97,8 +97,7 @@ export default function Progression({
       </div>
 
       <div className="card" style={{ marginTop: 12 }}>
-        <div className="card-header">
-          <h3>Saisir une réalisation</h3>
+        <div className="card-header progression-entry-actions">
           <Button onClick={() => openRealisationModal("", myParticipantId)} disabled={!myParticipantId}>
             Nouvelle réalisation
           </Button>
@@ -164,13 +163,26 @@ export default function Progression({
               ? REALISATION_CRITERION_LABELS[criterionRealisation]
               : "Critère non précisé (historique)";
             return (
-              <details className="subcard editable-realisation-card" key={realisation.id} open={expandedRealisationIds.includes(realisation.id)} onToggle={(event) => setRealisationExpanded(realisation.id, event.currentTarget.open)}>
-                <summary className="card-header realisation-summary">
+              <details className="subcard editable-realisation-card progression-realisation-card" key={realisation.id} open={expandedRealisationIds.includes(realisation.id)} onToggle={(event) => setRealisationExpanded(realisation.id, event.currentTarget.open)}>
+                <summary className="card-header realisation-summary progression-realisation-summary">
                   <div>
                     <strong>{!selectedParticipantProgress && `${fullName(participant)} — `}{route ? formatRouteForRealisation(route) : "Voie inconnue"}</strong>
                     <div className="small">{formatDateShortFr(realisation.dateRealisation?.slice(0, 10))} · {modeLabel} · {criterionLabel}{realisation.chute && <> · Vol{realisation.assureurId && participantsById[realisation.assureurId] ? ` · assuré par ${fullName(participantsById[realisation.assureurId])}` : ""}</>}{displayedRating && <> · <span aria-label={`Évaluation ${Number(realisation.rating)} sur 5`}>{displayedRating}</span></>}</div>
                   </div>
-                  <div className="group">{isIncludedInCpr && <span className="pill">Prise en compte dans le CPR</span>}{canEditRealisation && <Button variant="danger" className="realisation-delete-button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); deleteRealisation(realisation); }}>Supprimer</Button>}</div>
+                  <div className="group progression-realisation-actions">
+                    {isIncludedInCpr && <span className="pill">Prise en compte dans le CPR</span>}
+                    {canEditRealisation && (
+                      <Button
+                        variant="remove"
+                        className="progression-realisation-remove"
+                        title="Supprimer cette réalisation"
+                        aria-label="Supprimer cette réalisation"
+                        onClick={(event) => { event.preventDefault(); event.stopPropagation(); deleteRealisation(realisation); }}
+                      >
+                        ×
+                      </Button>
+                    )}
+                  </div>
                 </summary>
                 <div className="grid three">
                   <div><label>Séance</label><select value={realisation.sessionId} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { sessionId: event.target.value })}>{availableSessionsForRealisation.length === 0 ? <option value="">Aucune séance inscrite</option> : availableSessionsForRealisation.map((sessionOption) => <option key={sessionOption.id} value={sessionOption.id}>{formatDateShortFr(sessionOption.date)} · {sessionOption.slot}</option>)}</select></div>

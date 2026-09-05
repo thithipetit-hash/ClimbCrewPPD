@@ -1469,7 +1469,7 @@ async function handleThemePreferenceChange(nextTheme) {
   async function exportAllData() {
     // La version applicative complète la version du format d’export sans la remplacer.
     // Les anciens imports restent ainsi compatibles, tandis qu’un fichier permet
-    // d’identifier immédiatement la version de ClimbClubCristal qui l’a produit.
+    // d’identifier immédiatement la version de CristalClimbClub qui l’a produit.
     const buildVersionedExport = (data) => ({
       ...data,
       exportedAt: data?.exportedAt || new Date().toISOString(),
@@ -1762,13 +1762,13 @@ async function handleThemePreferenceChange(nextTheme) {
         ☰
       </button>
       <div className="brand">
-        <img src="/logo-climbcrew.png" alt="Logo ClimbClubCristal" className="app-logo" />
+        <img src="/logo-climbcrew.png" alt="Logo CristalClimbClub" className="app-logo" />
         <div>
           <div className="brand-title-row">
-            <h1>ClimbClubCristal</h1>
+            <h1>CristalClimbClub</h1>
             <span className="topbar-version" aria-label={`Version ${APP_VERSION}`}>v{APP_VERSION}</span>
           </div>
-          <p>{tab === "parametres" ? "Paramètres" : (visibleTabs.find((item) => item.key === tab)?.label || "ClimbClubCristal")}</p>
+          <p>{tab === "parametres" ? "Paramètres" : (visibleTabs.find((item) => item.key === tab)?.label || "CristalClimbClub")}</p>
         </div>
       </div>
     </div>

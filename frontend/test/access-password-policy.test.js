@@ -2,20 +2,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-test("la surcouche de création de compte affiche bien la règle à 8 caractères", async () => {
-  const source = await readFile(new URL("../src/issue-13-access-page.js", import.meta.url), "utf8");
-  assert.match(source, /8 caractères minimum/);
-  assert.doesNotMatch(source, /12 caractères/);
+const authPageSource = await readFile(new URL("../src/components/AuthPage.jsx", import.meta.url), "utf8");
+const passwordPolicySource = await readFile(new URL("../src/lib/password-policy.js", import.meta.url), "utf8");
+
+test("la création de compte affiche nativement la règle à 8 caractères", () => {
+  assert.match(passwordPolicySource, /8 caractères minimum/);
+  assert.doesNotMatch(passwordPolicySource, /12 caractères/);
+  assert.match(authPageSource, /Règles du mot de passe/);
+  assert.match(authPageSource, /PASSWORD_RULE_TEXT/);
 });
 
-test("le formulaire de réinitialisation n'est jamais confondu avec la création de compte", async () => {
-  // Les deux formulaires affichent les règles du mot de passe : seule la
-  // présence du champ Prénom distingue la création de compte. Sans ça, le
-  // bouton « Mettre à jour le mot de passe » se faisait renommer en
-  // « Création d'un compte » sur l'écran de réinitialisation.
-  const source = await readFile(new URL("../src/issue-13-access-page.js", import.meta.url), "utf8");
-  assert.match(source, /function isRequestFormVisible\(card\)/);
-  assert.match(source, /text === "prénom"/);
-  assert.match(source, /const requestFormVisible = isRequestFormVisible\(card\)/);
-  assert.doesNotMatch(source, /const requestFormVisible = enhancePasswordPolicy\(card\)/);
+test("création de compte et réinitialisation sont deux formulaires React distincts", () => {
+  assert.match(authPageSource, /authView === "request"/);
+  assert.match(authPageSource, /handleRequestAccess\(\)/);
+  assert.match(authPageSource, /Création d’un compte/);
+  assert.match(authPageSource, /authView === "reset"/);
+  assert.match(authPageSource, /handleResetPassword\(\)/);
+  assert.match(authPageSource, /Mettre à jour le mot de passe/);
+  assert.match(authPageSource, /Consulter le texte RGPD/);
 });
