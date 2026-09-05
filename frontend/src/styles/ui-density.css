@@ -51,6 +51,13 @@ html, body, .app { font-size:var(--cc-font-body)!important; line-height:1.22!imp
   .app :where(.toolbar,.card) { padding:6px!important; margin-top:4px!important; }
   .app :where(.menu-button,.nav-symbol,.remove-button,.modal-close,.bottom-tab) { min-height:40px!important; }
   .app .session-card :where(select,input,button) { min-height:36px!important; }
+  .app .session-card .session-participant-list .remove-button {
+    width:22px!important;
+    min-width:22px!important;
+    height:22px!important;
+    min-height:22px!important;
+    padding:0!important;
+  }
   .app .route-card button { min-height:34px!important; }
   .app .mobile-bottom-nav { gap:2px!important; padding:3px!important; }
   .app .bottom-tab { padding:4px 5px!important; font-size:12px!important; }
