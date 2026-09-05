@@ -36,18 +36,30 @@ export const VIDEO_ANALYSIS_RULE_DEFINITIONS = Object.freeze([
   { key: "armAsymmetryRatio", label: "Asymétrie bras significative", unit: "ratio", min: 0.05, max: 0.8, step: 0.05 },
 ]);
 
+const RULE_LIMITS = Object.fromEntries(
+  VIDEO_ANALYSIS_RULE_DEFINITIONS.map(({ key, min, max }) => [key, [min, max]]),
+);
+
 function finiteOrDefault(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
 
 export function normalizeVideoAnalysisRules(candidate = {}) {
-  return Object.fromEntries(
-    Object.entries(DEFAULT_VIDEO_ANALYSIS_RULES).map(([key, fallback]) => [
-      key,
-      finiteOrDefault(candidate?.[key], fallback),
-    ]),
+  const normalized = Object.fromEntries(
+    Object.entries(DEFAULT_VIDEO_ANALYSIS_RULES).map(([key, fallback]) => {
+      const [min, max] = RULE_LIMITS[key];
+      const value = finiteOrDefault(candidate?.[key], fallback);
+      return [key, Math.min(max, Math.max(min, value))];
+    }),
   );
+  if (normalized.longPauseMinSeconds < normalized.pauseMinSeconds) {
+    normalized.longPauseMinSeconds = normalized.pauseMinSeconds;
+  }
+  if (normalized.lockOffAngleDegrees > normalized.bentArmAngleDegrees) {
+    normalized.lockOffAngleDegrees = normalized.bentArmAngleDegrees;
+  }
+  return normalized;
 }
 
 export function loadVideoAnalysisRules() {
