@@ -1,15 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import "./brand-name-ui.js";
 import App from "./App.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
 import StartupVideoGate from "./StartupVideoGate.jsx";
-import "./api-error-messages.js";
-import "./issue-13-access-page.js";
-import "./admin-user-management.js";
-import "./progression-ui.js";
-import "./badge-faq-ui.js";
-import "./climber-profile-ui.js";
 import "./styles/climbcrew-enhancements.css";
 import "./styles/index.css";
 import "./styles/button-compact.css";
