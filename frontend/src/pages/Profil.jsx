@@ -294,6 +294,7 @@ export default function Profil({
                           route={route}
                           editable={isOwnProfile}
                           onUpdate={(patch) => updateOwnRealisation(realisation.id, patch)}
+                          onRefresh={refreshRealisations}
                         />
                       </details>
                     );
