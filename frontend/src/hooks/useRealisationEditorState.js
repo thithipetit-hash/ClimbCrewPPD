@@ -3,7 +3,7 @@ import { useState } from "react";
 export function useRealisationEditorState({ defaultRouteId = "" } = {}) {
   const [newRealisation, setNewRealisation] = useState({
     participantId: "", selectedDay: "", sessionId: "", voieId: defaultRouteId,
-    styleRealisation: "a_vue", commentaire: "", cotationProposee: "", rating: 0,
+    modeRealisation: "en_tete", styleRealisation: "a_vue", commentaire: "", cotationProposee: "", rating: 0,
     chute: false, assureurId: "",
   });
   const [realisationModalRouteId, setRealisationModalRouteId] = useState(null);
