@@ -1,0 +1,44 @@
+name: Apply frontend polish 005
+
+on:
+  push:
+    branches:
+      - refactor/frontend-polish-20260905-005
+    paths:
+      - .github/workflows/apply-frontend-polish-005.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/frontend-polish-20260905-005
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Appliquer la migration
+        run: node scripts/apply-frontend-polish-005.mjs
+      - name: Vérifier le frontend
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build
+      - name: Committer le résultat sans laisser de script temporaire
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f scripts/apply-frontend-polish-005.mjs .github/workflows/apply-frontend-polish-005.yml
+          git add -A
+          git commit -m "Finalise et homogénéise le frontend 20260905.005"
+          git push origin HEAD:refactor/frontend-polish-20260905-005
