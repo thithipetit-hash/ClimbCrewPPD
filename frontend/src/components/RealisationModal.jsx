@@ -5,6 +5,7 @@ import {
   REALISATION_CRITERION_LABELS,
   REALISATION_MODE_LABELS,
 } from "../lib/realisation-mode.js";
+import { setPendingRealisationMode } from "../lib/realisation-request-mode.js";
 
 export default function RealisationModal({
   open,
@@ -21,6 +22,9 @@ export default function RealisationModal({
   onSubmit,
 }) {
   const forcedMoulinette = Boolean(route?.moulinetteOnly);
+  const selectedMode = forcedMoulinette
+    ? "moulinette"
+    : (newRealisation.modeRealisation || "en_tete");
 
   React.useEffect(() => {
     if (!open) return;
@@ -38,6 +42,11 @@ export default function RealisationModal({
     });
   }, [open, forcedMoulinette, setNewRealisation]);
 
+  React.useEffect(() => {
+    if (!open) return;
+    setPendingRealisationMode(selectedMode);
+  }, [open, selectedMode]);
+
   if (!open) return null;
 
   const eligibleParticipantIds = new Set(eligibleParticipants.map((participant) => String(participant.id)));
@@ -45,9 +54,6 @@ export default function RealisationModal({
     eligibleParticipantIds.has(String(participant.id))
     && String(participant.id) !== String(newRealisation.participantId)
   ));
-  const selectedMode = forcedMoulinette
-    ? "moulinette"
-    : (newRealisation.modeRealisation || "en_tete");
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Enregistrer une voie réalisée">
