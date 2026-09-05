@@ -1,0 +1,46 @@
+name: One-shot frontend branding migration
+
+on:
+  push:
+    branches:
+      - refactor/finish-frontend-react-20260905-004
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: refactor/finish-frontend-react-20260905-004
+          fetch-depth: 0
+
+      - name: Replace legacy branding and remove this migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('frontend/src/App.jsx')
+          source = path.read_text(encoding='utf-8')
+          old = 'ClimbClubCristal'
+          count = source.count(old)
+          if count != 4:
+              raise SystemExit(f'Expected 4 legacy branding occurrences in App.jsx, found {count}')
+          path.write_text(source.replace(old, 'CristalClimbClub'), encoding='utf-8')
+          PY
+          rm .github/workflows/one-shot-frontend-branding.yml
+
+      - name: Commit exact source migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src/App.jsx .github/workflows/one-shot-frontend-branding.yml
+          git commit -m 'Aligne le branding dans App.jsx'
+          git push origin HEAD:refactor/finish-frontend-react-20260905-004
