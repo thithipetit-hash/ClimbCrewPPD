@@ -116,7 +116,6 @@ jobs:
           import test from "node:test";
           import assert from "node:assert/strict";
           import { access, readFile } from "node:fs/promises";
-
           import { buildRealisationPayload } from "../src/lib/realisation-workflow.js";
 
           const legacyUiUrl = new URL("../src/realisation-mode-ui.js", import.meta.url);
@@ -129,19 +128,14 @@ jobs:
           const appUrl = new URL("../src/App.jsx", import.meta.url);
 
           const [mainSource, modalSource, progressionSource, profileSource, hookSource, appSource] = await Promise.all([
-            readFile(mainUrl, "utf8"),
-            readFile(modalUrl, "utf8"),
-            readFile(progressionUrl, "utf8"),
-            readFile(profileUrl, "utf8"),
-            readFile(hookUrl, "utf8"),
-            readFile(appUrl, "utf8"),
+            readFile(mainUrl, "utf8"), readFile(modalUrl, "utf8"), readFile(progressionUrl, "utf8"),
+            readFile(profileUrl, "utf8"), readFile(hookUrl, "utf8"), readFile(appUrl, "utf8"),
           ]);
 
           test("le POST d'une nouvelle réalisation transporte directement le mode choisi", () => {
             const payload = buildRealisationPayload({
               draft: { participantId: "p1", selectedDay: "2026-09-05", voieId: "v1", modeRealisation: "moulinette", styleRealisation: "a_vue" },
-              sessionId: "s1",
-              now: () => 1,
+              sessionId: "s1", now: () => 1,
             });
             assert.equal(payload.modeRealisation, "moulinette");
             assert.equal(payload.styleRealisation, "a_vue");
@@ -165,10 +159,10 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           path = Path("frontend/test/ui-density.test.js")
-          source = path.read_text()
-          source = source.replace('/@media \\(max-width:700px\\)/', '/@media \\(max-width:700px\\)/')
-          # Rewrite explicitly to avoid regexp escaping ambiguity.
-          source = source.replace('assert.match(css, /@media (max-width:700px)/);', 'assert.match(css, /@media \\(max-width:700px\\)/);')
+          source = path.read_text().replace(
+              'assert.match(css, /@media (max-width:700px)/);',
+              'assert.match(css, /@media \\(max-width:700px\\)/);',
+          )
           path.write_text(source)
           PY
       - name: Vérifier le frontend
@@ -177,13 +171,16 @@ jobs:
           npm ci --no-audit --no-fund
           npm test
           npm run build
-      - name: Committer le résultat sans laisser de script temporaire
+      - name: Committer le résultat validé
         shell: bash
         run: |
           set -euo pipefail
+          # Le jeton Actions ne peut pas modifier les workflows. La correction
+          # du nom d'expéditeur sera appliquée séparément via le connecteur GitHub.
+          git restore .github/workflows/deploy.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm -f scripts/apply-frontend-polish-005.mjs .github/workflows/apply-frontend-polish-005.yml
+          git rm -f scripts/apply-frontend-polish-005.mjs
           git add -A
           git commit -m "Finalise et homogénéise le frontend 20260905.005"
           git push origin HEAD:refactor/frontend-polish-20260905-005
