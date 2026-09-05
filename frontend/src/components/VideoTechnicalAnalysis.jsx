@@ -2,7 +2,7 @@ import React from "react";
 import Button from "./Button.jsx";
 import { API_BASE } from "../lib/api.js";
 import { analyzeClimbingVideo } from "../lib/mediapipe-video-analysis.js";
-import { loadVideoAnalysisRules } from "../lib/video-analysis-rules.js";
+import { fetchVideoAnalysisRules } from "../lib/video-analysis-rules.js";
 
 function playableVideoUrl(url) {
   if (String(url || "").startsWith("/")) return `${API_BASE}${url}`;
@@ -65,8 +65,9 @@ export default function VideoTechnicalAnalysis({ videoUrls = [] }) {
     setError("");
     setProgress(0);
     try {
+      const rules = await fetchVideoAnalysisRules();
       const result = await analyzeClimbingVideo(videoRef.current, {
-        rules: loadVideoAnalysisRules(),
+        rules,
         signal: controller.signal,
         onProgress: setProgress,
       });
@@ -88,7 +89,7 @@ export default function VideoTechnicalAnalysis({ videoUrls = [] }) {
   if (!analyzableUrls.length) {
     return (
       <div className="muted-box" style={{ marginTop: 10 }}>
-        L’analyse technique nécessite pour l’instant une vidéo chargée dans ClimbCrew. Les liens YouTube ou externes ne sont pas analysés automatiquement.
+        Associez d’abord à cette réalisation une vidéo chargée dans ClimbCrew. Les liens YouTube ou externes peuvent être conservés, mais ne sont pas analysés automatiquement.
       </div>
     );
   }
@@ -100,7 +101,7 @@ export default function VideoTechnicalAnalysis({ videoUrls = [] }) {
       <div className="card-header">
         <div>
           <strong>Analyse technique vidéo</strong>
-          <div className="small">MediaPipe Pose · traitement de l’image sur cet appareil · aucun coût par analyse</div>
+          <div className="small">MediaPipe Pose · traitement de l’image sur cet appareil · règles globales du club · aucun coût par analyse</div>
         </div>
         {analyzableUrls.length > 1 && (
           <select
