@@ -10,6 +10,15 @@
   border-color: rgba(74, 222, 128, .65) !important;
 }
 
+/* React expose déjà le passeport via data-passport. Les inscrits incompatibles
+ * avec une séance libre peuvent donc être signalés sans MutationObserver ni
+ * modification impérative du DOM. Les passeports autorisés sont jaune, orange,
+ * vert et bleu ; toute autre valeur reste visible mais hachurée. */
+.session-card.session-status-libre .passport-row:not([data-passport="jaune"]):not([data-passport="orange"]):not([data-passport="vert"]):not([data-passport="bleu"]) {
+  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.32) 0, rgba(255,255,255,.32) 7px, rgba(15,23,42,.18) 7px, rgba(15,23,42,.18) 14px) !important;
+  background-blend-mode: overlay;
+}
+
 .session-card.session-status-encadree {
   background: linear-gradient(135deg, rgba(37, 99, 235, .32), rgba(30, 64, 175, .48)) !important;
   border-color: rgba(96, 165, 250, .68) !important;
