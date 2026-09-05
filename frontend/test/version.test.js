@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 
 const versionPattern = /^\d{8}\.\d{3}$/;
 
@@ -31,10 +31,8 @@ test("App.jsx ne définit plus sa propre version", async () => {
   assert.match(source, /climbcrew_export_\$\{APP_VERSION\}\.json/);
 });
 
-test("le script d'amélioration ne réécrit plus la version dans le DOM", async () => {
-  const source = await readFile(
-    new URL("../src/release-version-enhancements.js", import.meta.url),
-    "utf8",
-  );
-  assert.doesNotMatch(source, /APP_VERSION_LABEL|updateVisibleVersion|const\s+APP_VERSION/);
+test("la version n'est plus réécrite par un script DOM", async () => {
+  await assert.rejects(access(new URL("../src/release-version-enhancements.js", import.meta.url)));
+  const main = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
+  assert.equal(main.includes("release-version-enhancements.js"), false);
 });
