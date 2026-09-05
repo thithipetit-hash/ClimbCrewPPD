@@ -96,6 +96,8 @@ test("le branding courant est écrit dans les sources et les métadonnées", asy
     if (source.includes("ClimbClubCristal")) offenders.push(file);
   }
   assert.deepEqual(offenders, [], `ancien branding encore présent : ${offenders.join(", ")}`);
+  assert.doesNotMatch(appSource, /ClimbClubCristal/);
+  assert.match(appSource, /<h1>CristalClimbClub<\/h1>/);
   assert.doesNotMatch(indexSource, /ClimbClubCristal/);
   assert.doesNotMatch(manifestSource, /ClimbClubCristal/);
   assert.match(indexSource, /CristalClimbClub/);
