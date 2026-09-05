@@ -1,6 +1,6 @@
 export default function MobileBottomNav({ visibleTabs, activeTab, onSelectTab }) {
   return (
-    <nav className="mobile-bottom-nav" aria-label="Navigation mobile ClimbClubCristal">
+    <nav className="mobile-bottom-nav" aria-label="Navigation mobile CristalClimbClub">
       {visibleTabs.map((item) => (
         <button
           key={item.key}
