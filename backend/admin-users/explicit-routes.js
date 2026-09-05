@@ -51,6 +51,7 @@ import { startSecurityRetentionScheduler } from "./security-retention-service.js
 import { safeHealthCheck } from "./maintenance-hardening.js";
 import { installBackupRoutes } from "../backup-routes.js";
 import { startBackupScheduler } from "../backup-service.js";
+import { installVideoAnalysisSettingsRoutes } from "../video-analysis-settings-routes.js";
 
 export function installExplicitAdminUserRoutes(app, {
   requireAuth,
@@ -89,6 +90,7 @@ export function installExplicitAdminUserRoutes(app, {
   app.get("/admin/auth/notification-preferences", requireAuth, requireAdmin, listManagedAccountNotificationPreferences);
   app.put("/admin/participants/:participantId/account-notifications", requireAuth, requireAdmin, updateManagedAccountNotificationPreference);
   app.put("/admin/participants/:id/qualifications", requireAuth, requireAdmin, updateParticipantInitiatorQualifications);
+  installVideoAnalysisSettingsRoutes(app, { requireAuth, requireAdmin });
   installBackupRoutes(app);
 }
 
