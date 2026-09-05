@@ -7,6 +7,8 @@ function fail(message) {
 
 const app = fs.readFileSync("frontend/src/App.jsx", "utf8");
 const domain = fs.readFileSync("frontend/src/lib/domain.js", "utf8");
+const routeDisplayGroups = fs.readFileSync("frontend/src/lib/route-display-groups.js", "utf8");
+const viteConfig = fs.readFileSync("frontend/vite.config.js", "utf8");
 const frontendDockerfile = fs.readFileSync("frontend/Dockerfile.prod", "utf8");
 const dayStart = app.indexOf("const daySessions = useMemo");
 const weekStart = app.indexOf("const weekDates = useMemo", dayStart);
@@ -19,6 +21,28 @@ const main = fs.readFileSync("frontend/src/main.jsx", "utf8");
 if (!main.includes("<ErrorBoundary>")) fail("ErrorBoundary absent du point d’entrée React");
 if (main.includes("climbcrew-enhancements.js") || fs.existsSync("frontend/src/climbcrew-enhancements.js") || fs.existsSync("frontend/src/climbcrew-enhancements-legacy.js")) {
   fail("ancienne couche frontend legacy encore présente");
+}
+if (fs.existsSync("frontend/scripts/app-source-adjustments.mjs")) {
+  fail("transformation historique de App encore présente");
+}
+if (viteConfig.includes("app-source-adjustments")
+    || viteConfig.includes("applyAppSourceAdjustments")
+    || viteConfig.includes("transform(code")) {
+  fail("Vite transforme encore App.jsx avant compilation");
+}
+if (!viteConfig.includes("plugins: [react()]")) {
+  fail("configuration Vite React canonique introuvable");
+}
+if (!app.includes('import { buildRouteDisplayGroups } from "./lib/route-display-groups.js";')
+    || !app.includes("buildRouteDisplayGroups({")) {
+  fail("App non branché directement sur le module de groupement des voies");
+}
+if (app.includes("const gradeRank = new Map(GRADES.map")) {
+  fail("copie locale du groupement des voies encore présente dans App");
+}
+if (!routeDisplayGroups.includes("export function buildRouteDisplayGroups")
+    || !routeDisplayGroups.includes("routes.map((route) => normalizeRopeNumber(route.numeroCorde))")) {
+  fail("module de groupement des voies incomplet ou cordes vides non masquées");
 }
 
 const backendPackage = JSON.parse(fs.readFileSync("backend/package.json", "utf8"));
@@ -39,7 +63,6 @@ if (app.includes("multi-signup") || app.includes('name="participantIds"')) fail(
 if (app.includes("Sans nom") || app.includes("Voie sans nom")) fail("un libellé Sans nom est encore affiché");
 if (!domain.includes("function formatRouteName(route)")) fail("formatage ouvreur puis nom de voie absent");
 if (!app.includes("async function deleteRealisation(realisation)")) fail("suppression de réalisation absente de la progression");
-if (!app.includes("state.routes.map((route) => normalizeRopeNumber(route.numeroCorde))")) fail("les cordes vides ne sont pas masquées");
 if (app.includes("l’ocre apparaît sur fond marron") || main.includes("l’ocre apparaît sur fond marron")) {
   fail("mention ocre sur fond marron encore présente dans le frontend");
 }

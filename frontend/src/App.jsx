@@ -21,7 +21,6 @@ import WallOfFame from "./pages/WallOfFame.jsx";
 import { THEME_OPTIONS, THEME_PREFERENCE_KEY, resolveThemePreference } from "./lib/theme.js";
 import { ROPE_NUMBERS, ROUTE_COLORS, STYLE_LABELS, ROUTE_TAGS, THECRAG_STYLE_BY_CLIMBCREW, TABS } from "./lib/ui-config.js";
 import {
-  GRADES,
   MAX_PARTICIPANTS,
   fullName,
   formatRouteName,
@@ -59,6 +58,7 @@ import { useParticipantEditorState } from "./hooks/useParticipantEditorState.js"
 import { useRouteEditorState } from "./hooks/useRouteEditorState.js";
 import { useRealisationEditorState } from "./hooks/useRealisationEditorState.js";
 import { PASSWORD_RULE_TEXT, isStrongPassword } from "./lib/password-policy.js";
+import { buildRouteDisplayGroups } from "./lib/route-display-groups.js";
 
 const ADMIN_CODE = import.meta.env.VITE_LEGACY_ADMIN_CODE || "";
 
@@ -193,36 +193,14 @@ function App() {
     [state.routes]
   );
 
-  // Prépare les groupes du tableau des voies. L'ordre des cotations suit GRADES
-  // afin que 6a+ soit placé entre 6a et 6b.
-  const routeDisplayGroups = useMemo(() => {
-    if (routeSortMode === "cotation") {
-      const gradeRank = new Map(GRADES.map((grade, index) => [grade, index]));
-      const grades = [...new Set(state.routes.map((route) => route.cotationAjustee || route.cotationReference || "nc"))]
-        .sort((gradeA, gradeB) => {
-          const rankA = gradeRank.has(gradeA) ? gradeRank.get(gradeA) : Number.MAX_SAFE_INTEGER;
-          const rankB = gradeRank.has(gradeB) ? gradeRank.get(gradeB) : Number.MAX_SAFE_INTEGER;
-          return rankA - rankB || String(gradeA).localeCompare(String(gradeB), "fr");
-        });
-
-      return grades.map((grade) => ({
-        key: `cotation-${grade}`,
-        label: `Cotation ${grade}`,
-        routes: state.routes.filter((route) => (route.cotationAjustee || route.cotationReference || "nc") === grade),
-      }));
-    }
-
-    return [...new Set(state.routes.map((route) => normalizeRopeNumber(route.numeroCorde)))]
-      .sort((numeroA, numeroB) => numeroA - numeroB)
-      .map((numeroCorde) => {
-        const rope = state.ropes.find((item) => normalizeRopeNumber(item.numeroCorde) === numeroCorde);
-        return {
-          key: `corde-${numeroCorde}`,
-          label: `Corde ${numeroCorde}${rope?.couleurCorde ? ` · ${rope.couleurCorde}` : ""}`,
-          routes: state.routes.filter((route) => normalizeRopeNumber(route.numeroCorde) === numeroCorde),
-        };
-      });
-  }, [routeSortMode, state.routes, state.ropes]);
+  const routeDisplayGroups = useMemo(
+    () => buildRouteDisplayGroups({
+      routes: state.routes,
+      ropes: state.ropes,
+      sortMode: routeSortMode,
+    }),
+    [routeSortMode, state.routes, state.ropes],
+  );
 
   const sessionsById = useMemo(
     () => Object.fromEntries(state.sessions.map((s) => [s.id, s])),
