@@ -1,8 +1,8 @@
 import { loadVideoAnalysisRules, normalizeVideoAnalysisRules } from "./video-analysis-rules.js";
 
-const MEDIAPIPE_MODULE_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/+esm";
-const MEDIAPIPE_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
-const POSE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+const MEDIAPIPE_MODULE_URL = "/mediapipe-runtime/vision_bundle.mjs";
+const MEDIAPIPE_WASM_URL = "/mediapipe-runtime/wasm";
+const POSE_MODEL_URL = "/mediapipe-runtime/models/pose_landmarker_lite.task";
 const MAX_ANALYSIS_SECONDS = 8 * 60;
 
 const LANDMARK = Object.freeze({
