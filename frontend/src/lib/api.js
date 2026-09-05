@@ -1,3 +1,5 @@
+import { enrichRealisationCreateOptions } from "./realisation-request-mode.js";
+
 export const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 export const USE_API = Boolean(API_BASE);
 
@@ -38,7 +40,8 @@ async function performApiFetch(path, options = {}) {
 }
 
 export async function apiFetch(path, options = {}) {
-  const method = String(options.method || "GET").toUpperCase();
+  const preparedOptions = enrichRealisationCreateOptions(path, options);
+  const method = String(preparedOptions.method || "GET").toUpperCase();
 
   // Au démarrage, App peut demander les mêmes données une première fois pendant
   // la vidéo d'introduction puis une seconde fois lorsque /auth/me se termine.
@@ -50,7 +53,7 @@ export async function apiFetch(path, options = {}) {
     const existingRequest = inFlightGetRequests.get(requestKey);
     if (existingRequest) return existingRequest;
 
-    const request = performApiFetch(path, options)
+    const request = performApiFetch(path, preparedOptions)
       .finally(() => {
         if (inFlightGetRequests.get(requestKey) === request) {
           inFlightGetRequests.delete(requestKey);
@@ -61,7 +64,7 @@ export async function apiFetch(path, options = {}) {
     return request;
   }
 
-  return performApiFetch(path, options);
+  return performApiFetch(path, preparedOptions);
 }
 
 export async function apiUpload(path, file, options = {}) {

@@ -12,7 +12,21 @@ import {
   formatRouteForRealisation,
   gradeToIndex,
 } from "../lib/domain.js";
-import { STYLE_LABELS } from "../lib/ui-config.js";
+import {
+  REALISATION_CRITERION_LABELS,
+  REALISATION_MODE_LABELS,
+  getRealisationCriterion,
+  getRealisationMode,
+} from "../lib/realisation-mode.js";
+
+function sortParticipantsForProfile(participants, myParticipantId) {
+  return [...participants].sort((a, b) => {
+    const aIsMe = String(a.id) === String(myParticipantId || "");
+    const bIsMe = String(b.id) === String(myParticipantId || "");
+    if (aIsMe !== bIsMe) return aIsMe ? -1 : 1;
+    return fullName(a).localeCompare(fullName(b), "fr");
+  });
+}
 
 export default function Profil({
   USE_API,
@@ -54,13 +68,13 @@ export default function Profil({
     apiFetch("/participants")
       .then((data) => {
         if (!mounted || !Array.isArray(data)) return;
-        setParticipants([...data].sort((a, b) => fullName(a).localeCompare(fullName(b), "fr")));
+        setParticipants(sortParticipantsForProfile(data, myParticipantId));
       })
       .catch((error) => {
         if (mounted) setProfileError(String(error.message || error));
       });
     return () => { mounted = false; };
-  }, [USE_API]);
+  }, [USE_API, myParticipantId]);
 
   if (!USE_API) return <div className="card"><div className="muted-box">Profil est disponible avec le backend API.</div></div>;
 
@@ -223,24 +237,45 @@ export default function Profil({
                     <div className="muted-box">Aucune réalisation enregistrée.</div>
                   ) : selectedRealisations.map((realisation) => {
                     const route = routesById[realisation.voieId];
+                    const modeRealisation = getRealisationMode(realisation, route);
+                    const criterionRealisation = getRealisationCriterion(realisation);
+                    const modeLabel = REALISATION_MODE_LABELS[modeRealisation] || modeRealisation;
+                    const criterionLabel = criterionRealisation
+                      ? REALISATION_CRITERION_LABELS[criterionRealisation]
+                      : "Critère non précisé (historique)";
+                    const forcedMoulinette = Boolean(route?.moulinetteOnly);
                     return (
                       <details className="subcard editable-realisation-card" key={realisation.id}>
                         <summary className="card-header realisation-summary">
                           <div>
                             <strong>{route ? formatRouteForRealisation(route) : "Voie inconnue"}</strong>
-                            <div className="small">{formatDateShortFr(realisation.dateRealisation?.slice(0, 10))} · {STYLE_LABELS[realisation.styleRealisation] || realisation.styleRealisation}</div>
+                            <div className="small">{formatDateShortFr(realisation.dateRealisation?.slice(0, 10))} · {modeLabel} · {criterionLabel}</div>
                           </div>
                           {isOwnProfile && <Button variant="danger" onClick={(event) => { event.preventDefault(); event.stopPropagation(); deleteOwnRealisation(realisation); }}>Supprimer</Button>}
                         </summary>
                         <div className="grid two">
-                          <div>
-                            <label>Style</label>
+                          <div className="realisation-mode-field" data-context="existing">
+                            <label>Mode</label>
                             <select
-                              value={realisation.styleRealisation || ""}
+                              className="realisation-mode-select"
+                              aria-label="Mode de réalisation"
+                              value={modeRealisation}
+                              disabled={!isOwnProfile || forcedMoulinette}
+                              onChange={(event) => updateOwnRealisation(realisation.id, { modeRealisation: event.target.value })}
+                            >
+                              {Object.entries(REALISATION_MODE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                            </select>
+                            {forcedMoulinette && <div className="small">Cette voie est configurée en moulinette uniquement.</div>}
+                          </div>
+                          <div>
+                            <label>Critère</label>
+                            <select
+                              value={criterionRealisation}
                               disabled={!isOwnProfile}
                               onChange={(event) => updateOwnRealisation(realisation.id, { styleRealisation: event.target.value })}
                             >
-                              {Object.entries(STYLE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                              {!criterionRealisation && <option value="" disabled>Non précisé (historique)</option>}
+                              {Object.entries(REALISATION_CRITERION_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                             </select>
                           </div>
                           <div>

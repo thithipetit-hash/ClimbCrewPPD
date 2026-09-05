@@ -2,7 +2,12 @@ import React from "react";
 import Button from "../components/Button.jsx";
 import ParticipantBadges from "../components/ParticipantBadges.jsx";
 import { GRADES, fullName, formatRouteForRealisation, formatPoints, formatDateShortFr } from "../lib/domain.js";
-import { STYLE_LABELS } from "../lib/ui-config.js";
+import {
+  REALISATION_CRITERION_LABELS,
+  REALISATION_MODE_LABELS,
+  getRealisationCriterion,
+  getRealisationMode,
+} from "../lib/realisation-mode.js";
 import CprEvolutionChart from "../sections/CprEvolutionChart.jsx";
 import ClimberProfilePanel from "../components/ClimberProfilePanel.jsx";
 import ProfileGecko from "../components/ProfileGecko.jsx";
@@ -151,19 +156,45 @@ export default function Progression({
             const displayedRating = ratingStars(realisation.rating);
             const canEditRealisation = String(realisation.participantId) === String(myParticipantId);
             const isIncludedInCpr = Boolean(cprByParticipantId[realisation.participantId]?.timeline.some((performance) => String(performance.id) === String(realisation.id)));
+            const modeRealisation = getRealisationMode(realisation, route);
+            const criterionRealisation = getRealisationCriterion(realisation);
+            const forcedMoulinette = Boolean(route?.moulinetteOnly);
+            const modeLabel = REALISATION_MODE_LABELS[modeRealisation] || modeRealisation;
+            const criterionLabel = criterionRealisation
+              ? REALISATION_CRITERION_LABELS[criterionRealisation]
+              : "Critère non précisé (historique)";
             return (
               <details className="subcard editable-realisation-card" key={realisation.id} open={expandedRealisationIds.includes(realisation.id)} onToggle={(event) => setRealisationExpanded(realisation.id, event.currentTarget.open)}>
                 <summary className="card-header realisation-summary">
                   <div>
                     <strong>{!selectedParticipantProgress && `${fullName(participant)} — `}{route ? formatRouteForRealisation(route) : "Voie inconnue"}</strong>
-                    <div className="small">{formatDateShortFr(realisation.dateRealisation?.slice(0, 10))} · {STYLE_LABELS[realisation.styleRealisation] || realisation.styleRealisation}{realisation.chute && <> · Vol{realisation.assureurId && participantsById[realisation.assureurId] ? ` · assuré par ${fullName(participantsById[realisation.assureurId])}` : ""}</>}{displayedRating && <> · <span aria-label={`Évaluation ${Number(realisation.rating)} sur 5`}>{displayedRating}</span></>}</div>
+                    <div className="small">{formatDateShortFr(realisation.dateRealisation?.slice(0, 10))} · {modeLabel} · {criterionLabel}{realisation.chute && <> · Vol{realisation.assureurId && participantsById[realisation.assureurId] ? ` · assuré par ${fullName(participantsById[realisation.assureurId])}` : ""}</>}{displayedRating && <> · <span aria-label={`Évaluation ${Number(realisation.rating)} sur 5`}>{displayedRating}</span></>}</div>
                   </div>
                   <div className="group">{isIncludedInCpr && <span className="pill">Prise en compte dans le CPR</span>}{canEditRealisation && <Button variant="danger" className="realisation-delete-button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); deleteRealisation(realisation); }}>Supprimer</Button>}</div>
                 </summary>
                 <div className="grid three">
                   <div><label>Séance</label><select value={realisation.sessionId} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { sessionId: event.target.value })}>{availableSessionsForRealisation.length === 0 ? <option value="">Aucune séance inscrite</option> : availableSessionsForRealisation.map((sessionOption) => <option key={sessionOption.id} value={sessionOption.id}>{formatDateShortFr(sessionOption.date)} · {sessionOption.slot}</option>)}</select></div>
                   <div><label>Voie</label><select value={realisation.voieId} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { voieId: event.target.value })}>{routes.map((routeOption) => <option key={routeOption.id} value={routeOption.id}>{formatRouteForRealisation(routeOption)}</option>)}</select></div>
-                  <div><label>Style</label><select value={realisation.styleRealisation} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { styleRealisation: event.target.value })}>{Object.entries(STYLE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
+                  <div className="realisation-mode-field" data-context="existing">
+                    <label>Mode</label>
+                    <select
+                      className="realisation-mode-select"
+                      aria-label="Mode de réalisation"
+                      value={modeRealisation}
+                      disabled={!canEditRealisation || forcedMoulinette}
+                      onChange={(event) => updateRealisation(realisation.id, { modeRealisation: event.target.value })}
+                    >
+                      {Object.entries(REALISATION_MODE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                    </select>
+                    {forcedMoulinette && <div className="small">Cette voie est configurée en moulinette uniquement.</div>}
+                  </div>
+                  <div>
+                    <label>Critère</label>
+                    <select value={criterionRealisation} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { styleRealisation: event.target.value })}>
+                      {!criterionRealisation && <option value="" disabled>Non précisé (historique)</option>}
+                      {Object.entries(REALISATION_CRITERION_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                    </select>
+                  </div>
                   <div><label>Cotation proposée</label><select value={realisation.cotationProposee || ""} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { cotationProposee: event.target.value })}><option value="">Aucune</option>{GRADES.map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select></div>
                   {displayedRating && <div><label>Évaluation</label><div className="pill" aria-label={`Évaluation ${Number(realisation.rating)} sur 5`}>{displayedRating}</div></div>}
                 </div>
