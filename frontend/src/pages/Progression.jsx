@@ -1,6 +1,7 @@
 import React from "react";
 import Button from "../components/Button.jsx";
 import ParticipantBadges from "../components/ParticipantBadges.jsx";
+import VideoTechnicalAnalysis from "../components/VideoTechnicalAnalysis.jsx";
 import { GRADES, fullName, formatRouteForRealisation, formatPoints, formatDateShortFr } from "../lib/domain.js";
 import {
   REALISATION_CRITERION_LABELS,
@@ -211,6 +212,7 @@ export default function Progression({
                   {displayedRating && <div><label>Évaluation</label><div className="pill" aria-label={`Évaluation ${Number(realisation.rating)} sur 5`}>{displayedRating}</div></div>}
                 </div>
                 <div style={{ marginTop: 8 }}><label>Commentaire</label><input value={realisation.commentaire || ""} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { commentaire: event.target.value })} /></div>
+                {route && <VideoTechnicalAnalysis videoUrls={route.videoUrls || []} />}
               </details>
             );
           })}
