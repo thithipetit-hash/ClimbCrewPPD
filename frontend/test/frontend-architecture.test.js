@@ -9,6 +9,9 @@ const mainUrl = new URL("../src/main.jsx", import.meta.url);
 const authPageUrl = new URL("../src/components/AuthPage.jsx", import.meta.url);
 const releaseEnhancementsUrl = new URL("../src/release-version-enhancements.js", import.meta.url);
 const sessionStatusDisplayUrl = new URL("../src/session-status-display.js", import.meta.url);
+const accountParticipantPriorityUrl = new URL("../src/account-participant-priority.js", import.meta.url);
+const accountParticipantPriorityRulesUrl = new URL("../src/account-participant-priority-rules.js", import.meta.url);
+const realisationModeUiUrl = new URL("../src/realisation-mode-ui.js", import.meta.url);
 const viteConfigUrl = new URL("../vite.config.js", import.meta.url);
 const adjustmentsUrl = new URL("../scripts/app-source-adjustments.mjs", import.meta.url);
 const routeGroupingUrl = new URL("../src/lib/route-display-groups.js", import.meta.url);
@@ -42,12 +45,17 @@ test("le build retire de App la logique métier de groupement des voies", () => 
   );
 });
 
-test("le noyau React historique et les deux patchs DOM finalisés ont disparu", async () => {
+test("le noyau React historique et les patchs DOM finalisés ont disparu", async () => {
   await assert.rejects(access(appCoreUrl));
   await assert.rejects(access(releaseEnhancementsUrl));
   await assert.rejects(access(sessionStatusDisplayUrl));
+  await assert.rejects(access(accountParticipantPriorityUrl));
+  await assert.rejects(access(accountParticipantPriorityRulesUrl));
+  await assert.rejects(access(realisationModeUiUrl));
   assert.equal(mainSource.includes("release-version-enhancements.js"), false);
   assert.equal(mainSource.includes("session-status-display.js"), false);
+  assert.equal(mainSource.includes("account-participant-priority.js"), false);
+  assert.equal(mainSource.includes("realisation-mode-ui.js"), false);
 });
 
 test("la soumission des écrans d'accès appartient au composant React", () => {
