@@ -52,14 +52,14 @@ export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, a
       <details className="faq-item">
         <summary><strong>Comment enregistrer une voie réalisée ?</strong></summary>
         <div className="small">
-          Dans l'onglet Voies, le bouton « Réalisation » ouvre la saisie. Dans Profil, lorsque votre propre profil est affiché, le bouton « Nouvelle réalisation » permet également d'enregistrer une voie pour le compte connecté. Seules vos propres réalisations peuvent être ajoutées, modifiées ou supprimées. La personne doit être cotisante et inscrite à une séance le jour choisi. La saisie ne distingue pas les créneaux midi et soir.
+          Dans l’onglet Voies, le bouton « Réalisation » ouvre la saisie. Dans Profil, lorsque votre propre profil est affiché, « Nouvelle réalisation » permet aussi d’enregistrer une voie pour le compte connecté. Le mode d’ascension (En tête ou Moulinette) et le critère (À vue, Flash, Travaillée, Avec repos, Projet, Non enchaînée ou Essai/test) sont sélectionnés séparément. Une voie configurée « moulinette uniquement » impose automatiquement le mode Moulinette. Seules vos propres réalisations peuvent être ajoutées, modifiées ou supprimées ; la personne doit être cotisante et inscrite à une séance le jour choisi.
         </div>
       </details>
 
       <details className="faq-item">
         <summary><strong>Quel grimpeur est affiché par défaut dans Profil ?</strong></summary>
         <div className="small">
-          À l'ouverture de l'onglet Profil, l'application affiche automatiquement le grimpeur associé au compte connecté. La liste « Grimpeur affiché » permet ensuite de consulter un autre grimpeur. Les actions personnelles — visibilité du profil, personnalisation, modification ou suppression de réalisations et export theCrag — restent disponibles uniquement lorsque votre propre profil est affiché.
+          À l'ouverture de l'onglet Profil, l'application affiche automatiquement le grimpeur associé au compte connecté. La liste « Grimpeur affiché » place également ce grimpeur en tête, puis permet d'en consulter un autre. Les actions personnelles — visibilité du profil, personnalisation, modification ou suppression de réalisations et export theCrag — restent disponibles uniquement lorsque votre propre profil est affiché.
         </div>
       </details>
 
@@ -122,7 +122,7 @@ export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, a
       <details className="faq-item">
         <summary><strong>Que signifie CPR ?</strong></summary>
         <div className="small">
-          Le CPR représente le niveau récent du grimpeur. Le calcul examine les réalisations des 90 derniers jours et convertit chaque cotation en indice, de 4a à 7b. Cet indice est multiplié par le coefficient du style : à vue 1,25 ; flash 1,20 ; en tête 1,00 ; moulinette 0,85 ; travaillée 0,75 ; avec repos 0,60 ; projet 0,30 ; non enchaînée 0,20 ; essai ou test 0,10. Les performances sont ensuite classées par indice pondéré et seules les 10 meilleures sont conservées. La moyenne de leurs indices pondérés est arrondie à l'indice de cotation le plus proche, puis reconvertie en cotation. S'il existe moins de 10 réalisations valides, le calcul utilise uniquement celles disponibles. Une voie facile d'échauffement ne réduit donc pas le CPR si elle ne figure pas parmi les 10 meilleures performances récentes.
+          Le CPR représente le niveau récent du grimpeur. Le calcul examine les réalisations des 90 derniers jours et convertit chaque cotation en indice, de 4a à 7b. Pour une réalisation en tête, le critère applique le coefficient correspondant : À vue 1,25 ; Flash 1,20 ; Travaillée 0,75 ; Avec repos 0,60 ; Projet 0,30 ; Non enchaînée 0,20 ; Essai/test 0,10. Le mode Moulinette utilise le coefficient 0,85. Les performances sont ensuite classées par indice pondéré et seules les 10 meilleures sont conservées. La moyenne de leurs indices pondérés est arrondie à l'indice de cotation le plus proche, puis reconvertie en cotation. S'il existe moins de 10 réalisations valides, le calcul utilise uniquement celles disponibles. Une voie facile d'échauffement ne réduit donc pas le CPR si elle ne figure pas parmi les 10 meilleures performances récentes.
         </div>
       </details>
 
@@ -136,7 +136,7 @@ export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, a
       <details className="faq-item">
         <summary><strong>Comment sont calculées les statistiques des réalisations en tête ?</strong></summary>
         <div className="small">
-          Le total correspond à tous les enregistrements dont le style est « En tête ». Pour chaque cotation, l'application compte les voies disponibles et les réalisations en tête enregistrées sur ces voies. Le ratio est égal au nombre de réalisations en tête divisé par le nombre de voies de la cotation. Il représente donc le nombre moyen de réalisations en tête par voie et peut dépasser 1. Sans voie pour une cotation, le ratio est indiqué « nc ».
+          Une réussite en tête associe le mode « En tête » à un critère de réussite : À vue, Flash ou Travaillée. Les anciennes réalisations enregistrées directement comme « En tête » restent compatibles. Pour chaque cotation, l’application compte les voies disponibles et ces réussites en tête ; le ratio correspond au nombre de réussites en tête divisé par le nombre de voies de la cotation. Sans voie pour une cotation, le ratio est indiqué « nc ».
         </div>
       </details>
 
@@ -150,7 +150,7 @@ export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, a
       <details className="faq-item">
         <summary><strong>Comment fonctionne la règle des 1 000 points ?</strong></summary>
         <div className="small">
-          Chaque voie distribue exactement 1 000 points entre les grimpeurs distincts qui l'ont enregistrée avec le style « En tête ». La part reçue pour une voie est donc égale à 1 000 divisé par le nombre de grimpeurs concernés. Par exemple, une personne seule reçoit 1 000 points ; quatre personnes reçoivent 250 points chacune. Plusieurs enregistrements en tête de la même voie par le même grimpeur ne lui donnent qu'une seule part. Les réalisations dans les autres styles ne distribuent pas de points. Le total d'un grimpeur est la somme de ses parts sur toutes les voies.
+          Chaque voie distribue exactement 1 000 points entre les grimpeurs distincts qui l’ont réussie en mode « En tête » avec un critère de réussite (À vue, Flash ou Travaillée). Une personne seule reçoit 1 000 points ; quatre personnes reçoivent 250 points chacune. Refaire plusieurs fois la même voie en tête ne donne qu’une seule part. Une réalisation en moulinette ne distribue jamais de points d’ascension en tête. Le total d'un grimpeur est la somme de ses parts sur toutes les voies.
         </div>
       </details>
 
