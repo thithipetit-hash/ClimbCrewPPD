@@ -24,6 +24,42 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Préparer la suppression du token frontend legacy
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          app_path = Path("frontend/src/App.jsx")
+          app = app_path.read_text()
+          app = app.replace(
+              '<FaqSection APP_VERSION={APP_VERSION} canAccessAdminTabs={canAccessAdminTabs} USE_API={USE_API} authToken={authToken} authUser={authUser} />',
+              '<FaqSection APP_VERSION={APP_VERSION} canAccessAdminTabs={canAccessAdminTabs} USE_API={USE_API} authUser={authUser} />',
+          )
+          app_path.write_text(app)
+
+          faq_path = Path("frontend/src/sections/FaqSection.jsx")
+          faq = faq_path.read_text()
+          faq = faq.replace(
+              'export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, authToken, authUser }) {',
+              'export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, authUser }) {',
+          )
+          faq = faq.replace(
+              '<DemandesEvolution USE_API={USE_API} authToken={authToken} authUser={authUser} />',
+              '<DemandesEvolution USE_API={USE_API} authUser={authUser} />',
+          )
+          faq_path.write_text(faq)
+
+          demandes_path = Path("frontend/src/pages/DemandesEvolution.jsx")
+          demandes = demandes_path.read_text()
+          demandes = demandes.replace('import { authApiFetch } from "../lib/api.js";', 'import { apiFetch } from "../lib/api.js";')
+          demandes = demandes.replace('export default function DemandesEvolution({ USE_API, authToken, authUser }) {', 'export default function DemandesEvolution({ USE_API, authUser }) {')
+          demandes = demandes.replace('authApiFetch(', 'apiFetch(')
+          demandes = demandes.replace(', authToken, {', ', {')
+          demandes = demandes.replace(', authToken)', ')')
+          demandes = demandes.replace('useEffect(() => { loadRequests(); }, [USE_API, authToken]);', 'useEffect(() => { loadRequests(); }, [USE_API, authUser?.id]);')
+          demandes_path.write_text(demandes)
+          PY
       - name: Appliquer la migration
         run: node scripts/apply-frontend-polish-005.mjs
       - name: Vérifier le frontend
