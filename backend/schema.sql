@@ -11,6 +11,8 @@ create table if not exists participants (
   sexe text not null default '' check (sexe in ('', 'h', 'f')),
   cotisation boolean not null default false,
   ffme boolean not null default false,
+  initiateur_sae boolean not null default false,
+  initiateur_sne boolean not null default false,
   can_encadrer boolean not null default false,
   can_referer boolean not null default false,
   can_admin boolean not null default false,
@@ -176,12 +178,24 @@ create table if not exists routes (
   active boolean not null default true,
   date_creation text not null default '',
   tags text[] not null default '{}',
+  video_urls text[] not null default '{}',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 create index if not exists idx_routes_numero_corde on routes(numero_corde);
 create index if not exists idx_routes_active on routes(active);
+
+create table if not exists route_videos (
+  id text primary key,
+  route_id text not null references routes(id) on delete cascade,
+  file_name text not null default 'video',
+  mime_type text not null,
+  content bytea not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_route_videos_route on route_videos(route_id);
 
 create table if not exists route_ratings (
   route_id text not null references routes(id) on delete cascade,
@@ -208,6 +222,7 @@ create table if not exists realisations (
   assureur_id bigint references participants(id) on delete set null,
   rating integer check (rating between 1 and 5),
   tags text[] not null default '{}',
+  video_urls jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -215,6 +230,16 @@ create table if not exists realisations (
 create index if not exists idx_realisations_participant on realisations(participant_id);
 create index if not exists idx_realisations_session on realisations(session_id);
 create index if not exists idx_realisations_voie on realisations(voie_id);
+
+create table if not exists video_analysis_settings (
+  id integer primary key check (id = 1),
+  rules jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+insert into video_analysis_settings (id, rules)
+values (1, '{}'::jsonb)
+on conflict (id) do nothing;
 
 create table if not exists evolution_requests (
   id bigserial primary key,
