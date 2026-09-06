@@ -16,12 +16,12 @@ concurrency:
 
 jobs:
   nginx_video_upload_limit:
-    name: Autoriser les vidéos de 50 Mo sur le proxy HTTPS
+    name: Autoriser les blocs vidéo du Profil
     runs-on: self-hosted
     timeout-minutes: 10
 
     steps:
-      - name: Corriger et valider le Nginx actif
+      - name: Corriger le Nginx local et valider un bloc de 5 Mo
         shell: bash
         run: |
           set -euo pipefail
@@ -217,10 +217,11 @@ jobs:
             exit 1
           fi
 
-          # Le runner voit le frontal via un chemin réseau interne dont le
-          # certificat ne correspond pas nécessairement au nom public. Pour ce
-          # test uniquement, on ignore la validation TLS : le but est de prouver
-          # qu'un corps >10 Mo franchit bien le Nginx actif et atteint l'API.
+          # Un frontal extérieur au serveur refuse les requêtes d'environ 10 Mo.
+          # Le Profil envoie désormais des blocs de 5 Mo : ce test vérifie que
+          # cette taille traverse réellement toute la chaîne jusqu'à ClimbCrew.
+          # --insecure est limité à ce diagnostic car le runner voit le frontal
+          # via un certificat interne dont le nom ne correspond pas au DNS public.
           PROBE_DOMAIN="$(tr ' ' '\n' < "$DETECTED_DOMAINS_FILE" | sed '/^$/d' | head -n 1)"
           if [ -z "$PROBE_DOMAIN" ]; then
             PROBE_DOMAIN="$EXPECTED_DOMAIN"
@@ -229,16 +230,16 @@ jobs:
 
           PROBE_FILE="$(mktemp)"
           trap 'rm -f "$PROBE_FILE" "$DETECTED_DOMAINS_FILE"' EXIT
-          dd if=/dev/zero of="$PROBE_FILE" bs=1M count=12 status=none
+          dd if=/dev/zero of="$PROBE_FILE" bs=1M count=5 status=none
           HTTP_CODE="$(curl --insecure --silent --show-error --output /tmp/climbcrew-upload-probe-response.txt \
             --write-out '%{http_code}' --max-time 60 \
-            -X POST -H 'Content-Type: video/mp4' \
+            -X POST -H 'Content-Type: application/octet-stream' \
             --data-binary "@$PROBE_FILE" \
-            "https://${PROBE_DOMAIN}/api/realisations/proxy-limit-probe/videos" || true)"
+            "https://${PROBE_DOMAIN}/api/realisations/proxy-limit-probe/video-uploads/proxy-probe-1234/chunks/0" || true)"
 
-          echo "Réponse du test 12 Mo : HTTP $HTTP_CODE"
+          echo "Réponse du test bloc 5 Mo : HTTP $HTTP_CODE"
           if [ "$HTTP_CODE" = "413" ]; then
-            echo "ERROR: le reverse proxy refuse encore les fichiers de plus de 10 Mo."
+            echo "ERROR: le frontal refuse encore un bloc vidéo de 5 Mo."
             exit 1
           fi
           if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" = "000" ] || [[ "$HTTP_CODE" =~ ^5 ]]; then
@@ -247,5 +248,5 @@ jobs:
           fi
 
           trap - ERR
-          echo "Nginx actif validé : client_max_body_size ${REQUIRED_LIMIT};"
-          echo "Un corps de 12 Mo franchit désormais le reverse proxy (HTTP ${HTTP_CODE})."
+          echo "Nginx local validé : client_max_body_size ${REQUIRED_LIMIT};"
+          echo "Un bloc vidéo de 5 Mo franchit la chaîne de proxy (HTTP ${HTTP_CODE})."
