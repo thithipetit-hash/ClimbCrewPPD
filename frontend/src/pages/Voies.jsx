@@ -17,6 +17,16 @@ function isLocalVideoUrl(url) {
   return /^\/routes\/[^/]+\/videos\/[^/]+$/.test(String(url || ""));
 }
 
+function localVideoId(url) {
+  const match = String(url || "").match(/^\/routes\/[^/]+\/videos\/([^/]+)$/);
+  if (!match) return "";
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
 function downloadableVideoUrl(url) {
   const videoUrl = playableVideoUrl(url);
   if (!isLocalVideoUrl(url)) return videoUrl;
@@ -50,9 +60,18 @@ export default function Voies({
   const [videoSaveStatus, setVideoSaveStatus] = React.useState("");
   const [videoSavingRouteId, setVideoSavingRouteId] = React.useState("");
   const [videoUploadingRouteId, setVideoUploadingRouteId] = React.useState("");
+  const [videoDeletingUrl, setVideoDeletingUrl] = React.useState("");
+  const [selectedComparisonVideos, setSelectedComparisonVideos] = React.useState([]);
+  const [comparisonOpen, setComparisonOpen] = React.useState(false);
 
   const allRoutes = routeDisplayGroups.flatMap((group) => group.routes);
   const videoRoute = allRoutes.find((route) => String(route.id) === String(videoRouteId)) || null;
+
+  React.useEffect(() => {
+    setSelectedComparisonVideos([]);
+    setComparisonOpen(false);
+    setVideoSaveStatus("");
+  }, [videoRouteId]);
 
   function effectiveVideoUrls(route) {
     const local = videoDraftByRouteId[route.id];
@@ -64,6 +83,16 @@ export default function Voies({
     const local = videoDraftByRouteId[route.id];
     if (local && Object.hasOwn(local, "draft")) return local.draft;
     return effectiveVideoUrls(route).filter((url) => !isLocalVideoUrl(url)).join("\n");
+  }
+
+  function setSavedVideoUrls(route, savedUrls) {
+    setVideoDraftByRouteId((current) => ({
+      ...current,
+      [route.id]: {
+        draft: savedUrls.filter((url) => !isLocalVideoUrl(url)).join("\n"),
+        savedUrls,
+      },
+    }));
   }
 
   function updateVideoDraft(route, draft) {
@@ -84,19 +113,64 @@ export default function Voies({
       const savedUrls = Array.isArray(result?.route?.videoUrls)
         ? result.route.videoUrls
         : [...effectiveVideoUrls(route), result.url].filter(Boolean);
-      setVideoDraftByRouteId((current) => ({
-        ...current,
-        [route.id]: {
-          draft: savedUrls.filter((url) => !isLocalVideoUrl(url)).join("\n"),
-          savedUrls,
-        },
-      }));
+      setSavedVideoUrls(route, savedUrls);
       setVideoSaveStatus("Vidéo chargée.");
     } catch (error) {
       setVideoSaveStatus(error.message || "Chargement de la vidéo impossible.");
     } finally {
       setVideoUploadingRouteId("");
     }
+  }
+
+  async function deleteVideo(route, url) {
+    const confirmed = window.confirm("Supprimer définitivement cette vidéo de la voie ?");
+    if (!confirmed) return;
+
+    try {
+      setVideoDeletingUrl(url);
+      setVideoSaveStatus("");
+      let savedUrls;
+
+      if (isLocalVideoUrl(url)) {
+        const videoId = localVideoId(url);
+        if (!videoId) throw new Error("Identifiant de vidéo invalide.");
+        const result = await apiFetch(`/routes/${encodeURIComponent(route.id)}/videos/${encodeURIComponent(videoId)}`, {
+          method: "DELETE",
+        });
+        savedUrls = Array.isArray(result?.route?.videoUrls)
+          ? result.route.videoUrls
+          : effectiveVideoUrls(route).filter((candidate) => candidate !== url);
+      } else {
+        const videoUrls = effectiveVideoUrls(route).filter((candidate) => candidate !== url);
+        const updated = await apiFetch(`/routes/${encodeURIComponent(route.id)}`, {
+          method: "PUT",
+          body: JSON.stringify({ videoUrls }),
+        });
+        savedUrls = Array.isArray(updated?.videoUrls) ? updated.videoUrls : videoUrls;
+      }
+
+      setSavedVideoUrls(route, savedUrls);
+      setSelectedComparisonVideos((current) => current.filter((candidate) => candidate !== url));
+      setComparisonOpen(false);
+      setVideoSaveStatus("Vidéo supprimée.");
+    } catch (error) {
+      setVideoSaveStatus(error.message || "Suppression de la vidéo impossible.");
+    } finally {
+      setVideoDeletingUrl("");
+    }
+  }
+
+  function toggleComparisonVideo(url) {
+    setComparisonOpen(false);
+    setSelectedComparisonVideos((current) => {
+      if (current.includes(url)) return current.filter((candidate) => candidate !== url);
+      if (current.length >= 2) {
+        setVideoSaveStatus("Deux vidéos sont déjà sélectionnées pour la comparaison.");
+        return current;
+      }
+      setVideoSaveStatus("");
+      return [...current, url];
+    });
   }
 
   async function saveRouteVideos(route, { silent = false } = {}) {
@@ -115,13 +189,7 @@ export default function Voies({
         body: JSON.stringify({ videoUrls }),
       });
       const savedUrls = Array.isArray(updated.videoUrls) ? updated.videoUrls : videoUrls;
-      setVideoDraftByRouteId((current) => ({
-        ...current,
-        [route.id]: {
-          draft: savedUrls.filter((url) => !isLocalVideoUrl(url)).join("\n"),
-          savedUrls,
-        },
-      }));
+      setSavedVideoUrls(route, savedUrls);
       if (!silent) setVideoSaveStatus(`${savedUrls.length} lien${savedUrls.length > 1 ? "s" : ""} vidéo enregistré${savedUrls.length > 1 ? "s" : ""}.`);
       return true;
     } catch (error) {
@@ -140,6 +208,8 @@ export default function Voies({
 
   if (videoRoute) {
     const videoUrls = effectiveVideoUrls(videoRoute);
+    const localVideoUrls = videoUrls.filter(isLocalVideoUrl);
+    const comparisonVideos = selectedComparisonVideos.filter((url) => videoUrls.includes(url)).slice(0, 2);
     return (
       <div className="card">
         <div className="card-header">
@@ -149,33 +219,113 @@ export default function Voies({
           </div>
           <Button variant="secondary" onClick={() => setVideoRouteId("")}>Retour aux voies</Button>
         </div>
-        {videoUrls.length === 0 ? <div className="muted-box">Aucune vidéo n’est encore associée à cette voie.</div> : (
-          <div className="stack">
-            {videoUrls.map((url, index) => (
-              <div className="subcard" key={`${url}-${index}`}>
-                <div className="card-header">
-                  <div><strong>Vidéo {index + 1}</strong>{!isLocalVideoUrl(url) && <div className="small" style={{ overflowWrap: "anywhere" }}>{url}</div>}</div>
-                  <div className="group">
-                    {isLocalVideoUrl(url) ? (
-                      <a className="pill" href={downloadableVideoUrl(url)} download style={{ textDecoration: "none" }}>Télécharger</a>
-                    ) : (
-                      <a className="pill" href={playableVideoUrl(url)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>Voir la vidéo</a>
-                    )}
-                  </div>
-                </div>
-                {isLocalVideoUrl(url) && (
-                  <video
-                    controls
-                    playsInline
-                    preload="metadata"
-                    src={playableVideoUrl(url)}
-                    style={{ width: "100%", maxHeight: "70vh", marginTop: 10, borderRadius: 12, background: "#000" }}
+
+        {localVideoUrls.length >= 2 && (
+          <div className="subcard" style={{ marginBottom: 12 }}>
+            <div className="card-header">
+              <div>
+                <strong>Comparer deux vidéos</strong>
+                <div className="small">Sélectionnez deux vidéos chargées dans l’application, puis lancez la comparaison.</div>
+              </div>
+              <div className="group">
+                <span className="badge">{comparisonVideos.length}/2</span>
+                <Button
+                  type="button"
+                  disabled={comparisonVideos.length !== 2}
+                  onClick={() => setComparisonOpen(true)}
+                >
+                  Comparer
+                </Button>
+                {comparisonVideos.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setSelectedComparisonVideos([]);
+                      setComparisonOpen(false);
+                    }}
                   >
-                    Votre navigateur ne permet pas la lecture de cette vidéo.
-                  </video>
+                    Effacer la sélection
+                  </Button>
                 )}
               </div>
-            ))}
+            </div>
+
+            {comparisonOpen && comparisonVideos.length === 2 && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 12 }}>
+                {comparisonVideos.map((url, index) => (
+                  <div key={url}>
+                    <div className="small" style={{ marginBottom: 6 }}><strong>Vidéo {index + 1}</strong></div>
+                    <video
+                      controls
+                      playsInline
+                      preload="metadata"
+                      src={playableVideoUrl(url)}
+                      style={{ width: "100%", maxHeight: "65vh", borderRadius: 12, background: "#000" }}
+                    >
+                      Votre navigateur ne permet pas la lecture de cette vidéo.
+                    </video>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {videoSaveStatus && <div className="small" style={{ marginBottom: 10 }}>{videoSaveStatus}</div>}
+
+        {videoUrls.length === 0 ? <div className="muted-box">Aucune vidéo n’est encore associée à cette voie.</div> : (
+          <div className="stack">
+            {videoUrls.map((url, index) => {
+              const localVideo = isLocalVideoUrl(url);
+              const selectedForComparison = selectedComparisonVideos.includes(url);
+              return (
+                <div className="subcard" key={`${url}-${index}`}>
+                  <div className="card-header">
+                    <div><strong>Vidéo {index + 1}</strong>{!localVideo && <div className="small" style={{ overflowWrap: "anywhere" }}>{url}</div>}</div>
+                    <div className="group">
+                      {localVideo && localVideoUrls.length >= 2 && (
+                        <Button
+                          type="button"
+                          variant={selectedForComparison ? "primary" : "secondary"}
+                          aria-pressed={selectedForComparison}
+                          onClick={() => toggleComparisonVideo(url)}
+                        >
+                          {selectedForComparison ? "Sélectionnée" : "Comparer"}
+                        </Button>
+                      )}
+                      {localVideo ? (
+                        <a className="pill" href={downloadableVideoUrl(url)} download style={{ textDecoration: "none" }}>Télécharger</a>
+                      ) : (
+                        <a className="pill" href={playableVideoUrl(url)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>Voir la vidéo</a>
+                      )}
+                      {adminUnlocked && (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          disabled={videoDeletingUrl === url}
+                          aria-busy={videoDeletingUrl === url}
+                          onClick={() => deleteVideo(videoRoute, url)}
+                        >
+                          {videoDeletingUrl === url ? "Suppression…" : "Supprimer"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {localVideo && (
+                    <video
+                      controls
+                      playsInline
+                      preload="metadata"
+                      src={playableVideoUrl(url)}
+                      style={{ width: "100%", maxHeight: "70vh", marginTop: 10, borderRadius: 12, background: "#000" }}
+                    >
+                      Votre navigateur ne permet pas la lecture de cette vidéo.
+                    </video>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
