@@ -89,7 +89,7 @@ export function installExplicitAdminUserRoutes(app, {
   app.put("/admin/participants/:participantId/account-notifications", requireAuth, requireAdmin, updateManagedAccountNotificationPreference);
   app.put("/admin/participants/:id/qualifications", requireAuth, requireAdmin, updateParticipantInitiatorQualifications);
   installVideoAnalysisSettingsRoutes(app, { requireAuth, requireAdmin });
-  installBackupRoutes(app, { requireAdmin });
+  installBackupRoutes(app, { requireAuth, requireAdmin });
 }
 
 // Le schéma est désormais intégralement géré par backend/database/migrate.js.
