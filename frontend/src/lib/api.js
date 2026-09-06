@@ -2,7 +2,7 @@ export const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_AP
 export const USE_API = Boolean(API_BASE);
 
 const inFlightGetRequests = new Map();
-export const VIDEO_UPLOAD_CHUNK_BYTES = 5 * 1024 * 1024;
+export const VIDEO_UPLOAD_CHUNK_BYTES = 768 * 1024;
 const VIDEO_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 
 const STATUS_MESSAGES = {
