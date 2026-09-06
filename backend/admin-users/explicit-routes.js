@@ -1,5 +1,4 @@
 import { ensureAdminUserSchema } from "./database.js";
-import { runDatabaseMigrations } from "./migration-service.js";
 import {
   changePassword,
   confirmEmailChange,
@@ -95,7 +94,6 @@ export function installExplicitAdminUserRoutes(app, {
 }
 
 export async function initializeAdminUserEnhancements() {
-  await runDatabaseMigrations();
   await ensureAdminUserSchema();
 }
 
