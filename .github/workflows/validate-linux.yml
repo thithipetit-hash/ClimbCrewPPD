@@ -132,6 +132,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          ready=false
+          for attempt in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:8080/ >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo "Frontend production unavailable for CSP browser validation."
+            exit 1
+          fi
+
           node --input-type=module <<'NODE'
           import { chromium } from "@playwright/test";
 
