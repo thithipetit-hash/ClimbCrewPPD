@@ -16,8 +16,8 @@ test("Profil permet d'enregistrer une réalisation avec une vidéo optionnelle",
   assert.match(recorderSource, /50 \* 1024 \* 1024/);
 });
 
-test("les vidéos du Profil sont découpées en blocs de 5 Mo avant transfert", () => {
-  assert.match(apiSource, /VIDEO_UPLOAD_CHUNK_BYTES = 5 \* 1024 \* 1024/);
+test("les vidéos du Profil sont découpées en blocs de 768 Kio avant transfert", () => {
+  assert.match(apiSource, /VIDEO_UPLOAD_CHUNK_BYTES = 768 \* 1024/);
   assert.match(apiSource, /file\.slice\(start, end, "application\/octet-stream"\)/);
   assert.match(apiSource, /\/chunks\/\$\{partNumber\}/);
   assert.match(apiSource, /\/complete/);
@@ -32,10 +32,9 @@ test("les vidéos d'une réalisation peuvent être effacées et comparées deux 
   assert.match(videoSource, /<video/);
 });
 
-test("le contrôle du proxy vérifie qu'un bloc de 5 Mo franchit le frontal", () => {
-  assert.match(nginxWorkflowSource, /REQUIRED_LIMIT="55m"/);
-  assert.match(nginxWorkflowSource, /nginx -t/);
-  assert.match(nginxWorkflowSource, /systemctl reload nginx/);
-  assert.match(nginxWorkflowSource, /bs=1M count=5/);
+test("le contrôle du proxy vérifie qu'un bloc de 768 Kio franchit la préproduction", () => {
+  assert.match(nginxWorkflowSource, /pre-climbcrew\.dip-tcs\.com/);
+  assert.match(nginxWorkflowSource, /client_max_body_size\[\[:space:\]\]\+55m/);
+  assert.match(nginxWorkflowSource, /bs=1K count=768/);
   assert.match(nginxWorkflowSource, /HTTP_CODE.*413/s);
 });
