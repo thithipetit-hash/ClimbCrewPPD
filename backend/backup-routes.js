@@ -28,12 +28,13 @@ function emailRuntimeConfig() {
 
 /**
  * Routes d'exploitation réservées aux administrateurs authentifiés.
- * Le middleware administrateur canonique est injecté par server.js via
- * explicit-routes.js afin qu'il n'existe plus de second chemin d'authentification.
- * Les dumps restent dans /backups et ne sont jamais exposés comme fichiers statiques.
+ * Les middlewares canoniques requireAuth puis requireAdmin sont injectés par
+ * server.js via explicit-routes.js afin qu'il n'existe plus de second chemin
+ * d'authentification. Les dumps restent dans /backups et ne sont jamais exposés
+ * comme fichiers statiques.
  */
-export function installBackupRoutes(app, { requireAdmin }) {
-  app.get("/admin/backups", requireAdmin, async (_req, res) => {
+export function installBackupRoutes(app, { requireAuth, requireAdmin }) {
+  app.get("/admin/backups", requireAuth, requireAdmin, async (_req, res) => {
     try {
       const backups = await listBackups();
       res.json({
@@ -50,7 +51,7 @@ export function installBackupRoutes(app, { requireAdmin }) {
     }
   });
 
-  app.post("/admin/backups", requireAdmin, async (_req, res) => {
+  app.post("/admin/backups", requireAuth, requireAdmin, async (_req, res) => {
     try {
       const backup = await createManualBackupAndEmail();
       res.status(201).json({ ok: true, backup });
@@ -60,7 +61,7 @@ export function installBackupRoutes(app, { requireAdmin }) {
     }
   });
 
-  app.post("/admin/backups/:filename/email", requireAdmin, async (req, res) => {
+  app.post("/admin/backups/:filename/email", requireAuth, requireAdmin, async (req, res) => {
     try {
       const result = await sendBackupByEmail(req.params.filename);
       res.json({ ok: true, sent: Boolean(result.sent), skipped: Boolean(result.skipped) });
@@ -72,6 +73,7 @@ export function installBackupRoutes(app, { requireAdmin }) {
 
   app.post(
     "/admin/backups/import",
+    requireAuth,
     requireAdmin,
     express.raw({ type: "application/octet-stream", limit: "50mb" }),
     async (req, res) => {
@@ -86,7 +88,7 @@ export function installBackupRoutes(app, { requireAdmin }) {
     },
   );
 
-  app.post("/admin/backups/:filename/restore", requireAdmin, async (req, res) => {
+  app.post("/admin/backups/:filename/restore", requireAuth, requireAdmin, async (req, res) => {
     if (String(req.body?.confirm || "") !== "RESTAURER") {
       return res.status(400).json({ error: "Confirmation RESTAURER requise" });
     }
