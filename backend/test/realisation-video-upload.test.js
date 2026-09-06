@@ -26,7 +26,7 @@ test("le chargement vidéo contrôle format, taille et journalisation", async ()
   assert.match(source, /video\/ogg/);
   assert.match(source, /video\/quicktime/);
   assert.match(source, /'realisation_video_upload'/);
-  assert.match(source, /realisation_id: req\.params\.id/);
+  assert.match(source, /realisation_id: realisationId/);
   assert.match(source, /route_id: realisation\.voie_id/);
-  assert.match(source, /size_bytes: req\.body\.length/);
+  assert.match(source, /size_bytes: content\.length/);
 });
