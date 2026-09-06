@@ -4,8 +4,8 @@ import { validateRealisationPayload } from "./validation.js";
 import { assertRealisationIntegrity } from "./realisation-integrity.js";
 
 const LOCAL_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
-const VIDEO_UPLOAD_CHUNK_MAX_BYTES = 6 * 1024 * 1024;
-const VIDEO_UPLOAD_MAX_PARTS = 12;
+const VIDEO_UPLOAD_CHUNK_MAX_BYTES = 1024 * 1024;
+const VIDEO_UPLOAD_MAX_PARTS = 80;
 const VIDEO_UPLOAD_ID_PATTERN = /^[A-Za-z0-9._-]{8,120}$/;
 const LOCAL_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/ogg", "video/quicktime"]);
 
@@ -253,7 +253,7 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
   });
 
   // Compatibilité avec les anciens clients. Les nouveaux écrans Profil utilisent
-  // le transfert fractionné ci-dessous pour traverser les proxies limités à 10 Mo.
+  // le transfert fractionné ci-dessous pour traverser les proxies limités à 1 Mo.
   app.post(
     "/realisations/:id/videos",
     requireAuth,
@@ -320,11 +320,11 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
       if (!VIDEO_UPLOAD_ID_PATTERN.test(uploadId)) {
         return res.status(400).json({ error: "Identifiant de transfert vidéo invalide." });
       }
-      if (!Number.isInteger(partNumber) || partNumber < 0 || partNumber >= totalParts) {
-        return res.status(400).json({ error: "Numéro de bloc vidéo invalide." });
-      }
       if (!Number.isInteger(totalParts) || totalParts < 1 || totalParts > VIDEO_UPLOAD_MAX_PARTS) {
         return res.status(400).json({ error: "Nombre de blocs vidéo invalide." });
+      }
+      if (!Number.isInteger(partNumber) || partNumber < 0 || partNumber >= totalParts) {
+        return res.status(400).json({ error: "Numéro de bloc vidéo invalide." });
       }
       if (!Number.isInteger(totalBytes) || totalBytes < 1 || totalBytes > LOCAL_VIDEO_MAX_BYTES) {
         return res.status(400).json({ error: "Taille totale de vidéo invalide." });
