@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - fix/preprod-nginx-upload-v005
   workflow_dispatch:
 
 permissions:
@@ -30,7 +31,7 @@ jobs:
           BACKUP_DIR="/tmp/climbcrew-nginx-backup-$(date +%s)"
           mkdir -p "$BACKUP_DIR"
 
-          for command in nginx python3 curl dd; do
+          for command in nginx python3 curl dd awk grep; do
             if ! command -v "$command" >/dev/null 2>&1; then
               echo "ERROR: commande requise absente : $command"
               exit 1
@@ -38,24 +39,35 @@ jobs:
           done
 
           NGINX_DUMP="$(sudo nginx -T 2>&1)"
+
+          echo "=== Repères du Nginx actif ==="
+          printf '%s\n' "$NGINX_DUMP" \
+            | grep -E '^(# configuration file |[[:space:]]*(server_name|proxy_pass|client_max_body_size)[[:space:]])' \
+            | head -n 250 || true
+
+          # Le serveur de préproduction a historiquement utilisé un bloc générique
+          # (sans le nom DNS pre-climbcrew). On privilégie donc le nom de domaine,
+          # puis on reconnaît le proxy ClimbCrew grâce à ses upstreams locaux.
           mapfile -t MATCHING_FILES < <(
             printf '%s\n' "$NGINX_DUMP" | awk -v domain="$DOMAIN" '
               /^# configuration file / {
                 file=$4
                 sub(/:$/, "", file)
               }
-              $0 ~ "server_name[[:space:]].*" domain {
-                if (file != "") print file
+              {
+                explicit_domain = ($0 ~ "server_name[[:space:]].*" domain)
+                climbcrew_upstream = ($0 ~ /proxy_pass[[:space:]]+http:\/\/127\.0\.0\.1:(3000|8080)/)
+                if ((explicit_domain || climbcrew_upstream) && file != "") print file
               }
             ' | sort -u
           )
 
           if [ "${#MATCHING_FILES[@]}" -eq 0 ]; then
-            echo "ERROR: impossible de localiser la configuration Nginx active de $DOMAIN"
+            echo "ERROR: aucun fichier actif ne référence le domaine ou les upstreams ClimbCrew 127.0.0.1:3000/8080."
             exit 1
           fi
 
-          echo "Configuration(s) active(s) détectée(s) : ${MATCHING_FILES[*]}"
+          echo "Configuration(s) candidate(s) : ${MATCHING_FILES[*]}"
 
           RESOLVED_FILES=()
           for config in "${MATCHING_FILES[@]}"; do
@@ -82,12 +94,13 @@ jobs:
           }
           trap 'restore_backups' ERR
 
+          EDITED_BLOCKS=0
           for target in "${RESOLVED_FILES[@]}"; do
             backup="$BACKUP_DIR/$(printf '%s' "$target" | sed 's#/#_#g')"
             sudo cp "$target" "$backup"
             sudo chown "$(id -u):$(id -g)" "$backup"
 
-            python3 - "$target" "$DOMAIN" "$REQUIRED_LIMIT" <<'PY'
+            edited="$(python3 - "$target" "$DOMAIN" "$REQUIRED_LIMIT" <<'PY'
           import pathlib
           import re
           import subprocess
@@ -97,10 +110,26 @@ jobs:
           path = pathlib.Path(sys.argv[1])
           domain = sys.argv[2]
           limit = sys.argv[3]
-          text = path.read_text(encoding="utf-8")
+          text = subprocess.run(
+              ["sudo", "cat", str(path)],
+              check=True,
+              capture_output=True,
+              text=True,
+          ).stdout
           lines = text.splitlines(keepends=True)
-          changed = False
           i = 0
+          edited_blocks = 0
+
+          def is_climbcrew_server(block: str) -> bool:
+              explicit_domain = re.search(
+                  rf"\bserver_name\b[^;]*\b{re.escape(domain)}\b[^;]*;",
+                  block,
+              )
+              local_upstream = re.search(
+                  r"proxy_pass\s+http://127\.0\.0\.1:(?:3000|8080)(?:[;/\s]|$)",
+                  block,
+              )
+              return bool(explicit_domain or local_upstream)
 
           while i < len(lines):
               if not re.match(r"^\s*server\s*\{", lines[i]):
@@ -114,58 +143,69 @@ jobs:
                   depth += lines[i].count("{") - lines[i].count("}")
                   i += 1
               end = i
-              block = "".join(lines[start:end])
-              if not re.search(rf"\bserver_name\b[^;]*\b{re.escape(domain)}\b[^;]*;", block):
+              block_lines = lines[start:end]
+              block = "".join(block_lines)
+              if not is_climbcrew_server(block):
                   continue
 
-              block_lines = lines[start:end]
               directive_indexes = [
                   idx for idx, line in enumerate(block_lines)
                   if re.search(r"\bclient_max_body_size\s+[^;]+;", line)
               ]
               if directive_indexes:
                   for idx in directive_indexes:
-                      newline = re.sub(
+                      block_lines[idx] = re.sub(
                           r"client_max_body_size\s+[^;]+;",
                           f"client_max_body_size {limit};",
                           block_lines[idx],
                       )
-                      if newline != block_lines[idx]:
-                          block_lines[idx] = newline
-                          changed = True
               else:
                   insert_at = next(
-                      (idx + 1 for idx, line in enumerate(block_lines) if "server_name" in line),
+                      (idx + 1 for idx, line in enumerate(block_lines) if re.search(r"\bserver_name\b", line)),
                       1,
                   )
-                  indent_match = re.match(r"^(\s*)", block_lines[insert_at - 1])
-                  indent = (indent_match.group(1) if indent_match else "    ") or "    "
+                  sample = block_lines[insert_at - 1] if block_lines else "    "
+                  indent = re.match(r"^(\s*)", sample).group(1) or "    "
                   block_lines.insert(insert_at, f"{indent}client_max_body_size {limit};\n")
-                  changed = True
                   end += 1
                   i += 1
 
               lines[start:end] = block_lines
+              edited_blocks += 1
 
-          if not changed and f"client_max_body_size {limit};" not in "".join(lines):
-              raise SystemExit(f"Aucun bloc server_name {domain} n'a pu être ajusté")
+          if edited_blocks:
+              output = "".join(lines)
+              with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
+                  handle.write(output)
+                  temp_name = handle.name
+              subprocess.run(["sudo", "cp", temp_name, str(path)], check=True)
+              pathlib.Path(temp_name).unlink(missing_ok=True)
 
-          output = "".join(lines)
-          with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
-              handle.write(output)
-              temp_name = handle.name
-          subprocess.run(["sudo", "cp", temp_name, str(path)], check=True)
-          pathlib.Path(temp_name).unlink(missing_ok=True)
+          print(edited_blocks)
           PY
+          )"
+            EDITED_BLOCKS=$((EDITED_BLOCKS + edited))
           done
+
+          if [ "$EDITED_BLOCKS" -lt 1 ]; then
+            echo "ERROR: aucun bloc server ClimbCrew n'a été reconnu dans les fichiers candidats."
+            exit 1
+          fi
+          echo "Blocs ClimbCrew ajustés : $EDITED_BLOCKS"
 
           sudo nginx -t
           sudo systemctl reload nginx
-          trap - ERR
+
+          # Contrôle de configuration chargé après reload.
+          RELOADED_DUMP="$(sudo nginx -T 2>&1)"
+          if ! printf '%s\n' "$RELOADED_DUMP" | grep -qE 'client_max_body_size[[:space:]]+55m;'; then
+            echo "ERROR: la limite 55m n'apparaît pas dans la configuration Nginx rechargée."
+            exit 1
+          fi
 
           # Contrôle de bout en bout : 12 Mo doivent franchir le proxy. Le backend
-          # peut répondre 401/403/404 sans authentification ; seul 413 prouve que
-          # le proxy bloque encore le corps avant qu'il atteigne l'application.
+          # peut répondre 401/403/404 sans authentification ; 413 signifie que le
+          # corps est encore bloqué avant d'atteindre l'application.
           PROBE_FILE="$(mktemp)"
           trap 'rm -f "$PROBE_FILE"' EXIT
           dd if=/dev/zero of="$PROBE_FILE" bs=1M count=12 status=none
@@ -185,5 +225,6 @@ jobs:
             exit 1
           fi
 
+          trap - ERR
           echo "Nginx actif validé : client_max_body_size ${REQUIRED_LIMIT};"
-          echo "Une vidéo de 12 Mo franchit désormais le reverse proxy public."
+          echo "Un corps de 12 Mo franchit désormais le reverse proxy public (HTTP ${HTTP_CODE})."
