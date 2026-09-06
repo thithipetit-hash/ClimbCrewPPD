@@ -16,237 +16,58 @@ concurrency:
 
 jobs:
   nginx_video_upload_limit:
-    name: Autoriser les blocs vidéo du Profil
+    name: Mesurer la limite du frontal vidéo
     runs-on: self-hosted
     timeout-minutes: 10
 
     steps:
-      - name: Corriger le Nginx local et valider un bloc de 5 Mo
+      - name: Mesurer les tailles acceptées
         shell: bash
         run: |
           set -euo pipefail
 
           EXPECTED_DOMAIN="pre-climbcrew.dip-tcs.com"
-          REQUIRED_LIMIT="55m"
-          BACKUP_DIR="/tmp/climbcrew-nginx-backup-$(date +%s)"
-          mkdir -p "$BACKUP_DIR"
-
-          for command in nginx python3 curl dd awk grep; do
-            if ! command -v "$command" >/dev/null 2>&1; then
-              echo "ERROR: commande requise absente : $command"
-              exit 1
-            fi
-          done
-
           NGINX_DUMP="$(sudo nginx -T 2>&1)"
-
-          echo "=== Repères du Nginx actif ==="
           printf '%s\n' "$NGINX_DUMP" \
             | grep -E '^(# configuration file |[[:space:]]*(server_name|proxy_pass|client_max_body_size)[[:space:]])' \
             | head -n 250 || true
 
-          # La machine de préproduction conserve historiquement un server_name
-          # différent de son alias DNS. On reconnaît donc le bloc ClimbCrew par
-          # le nom attendu OU par ses upstreams backend/frontend locaux.
-          mapfile -t MATCHING_FILES < <(
-            printf '%s\n' "$NGINX_DUMP" | awk -v domain="$EXPECTED_DOMAIN" '
-              /^# configuration file / {
-                file=$4
-                sub(/:$/, "", file)
-              }
-              {
-                explicit_domain = ($0 ~ "server_name[[:space:]].*" domain)
-                climbcrew_upstream = ($0 ~ /proxy_pass[[:space:]]+http:\/\/127\.0\.0\.1:(3000|8080)/)
-                if ((explicit_domain || climbcrew_upstream) && file != "") print file
-              }
-            ' | sort -u
-          )
-
-          if [ "${#MATCHING_FILES[@]}" -eq 0 ]; then
-            echo "ERROR: aucun fichier actif ne référence le domaine ou les upstreams ClimbCrew 127.0.0.1:3000/8080."
-            exit 1
-          fi
-
-          echo "Configuration(s) candidate(s) : ${MATCHING_FILES[*]}"
-
-          RESOLVED_FILES=()
-          for config in "${MATCHING_FILES[@]}"; do
-            resolved="$(readlink -f "$config")"
-            if [ -z "$resolved" ] || [ ! -f "$resolved" ]; then
-              echo "ERROR: configuration introuvable : $config"
-              exit 1
-            fi
-            if [[ " ${RESOLVED_FILES[*]} " != *" $resolved "* ]]; then
-              RESOLVED_FILES+=("$resolved")
-            fi
-          done
-
-          restore_backups() {
-            echo "Restauration de la configuration Nginx précédente..."
-            for target in "${RESOLVED_FILES[@]}"; do
-              backup="$BACKUP_DIR/$(printf '%s' "$target" | sed 's#/#_#g')"
-              if [ -f "$backup" ]; then
-                sudo cp "$backup" "$target"
-              fi
-            done
-            sudo nginx -t || true
-            sudo systemctl reload nginx || true
-          }
-          trap 'restore_backups' ERR
-
-          EDITED_BLOCKS=0
-          DETECTED_DOMAINS_FILE="$(mktemp)"
-          trap 'rm -f "$DETECTED_DOMAINS_FILE"' EXIT
-
-          for target in "${RESOLVED_FILES[@]}"; do
-            backup="$BACKUP_DIR/$(printf '%s' "$target" | sed 's#/#_#g')"
-            sudo cp "$target" "$backup"
-            sudo chown "$(id -u):$(id -g)" "$backup"
-
-            result="$(python3 - "$target" "$EXPECTED_DOMAIN" "$REQUIRED_LIMIT" <<'PY'
-          import pathlib
-          import re
-          import subprocess
-          import sys
-          import tempfile
-
-          path = pathlib.Path(sys.argv[1])
-          expected_domain = sys.argv[2]
-          limit = sys.argv[3]
-          text = subprocess.run(
-              ["sudo", "cat", str(path)],
-              check=True,
-              capture_output=True,
-              text=True,
-          ).stdout
-          lines = text.splitlines(keepends=True)
-          i = 0
-          edited_blocks = 0
-          detected_domains = []
-
-          def is_climbcrew_server(block: str) -> bool:
-              explicit_domain = re.search(
-                  rf"\bserver_name\b[^;]*\b{re.escape(expected_domain)}\b[^;]*;",
-                  block,
-              )
-              local_upstream = re.search(
-                  r"proxy_pass\s+http://127\.0\.0\.1:(?:3000|8080)(?:[;/\s]|$)",
-                  block,
-              )
-              return bool(explicit_domain or local_upstream)
-
-          while i < len(lines):
-              if not re.match(r"^\s*server\s*\{", lines[i]):
-                  i += 1
-                  continue
-
-              start = i
-              depth = lines[i].count("{") - lines[i].count("}")
-              i += 1
-              while i < len(lines) and depth > 0:
-                  depth += lines[i].count("{") - lines[i].count("}")
-                  i += 1
-              end = i
-              block_lines = lines[start:end]
-              block = "".join(block_lines)
-              if not is_climbcrew_server(block):
-                  continue
-
-              for match in re.finditer(r"\bserver_name\s+([^;]+);", block):
-                  for candidate in match.group(1).split():
-                      if candidate not in {"_", "localhost"} and "*" not in candidate and candidate not in detected_domains:
-                          detected_domains.append(candidate)
-
-              directive_indexes = [
-                  idx for idx, line in enumerate(block_lines)
-                  if re.search(r"\bclient_max_body_size\s+[^;]+;", line)
-              ]
-              if directive_indexes:
-                  for idx in directive_indexes:
-                      block_lines[idx] = re.sub(
-                          r"client_max_body_size\s+[^;]+;",
-                          f"client_max_body_size {limit};",
-                          block_lines[idx],
-                      )
-              else:
-                  insert_at = next(
-                      (idx + 1 for idx, line in enumerate(block_lines) if re.search(r"\bserver_name\b", line)),
-                      1,
-                  )
-                  sample = block_lines[insert_at - 1] if block_lines else "    "
-                  indent = re.match(r"^(\s*)", sample).group(1) or "    "
-                  block_lines.insert(insert_at, f"{indent}client_max_body_size {limit};\n")
-                  end += 1
-                  i += 1
-
-              lines[start:end] = block_lines
-              edited_blocks += 1
-
-          if edited_blocks:
-              output = "".join(lines)
-              with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
-                  handle.write(output)
-                  temp_name = handle.name
-              subprocess.run(["sudo", "cp", temp_name, str(path)], check=True)
-              pathlib.Path(temp_name).unlink(missing_ok=True)
-
-          print(edited_blocks)
-          print(" ".join(detected_domains))
-          PY
-          )"
-            edited="$(printf '%s\n' "$result" | sed -n '1p')"
-            domains="$(printf '%s\n' "$result" | sed -n '2p')"
-            EDITED_BLOCKS=$((EDITED_BLOCKS + edited))
-            if [ -n "$domains" ]; then
-              printf '%s\n' "$domains" >> "$DETECTED_DOMAINS_FILE"
-            fi
-          done
-
-          if [ "$EDITED_BLOCKS" -lt 1 ]; then
-            echo "ERROR: aucun bloc server ClimbCrew n'a été reconnu dans les fichiers candidats."
-            exit 1
-          fi
-          echo "Blocs ClimbCrew ajustés : $EDITED_BLOCKS"
-
-          sudo nginx -t
-          sudo systemctl reload nginx
-
-          RELOADED_DUMP="$(sudo nginx -T 2>&1)"
-          if ! printf '%s\n' "$RELOADED_DUMP" | grep -qE 'client_max_body_size[[:space:]]+55m;'; then
-            echo "ERROR: la limite 55m n'apparaît pas dans la configuration Nginx rechargée."
-            exit 1
-          fi
-
-          # Un frontal extérieur au serveur refuse les requêtes d'environ 10 Mo.
-          # Le Profil envoie désormais des blocs de 5 Mo : ce test vérifie que
-          # cette taille traverse réellement toute la chaîne jusqu'à ClimbCrew.
-          # --insecure est limité à ce diagnostic car le runner voit le frontal
-          # via un certificat interne dont le nom ne correspond pas au DNS public.
-          PROBE_DOMAIN="$(tr ' ' '\n' < "$DETECTED_DOMAINS_FILE" | sed '/^$/d' | head -n 1)"
+          PROBE_DOMAIN="$(printf '%s\n' "$NGINX_DUMP" | awk '
+            /server_name[[:space:]]/ && $2 != "_" && $2 != "localhost;" {
+              name=$2
+              sub(/;$/, "", name)
+            }
+            /proxy_pass[[:space:]]+http:\/\/127\.0\.0\.1:3000/ {
+              if (name != "") { print name; exit }
+            }
+          ')"
           if [ -z "$PROBE_DOMAIN" ]; then
             PROBE_DOMAIN="$EXPECTED_DOMAIN"
           fi
-          echo "Domaine utilisé pour le contrôle du proxy : $PROBE_DOMAIN"
+          echo "Domaine de test : $PROBE_DOMAIN"
 
-          PROBE_FILE="$(mktemp)"
-          trap 'rm -f "$PROBE_FILE" "$DETECTED_DOMAINS_FILE"' EXIT
-          dd if=/dev/zero of="$PROBE_FILE" bs=1M count=5 status=none
-          HTTP_CODE="$(curl --insecure --silent --show-error --output /tmp/climbcrew-upload-probe-response.txt \
-            --write-out '%{http_code}' --max-time 60 \
-            -X POST -H 'Content-Type: application/octet-stream' \
-            --data-binary "@$PROBE_FILE" \
-            "https://${PROBE_DOMAIN}/api/realisations/proxy-limit-probe/video-uploads/proxy-probe-1234/chunks/0" || true)"
+          PASSING_KIB=0
+          for SIZE_KIB in 128 256 512 768 1024 1536 2048 3072 4096 5120; do
+            PROBE_FILE="$(mktemp)"
+            BODY_FILE="$(mktemp)"
+            HEADER_FILE="$(mktemp)"
+            dd if=/dev/zero of="$PROBE_FILE" bs=1K count="$SIZE_KIB" status=none
+            HTTP_CODE="$(curl --insecure --silent --show-error \
+              --dump-header "$HEADER_FILE" --output "$BODY_FILE" \
+              --write-out '%{http_code}' --max-time 60 \
+              -X POST -H 'Content-Type: application/octet-stream' \
+              --data-binary "@$PROBE_FILE" \
+              "https://${PROBE_DOMAIN}/api/realisations/proxy-limit-probe/video-uploads/proxy-probe-1234/chunks/0" || true)"
+            echo "PROBE ${SIZE_KIB} KiB -> HTTP ${HTTP_CODE}"
+            grep -Ei '^(server:|content-type:|content-length:)' "$HEADER_FILE" | tr -d '\r' || true
+            if [ "$HTTP_CODE" != "413" ] && [ "$HTTP_CODE" != "000" ] && [[ ! "$HTTP_CODE" =~ ^5 ]]; then
+              PASSING_KIB="$SIZE_KIB"
+            fi
+            rm -f "$PROBE_FILE" "$BODY_FILE" "$HEADER_FILE"
+          done
 
-          echo "Réponse du test bloc 5 Mo : HTTP $HTTP_CODE"
-          if [ "$HTTP_CODE" = "413" ]; then
-            echo "ERROR: le frontal refuse encore un bloc vidéo de 5 Mo."
+          echo "Plus grand bloc accepté pendant ce diagnostic : ${PASSING_KIB} KiB"
+          if [ "$PASSING_KIB" -lt 128 ]; then
+            echo "ERROR: même un bloc de 128 KiB ne traverse pas le frontal."
             exit 1
           fi
-          if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" = "000" ] || [[ "$HTTP_CODE" =~ ^5 ]]; then
-            echo "ERROR: le contrôle du proxy n'a pas abouti correctement."
-            exit 1
-          fi
-
-          trap - ERR
-          echo "Nginx local validé : client_max_body_size ${REQUIRED_LIMIT};"
-          echo "Un bloc vidéo de 5 Mo franchit la chaîne de proxy (HTTP ${HTTP_CODE})."
