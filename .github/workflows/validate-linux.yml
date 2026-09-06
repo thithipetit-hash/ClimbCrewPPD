@@ -127,6 +127,53 @@ jobs:
             exit 1
           fi
 
+      - name: Verify production CSP permits WebAssembly but blocks JavaScript eval
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { chromium } from "@playwright/test";
+
+          const browser = await chromium.launch({ headless: true });
+          try {
+            const page = await browser.newPage();
+            const response = await page.goto("http://127.0.0.1:8080/", { waitUntil: "domcontentloaded" });
+            if (!response || !response.ok()) {
+              throw new Error(`Frontend production inaccessible: HTTP ${response?.status() ?? "unknown"}`);
+            }
+
+            const result = await page.evaluate(async () => {
+              let wasmOk = false;
+              let wasmError = "";
+              try {
+                await WebAssembly.instantiate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]));
+                wasmOk = true;
+              } catch (error) {
+                wasmError = String(error);
+              }
+
+              let evalBlocked = false;
+              try {
+                globalThis.eval("1 + 1");
+              } catch {
+                evalBlocked = true;
+              }
+
+              return { wasmOk, wasmError, evalBlocked };
+            });
+
+            if (!result.wasmOk) {
+              throw new Error(`La CSP bloque encore WebAssembly: ${result.wasmError}`);
+            }
+            if (!result.evalBlocked) {
+              throw new Error("La CSP autorise eval() JavaScript alors qu'il doit rester bloqué.");
+            }
+          } finally {
+            await browser.close();
+          }
+          NODE
+
       - name: Runtime health and authorization smoke tests
         shell: bash
         run: |
