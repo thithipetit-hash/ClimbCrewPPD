@@ -24,10 +24,13 @@ test("le schéma admin et vidéo n'est plus créé dans les routes runtime", () 
   assert.match(migrationSource, /idx_route_videos_source_realisation/i);
 });
 
-test("les sauvegardes utilisent le middleware administrateur canonique injecté", () => {
+test("les sauvegardes utilisent authentification puis autorisation canoniques", () => {
   assert.doesNotMatch(backupRoutesSource, /admin-users\/security\.js/);
-  assert.match(backupRoutesSource, /installBackupRoutes\(app, \{ requireAdmin \}\)/);
-  assert.match(explicitRoutesSource, /installBackupRoutes\(app, \{ requireAdmin \}\)/);
+  assert.match(backupRoutesSource, /installBackupRoutes\(app, \{ requireAuth, requireAdmin \}\)/);
+  assert.match(explicitRoutesSource, /installBackupRoutes\(app, \{ requireAuth, requireAdmin \}\)/);
+  assert.match(backupRoutesSource, /app\.get\("\/admin\/backups", requireAuth, requireAdmin/);
+  assert.match(backupRoutesSource, /app\.post\("\/admin\/backups", requireAuth, requireAdmin/);
+  assert.match(backupRoutesSource, /"\/admin\/backups\/import",\s*requireAuth,\s*requireAdmin,/);
 });
 
 test("la sécurité Express 4 transmet les rejets async à next", async () => {
