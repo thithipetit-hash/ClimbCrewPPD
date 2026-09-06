@@ -1,0 +1,189 @@
+name: Ensure preproduction video upload proxy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: climbcrew-preprod-nginx-upload-limit
+  cancel-in-progress: false
+
+jobs:
+  nginx_video_upload_limit:
+    name: Autoriser les vidéos de 50 Mo sur le proxy HTTPS
+    runs-on: self-hosted
+    timeout-minutes: 10
+
+    steps:
+      - name: Corriger et valider le Nginx actif
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DOMAIN="pre-climbcrew.dip-tcs.com"
+          REQUIRED_LIMIT="55m"
+          BACKUP_DIR="/tmp/climbcrew-nginx-backup-$(date +%s)"
+          mkdir -p "$BACKUP_DIR"
+
+          for command in nginx python3 curl dd; do
+            if ! command -v "$command" >/dev/null 2>&1; then
+              echo "ERROR: commande requise absente : $command"
+              exit 1
+            fi
+          done
+
+          NGINX_DUMP="$(sudo nginx -T 2>&1)"
+          mapfile -t MATCHING_FILES < <(
+            printf '%s\n' "$NGINX_DUMP" | awk -v domain="$DOMAIN" '
+              /^# configuration file / {
+                file=$4
+                sub(/:$/, "", file)
+              }
+              $0 ~ "server_name[[:space:]].*" domain {
+                if (file != "") print file
+              }
+            ' | sort -u
+          )
+
+          if [ "${#MATCHING_FILES[@]}" -eq 0 ]; then
+            echo "ERROR: impossible de localiser la configuration Nginx active de $DOMAIN"
+            exit 1
+          fi
+
+          echo "Configuration(s) active(s) détectée(s) : ${MATCHING_FILES[*]}"
+
+          RESOLVED_FILES=()
+          for config in "${MATCHING_FILES[@]}"; do
+            resolved="$(readlink -f "$config")"
+            if [ -z "$resolved" ] || [ ! -f "$resolved" ]; then
+              echo "ERROR: configuration introuvable : $config"
+              exit 1
+            fi
+            if [[ " ${RESOLVED_FILES[*]} " != *" $resolved "* ]]; then
+              RESOLVED_FILES+=("$resolved")
+            fi
+          done
+
+          restore_backups() {
+            echo "Restauration de la configuration Nginx précédente..."
+            for target in "${RESOLVED_FILES[@]}"; do
+              backup="$BACKUP_DIR/$(printf '%s' "$target" | sed 's#/#_#g')"
+              if [ -f "$backup" ]; then
+                sudo cp "$backup" "$target"
+              fi
+            done
+            sudo nginx -t || true
+            sudo systemctl reload nginx || true
+          }
+          trap 'restore_backups' ERR
+
+          for target in "${RESOLVED_FILES[@]}"; do
+            backup="$BACKUP_DIR/$(printf '%s' "$target" | sed 's#/#_#g')"
+            sudo cp "$target" "$backup"
+            sudo chown "$(id -u):$(id -g)" "$backup"
+
+            python3 - "$target" "$DOMAIN" "$REQUIRED_LIMIT" <<'PY'
+          import pathlib
+          import re
+          import subprocess
+          import sys
+          import tempfile
+
+          path = pathlib.Path(sys.argv[1])
+          domain = sys.argv[2]
+          limit = sys.argv[3]
+          text = path.read_text(encoding="utf-8")
+          lines = text.splitlines(keepends=True)
+          changed = False
+          i = 0
+
+          while i < len(lines):
+              if not re.match(r"^\s*server\s*\{", lines[i]):
+                  i += 1
+                  continue
+
+              start = i
+              depth = lines[i].count("{") - lines[i].count("}")
+              i += 1
+              while i < len(lines) and depth > 0:
+                  depth += lines[i].count("{") - lines[i].count("}")
+                  i += 1
+              end = i
+              block = "".join(lines[start:end])
+              if not re.search(rf"\bserver_name\b[^;]*\b{re.escape(domain)}\b[^;]*;", block):
+                  continue
+
+              block_lines = lines[start:end]
+              directive_indexes = [
+                  idx for idx, line in enumerate(block_lines)
+                  if re.search(r"\bclient_max_body_size\s+[^;]+;", line)
+              ]
+              if directive_indexes:
+                  for idx in directive_indexes:
+                      newline = re.sub(
+                          r"client_max_body_size\s+[^;]+;",
+                          f"client_max_body_size {limit};",
+                          block_lines[idx],
+                      )
+                      if newline != block_lines[idx]:
+                          block_lines[idx] = newline
+                          changed = True
+              else:
+                  insert_at = next(
+                      (idx + 1 for idx, line in enumerate(block_lines) if "server_name" in line),
+                      1,
+                  )
+                  indent_match = re.match(r"^(\s*)", block_lines[insert_at - 1])
+                  indent = (indent_match.group(1) if indent_match else "    ") or "    "
+                  block_lines.insert(insert_at, f"{indent}client_max_body_size {limit};\n")
+                  changed = True
+                  end += 1
+                  i += 1
+
+              lines[start:end] = block_lines
+
+          if not changed and f"client_max_body_size {limit};" not in "".join(lines):
+              raise SystemExit(f"Aucun bloc server_name {domain} n'a pu être ajusté")
+
+          output = "".join(lines)
+          with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
+              handle.write(output)
+              temp_name = handle.name
+          subprocess.run(["sudo", "cp", temp_name, str(path)], check=True)
+          pathlib.Path(temp_name).unlink(missing_ok=True)
+          PY
+          done
+
+          sudo nginx -t
+          sudo systemctl reload nginx
+          trap - ERR
+
+          # Contrôle de bout en bout : 12 Mo doivent franchir le proxy. Le backend
+          # peut répondre 401/403/404 sans authentification ; seul 413 prouve que
+          # le proxy bloque encore le corps avant qu'il atteigne l'application.
+          PROBE_FILE="$(mktemp)"
+          trap 'rm -f "$PROBE_FILE"' EXIT
+          dd if=/dev/zero of="$PROBE_FILE" bs=1M count=12 status=none
+          HTTP_CODE="$(curl --silent --show-error --output /tmp/climbcrew-upload-probe-response.txt \
+            --write-out '%{http_code}' --max-time 60 \
+            -X POST -H 'Content-Type: video/mp4' \
+            --data-binary "@$PROBE_FILE" \
+            "https://${DOMAIN}/api/realisations/proxy-limit-probe/videos" || true)"
+
+          echo "Réponse du test public 12 Mo : HTTP $HTTP_CODE"
+          if [ "$HTTP_CODE" = "413" ]; then
+            echo "ERROR: le reverse proxy public refuse encore les fichiers de plus de 10 Mo."
+            exit 1
+          fi
+          if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" = "000" ] || [[ "$HTTP_CODE" =~ ^5 ]]; then
+            echo "ERROR: le contrôle public du proxy n'a pas abouti correctement."
+            exit 1
+          fi
+
+          echo "Nginx actif validé : client_max_body_size ${REQUIRED_LIMIT};"
+          echo "Une vidéo de 12 Mo franchit désormais le reverse proxy public."
