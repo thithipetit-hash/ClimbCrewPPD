@@ -9,6 +9,7 @@ const SMALL_PUBLIC_AUTH_PATHS = new Set([
   "/auth/forgot-password",
   "/auth/reset-password",
 ]);
+const VIDEO_UPLOAD_CHUNK_PATH = /^\/realisations\/[^/]+\/video-uploads\/[^/]+\/chunks\/\d+$/;
 
 function boundedInteger(value, fallback, minimum, maximum) {
   const parsed = Number(value);
@@ -62,6 +63,12 @@ function canonicalClientIp(req) {
   return OVERFLOW_IP;
 }
 
+function isVideoUploadChunkRequest({ method, path, contentType }) {
+  return method === "POST"
+    && contentType.includes("application/octet-stream")
+    && VIDEO_UPLOAD_CHUNK_PATH.test(path);
+}
+
 function takeBucket(key, now = Date.now()) {
   const current = buckets.get(key);
   if (!current) {
@@ -94,7 +101,11 @@ function takeBucket(key, now = Date.now()) {
  * - borne le nombre de clés IP conservées en mémoire ;
  * - refuse les corps anormalement gros sur les routes publiques d'authentification ;
  * - limite les JSON ordinaires à 2 Mo avant parsing. L'import legacy administrateur
- *   reste l'unique exception JSON car il peut contenir un export métier complet.
+ *   reste l'unique exception JSON car il peut contenir un export métier complet ;
+ * - ne compte pas les blocs binaires du transfert vidéo fractionné dans le plafond
+ *   très strict de 30 écritures/minute. Ces blocs restent protégés par
+ *   l'authentification, la limite de 1 Mo de la route et le limiteur général des
+ *   écritures appliqué plus loin dans la pile HTTP.
  */
 export function preBodyRequestGuard(req, res, next) {
   const method = String(req.method || "GET").toUpperCase();
@@ -119,6 +130,10 @@ export function preBodyRequestGuard(req, res, next) {
   // bornée afin que leur Map historique ne puisse plus croître au-delà du plafond.
   req.headers["x-forwarded-for"] = canonicalIp;
   req.headers["x-real-ip"] = canonicalIp;
+
+  if (isVideoUploadChunkRequest({ method, path, contentType })) {
+    return next();
+  }
 
   const bucket = takeBucket(canonicalIp);
   if (!bucket.allowed) {
