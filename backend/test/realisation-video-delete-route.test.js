@@ -9,8 +9,9 @@ test("les vidéos chargées depuis Profil mémorisent leur réalisation source",
   assert.match(source, /insert into route_videos \(id, route_id, file_name, mime_type, content, source_realisation_id\)/);
 });
 
-test("le backend reçoit des blocs inférieurs à la limite du proxy puis les assemble", () => {
-  assert.match(source, /VIDEO_UPLOAD_CHUNK_MAX_BYTES = 6 \* 1024 \* 1024/);
+test("le backend reçoit des blocs sous 1 Mio puis les assemble", () => {
+  assert.match(source, /VIDEO_UPLOAD_CHUNK_MAX_BYTES = 1024 \* 1024/);
+  assert.match(source, /VIDEO_UPLOAD_MAX_PARTS = 80/);
   assert.match(source, /create table if not exists route_video_upload_chunks/);
   assert.match(source, /\/video-uploads\/:uploadId\/chunks\/:partNumber/);
   assert.match(source, /\/video-uploads\/:uploadId\/complete/);
