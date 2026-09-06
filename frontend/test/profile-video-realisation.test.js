@@ -24,12 +24,13 @@ test("les vidéos du Profil sont découpées en blocs de 768 Kio avant transfert
   assert.match(videoSource, /apiUploadVideoInChunks/);
 });
 
-test("les vidéos d'une réalisation peuvent être effacées et comparées deux par deux", () => {
+test("les vidéos d'une réalisation peuvent être effacées sans interface de comparaison", () => {
   assert.match(videoSource, /method: "DELETE"/);
   assert.match(videoSource, /\/realisations\/\$\{encodeURIComponent\(realisation\.id\)\}\/videos/);
-  assert.match(videoSource, /compareUrls\.length >= 2/);
-  assert.match(videoSource, /<strong>Comparaison vidéo<\/strong>/);
-  assert.match(videoSource, /<video/);
+  assert.match(videoSource, /VideoTechnicalAnalysis/);
+  assert.doesNotMatch(videoSource, /compareUrls/);
+  assert.doesNotMatch(videoSource, /Comparaison vidéo/);
+  assert.doesNotMatch(videoSource, /<video/);
 });
 
 test("le contrôle du proxy vérifie qu'un bloc de 768 Kio franchit la préproduction", () => {
