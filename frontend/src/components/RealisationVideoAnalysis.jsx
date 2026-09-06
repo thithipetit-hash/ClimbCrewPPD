@@ -1,7 +1,7 @@
 import React from "react";
 import Button from "./Button.jsx";
 import VideoTechnicalAnalysis from "./VideoTechnicalAnalysis.jsx";
-import { apiUpload } from "../lib/api.js";
+import { apiFetch, apiUpload } from "../lib/api.js";
 
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const ACCEPTED_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/ogg", "video/quicktime"]);
@@ -15,6 +15,11 @@ const VIDEO_TYPE_BY_EXTENSION = Object.freeze({
 
 function isLocalVideoUrl(url) {
   return /^\/routes\/[^/]+\/videos\/[^/]+$/.test(String(url || ""));
+}
+
+function localVideoId(url) {
+  const match = String(url || "").match(/^\/routes\/[^/]+\/videos\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : "";
 }
 
 function uniqueVideoUrls(...groups) {
@@ -37,10 +42,12 @@ export default function RealisationVideoAnalysis({
 }) {
   const inputRef = React.useRef(null);
   const [uploadedRouteUrls, setUploadedRouteUrls] = React.useState([]);
+  const [removedRouteUrls, setRemovedRouteUrls] = React.useState([]);
   const [localSelectedUrls, setLocalSelectedUrls] = React.useState(() => (
     Array.isArray(realisation?.videoUrls) ? realisation.videoUrls : []
   ));
   const [uploading, setUploading] = React.useState(false);
+  const [deletingUrl, setDeletingUrl] = React.useState("");
   const [uploadStatus, setUploadStatus] = React.useState("");
   const [uploadError, setUploadError] = React.useState("");
 
@@ -50,12 +57,14 @@ export default function RealisationVideoAnalysis({
 
   React.useEffect(() => {
     setUploadedRouteUrls([]);
+    setRemovedRouteUrls([]);
     setUploadStatus("");
     setUploadError("");
   }, [route?.id]);
 
-  const selectedVideoUrls = uniqueVideoUrls(localSelectedUrls);
-  const routeVideoUrls = uniqueVideoUrls(route?.videoUrls, selectedVideoUrls, uploadedRouteUrls);
+  const selectedVideoUrls = uniqueVideoUrls(localSelectedUrls).filter((url) => !removedRouteUrls.includes(url));
+  const routeVideoUrls = uniqueVideoUrls(route?.videoUrls, selectedVideoUrls, uploadedRouteUrls)
+    .filter((url) => !removedRouteUrls.includes(url));
   const limitReached = selectedVideoUrls.length >= 3;
 
   async function handleUpload(file) {
@@ -102,6 +111,38 @@ export default function RealisationVideoAnalysis({
     }
   }
 
+  async function handleDelete(url) {
+    if (!editable || !realisation?.id || !isLocalVideoUrl(url) || deletingUrl) return;
+    const videoId = localVideoId(url);
+    if (!videoId) return;
+    if (!window.confirm("Supprimer définitivement cette vidéo de ClimbCrew ? Elle sera retirée de toutes les réalisations qui l’utilisent.")) return;
+
+    setUploadStatus("");
+    setUploadError("");
+    setDeletingUrl(url);
+    try {
+      const result = await apiFetch(
+        `/realisations/${encodeURIComponent(realisation.id)}/videos/${encodeURIComponent(videoId)}`,
+        { method: "DELETE" },
+      );
+      const nextSelected = Array.isArray(result?.videoUrls)
+        ? result.videoUrls
+        : selectedVideoUrls.filter((item) => item !== url);
+      const nextRouteUrls = Array.isArray(result?.routeVideoUrls)
+        ? result.routeVideoUrls
+        : routeVideoUrls.filter((item) => item !== url);
+      setRemovedRouteUrls((current) => uniqueVideoUrls(current, [url]));
+      setLocalSelectedUrls(nextSelected);
+      setUploadedRouteUrls(nextRouteUrls);
+      setUploadStatus("Vidéo supprimée définitivement.");
+      if (typeof onRefresh === "function") await onRefresh();
+    } catch (error) {
+      setUploadError(error.message || "Suppression de la vidéo impossible.");
+    } finally {
+      setDeletingUrl("");
+    }
+  }
+
   return (
     <>
       <div className="subcard" style={{ marginTop: 10 }}>
@@ -119,7 +160,7 @@ export default function RealisationVideoAnalysis({
               <Button
                 type="button"
                 variant="secondary"
-                disabled={uploading || limitReached || !realisation?.id || !route?.id}
+                disabled={uploading || Boolean(deletingUrl) || limitReached || !realisation?.id || !route?.id}
                 onClick={() => inputRef.current?.click()}
               >
                 {uploading ? "Chargement…" : "Charger une vidéo"}
@@ -137,23 +178,36 @@ export default function RealisationVideoAnalysis({
           <div className="stack" style={{ marginTop: 8 }}>
             {routeVideoUrls.map((url, index) => {
               const checked = selectedVideoUrls.includes(url);
+              const localVideo = isLocalVideoUrl(url);
               return (
-                <label className="checkbox-field" key={url}>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    disabled={!editable || (!checked && limitReached)}
-                    onChange={(event) => {
-                      if (!editable || typeof onUpdate !== "function") return;
-                      const next = event.target.checked
-                        ? uniqueVideoUrls(selectedVideoUrls, [url]).slice(0, 3)
-                        : selectedVideoUrls.filter((item) => item !== url);
-                      setLocalSelectedUrls(next);
-                      onUpdate({ videoUrls: next });
-                    }}
-                  />
-                  <span>Vidéo {index + 1}{isLocalVideoUrl(url) ? " · chargée dans ClimbCrew" : " · lien externe"}</span>
-                </label>
+                <div className="card-header" key={url} style={{ gap: 8 }}>
+                  <label className="checkbox-field" style={{ flex: 1, minWidth: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={!editable || Boolean(deletingUrl) || (!checked && limitReached)}
+                      onChange={(event) => {
+                        if (!editable || typeof onUpdate !== "function") return;
+                        const next = event.target.checked
+                          ? uniqueVideoUrls(selectedVideoUrls, [url]).slice(0, 3)
+                          : selectedVideoUrls.filter((item) => item !== url);
+                        setLocalSelectedUrls(next);
+                        onUpdate({ videoUrls: next });
+                      }}
+                    />
+                    <span>Vidéo {index + 1}{localVideo ? " · chargée dans ClimbCrew" : " · lien externe"}</span>
+                  </label>
+                  {editable && localVideo && checked && (
+                    <Button
+                      type="button"
+                      variant="danger"
+                      disabled={Boolean(deletingUrl)}
+                      onClick={() => handleDelete(url)}
+                    >
+                      {deletingUrl === url ? "Suppression…" : "Supprimer"}
+                    </Button>
+                  )}
+                </div>
               );
             })}
           </div>
