@@ -77,7 +77,12 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
         created_at timestamptz not null default now()
       )
     `);
+    await pool.query(`
+      alter table route_videos
+      add column if not exists source_realisation_id text
+    `);
     await pool.query(`create index if not exists idx_route_videos_route on route_videos(route_id)`);
+    await pool.query(`create index if not exists idx_route_videos_source_realisation on route_videos(source_realisation_id)`);
     videoSchemaReady = true;
   }
 
@@ -193,8 +198,8 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
         const url = `/routes/${encodeURIComponent(realisation.voie_id)}/videos/${videoId}`;
 
         await client.query(
-          `insert into route_videos (id, route_id, file_name, mime_type, content) values ($1,$2,$3,$4,$5)`,
-          [videoId, realisation.voie_id, fileName, mimeType, req.body],
+          `insert into route_videos (id, route_id, file_name, mime_type, content, source_realisation_id) values ($1,$2,$3,$4,$5,$6)`,
+          [videoId, realisation.voie_id, fileName, mimeType, req.body, req.params.id],
         );
         const updatedRoute = await client.query(
           `update routes set video_urls = array_append(video_urls, $2), updated_at = now() where id = $1 returning video_urls`,
@@ -242,6 +247,109 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
       }
     },
   );
+
+  app.delete("/realisations/:id/videos/:videoId", requireAuth, async (req, res) => {
+    const participantId = req.auth?.user?.participantId;
+    if (!participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
+
+    let client;
+    try {
+      await ensureVideoSchema();
+      client = await pool.connect();
+      await client.query("begin");
+
+      const realisationResult = await client.query(
+        `
+          select voie_id, video_urls
+          from realisations
+          where id = $1 and participant_id = $2
+          for update
+        `,
+        [req.params.id, participantId],
+      );
+      if (!realisationResult.rowCount) {
+        await client.query("rollback");
+        return res.status(403).json({ error: "Cette réalisation ne vous appartient pas" });
+      }
+
+      const realisation = realisationResult.rows[0];
+      const routeId = String(realisation.voie_id);
+      const url = `/routes/${encodeURIComponent(routeId)}/videos/${req.params.videoId}`;
+      const currentUrls = Array.isArray(realisation.video_urls) ? realisation.video_urls.map(String) : [];
+      if (!currentUrls.includes(url)) {
+        await client.query("rollback");
+        return res.status(404).json({ error: "Cette vidéo n’est pas associée à la réalisation" });
+      }
+
+      const nextUrls = currentUrls.filter((item) => item !== url);
+      await client.query(
+        `update realisations set video_urls = $3::jsonb, updated_at = now() where id = $1 and participant_id = $2`,
+        [req.params.id, participantId, JSON.stringify(nextUrls)],
+      );
+
+      const sourceVideo = await client.query(
+        `
+          select file_name
+          from route_videos
+          where id = $1 and route_id = $2 and source_realisation_id = $3
+          for update
+        `,
+        [req.params.videoId, routeId, req.params.id],
+      );
+
+      let deletedPermanently = false;
+      if (sourceVideo.rowCount) {
+        const otherReferences = await client.query(
+          `
+            select 1
+            from realisations
+            where id <> $1 and video_urls ? $2
+            limit 1
+          `,
+          [req.params.id, url],
+        );
+        if (!otherReferences.rowCount) {
+          await client.query(
+            `delete from route_videos where id = $1 and route_id = $2 and source_realisation_id = $3`,
+            [req.params.videoId, routeId, req.params.id],
+          );
+          await client.query(
+            `update routes set video_urls = array_remove(video_urls, $2), updated_at = now() where id = $1`,
+            [routeId, url],
+          );
+          deletedPermanently = true;
+        }
+      }
+
+      await client.query(
+        `
+          insert into access_logs (user_id, event_type, success, ip_address, user_agent, details)
+          values ($1, 'realisation_video_delete', true, $2, $3, $4::jsonb)
+        `,
+        [
+          req.auth?.user?.id || null,
+          req.ip || null,
+          req.headers["user-agent"] || null,
+          JSON.stringify({
+            realisation_id: req.params.id,
+            route_id: routeId,
+            video_id: req.params.videoId,
+            deleted_permanently: deletedPermanently,
+          }),
+        ],
+      );
+
+      await client.query("commit");
+      return res.json({ ok: true, videoUrls: nextUrls, deletedPermanently });
+    } catch (error) {
+      if (client) {
+        try { await client.query("rollback"); } catch { /* transaction déjà terminée */ }
+      }
+      return res.status(error.status || 500).json({ error: error.message || "Suppression de la vidéo impossible." });
+    } finally {
+      client?.release();
+    }
+  });
 
   app.put("/realisations/:id", requireAuth, async (req, res) => {
     try {
