@@ -2,6 +2,8 @@ export const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_AP
 export const USE_API = Boolean(API_BASE);
 
 const inFlightGetRequests = new Map();
+export const VIDEO_UPLOAD_CHUNK_BYTES = 5 * 1024 * 1024;
+const VIDEO_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 
 const STATUS_MESSAGES = {
   400: "La demande contient des informations invalides.",
@@ -166,6 +168,68 @@ export async function apiUpload(path, file, options = {}) {
   return response.json();
 }
 
+function makeVideoUploadId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `video-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+export async function apiUploadVideoInChunks(pathPrefix, file, options = {}) {
+  if (!file || typeof file.size !== "number" || file.size <= 0) {
+    throw new Error("Fichier vidéo vide.");
+  }
+  if (file.size > VIDEO_UPLOAD_MAX_BYTES) {
+    throw new Error("Vidéo trop volumineuse. Maximum 50 Mo.");
+  }
+
+  const mimeType = String(options.mimeType || file.type || "").trim().toLowerCase();
+  const chunkBytes = Math.min(
+    VIDEO_UPLOAD_CHUNK_BYTES,
+    Math.max(256 * 1024, Number(options.chunkBytes) || VIDEO_UPLOAD_CHUNK_BYTES),
+  );
+  const uploadId = makeVideoUploadId();
+  const totalParts = Math.ceil(file.size / chunkBytes);
+  const prefix = String(pathPrefix || "").replace(/\/$/, "");
+  const encodedUploadId = encodeURIComponent(uploadId);
+  const fileName = encodeURIComponent(file.name || "video");
+
+  for (let partNumber = 0; partNumber < totalParts; partNumber += 1) {
+    const start = partNumber * chunkBytes;
+    const end = Math.min(file.size, start + chunkBytes);
+    const chunk = file.slice(start, end, "application/octet-stream");
+    const response = await fetchWithReadableErrors(
+      `${API_BASE}${prefix}/${encodedUploadId}/chunks/${partNumber}`,
+      {
+        credentials: "include",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "X-File-Name": fileName,
+          "X-Video-Mime-Type": mimeType,
+          "X-Total-Parts": String(totalParts),
+          "X-Total-Bytes": String(file.size),
+          ...csrfHeaders("POST"),
+        },
+        body: chunk,
+      },
+    );
+    if (!response.ok) {
+      throw new Error(await responseErrorMessage(response));
+    }
+    if (typeof options.onProgress === "function") {
+      options.onProgress({
+        uploadedParts: partNumber + 1,
+        totalParts,
+        uploadedBytes: end,
+        totalBytes: file.size,
+      });
+    }
+  }
+
+  return apiFetch(`${prefix}/${encodedUploadId}/complete`, {
+    method: "POST",
+    body: JSON.stringify({ uploadId, totalParts, totalBytes: file.size }),
+  });
+}
 
 export function downloadFile(filename, content, type = "application/json;charset=utf-8;") {
   const blob = new Blob([content], { type });
