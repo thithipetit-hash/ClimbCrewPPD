@@ -265,100 +265,105 @@ export default function Profil({
                 />
               )}
 
-              <div className="card">
-                <div className="card-header">
+              <details className="card profile-realisations-card">
+                <summary className="card-header" style={{ cursor: "pointer" }}>
                   <div className="group">
-                    <h3>Réalisations</h3>
+                    <h3 style={{ margin: 0 }}>Réalisations</h3>
                     <span className="badge">{selectedRealisations.length}</span>
                   </div>
+                  <span className="small">Cliquer pour afficher</span>
+                </summary>
+                <div style={{ marginTop: 10 }}>
                   {selectedRealisations.length > 1 && (
-                    <label className="group" htmlFor="profile-realisation-sort">
-                      <span className="small">Trier par</span>
-                      <select
-                        id="profile-realisation-sort"
-                        value={realisationSort}
-                        onChange={(event) => setRealisationSort(event.target.value)}
-                        style={{ width: "auto", maxWidth: "100%" }}
-                      >
-                        <option value="date">Date</option>
-                        <option value="rope">Corde</option>
-                        <option value="difficulty">Difficulté</option>
-                      </select>
-                    </label>
+                    <div className="group" style={{ justifyContent: "flex-end", marginBottom: 10 }}>
+                      <label className="group" htmlFor="profile-realisation-sort">
+                        <span className="small">Trier par</span>
+                        <select
+                          id="profile-realisation-sort"
+                          value={realisationSort}
+                          onChange={(event) => setRealisationSort(event.target.value)}
+                          style={{ width: "auto", maxWidth: "100%" }}
+                        >
+                          <option value="date">Date</option>
+                          <option value="rope">Corde</option>
+                          <option value="difficulty">Difficulté</option>
+                        </select>
+                      </label>
+                    </div>
                   )}
-                </div>
-                <div className="stack">
-                  {displayedRealisations.length === 0 ? (
-                    <div className="muted-box">Aucune réalisation enregistrée.</div>
-                  ) : displayedRealisations.map((realisation) => {
-                    const route = routesById[realisation.voieId];
-                    const modeRealisation = getRealisationMode(realisation, route);
-                    const criterionRealisation = getRealisationCriterion(realisation);
-                    const modeLabel = REALISATION_MODE_LABELS[modeRealisation] || modeRealisation;
-                    const criterionLabel = criterionRealisation
-                      ? REALISATION_CRITERION_LABELS[criterionRealisation]
-                      : "Critère non précisé (historique)";
-                    const forcedMoulinette = Boolean(route?.moulinetteOnly);
-                    return (
-                      <details className="subcard editable-realisation-card" key={realisation.id}>
-                        <summary className="card-header realisation-summary">
-                          <div>
-                            <strong>{route ? formatRouteForRealisation(route) : "Voie inconnue"}</strong>
-                            <div className="small">{formatDateShortFr(realisation.dateRealisation?.slice(0, 10))} · {modeLabel} · {criterionLabel}</div>
+                  <div className="stack">
+                    {displayedRealisations.length === 0 ? (
+                      <div className="muted-box">Aucune réalisation enregistrée.</div>
+                    ) : displayedRealisations.map((realisation) => {
+                      const route = routesById[realisation.voieId];
+                      const modeRealisation = getRealisationMode(realisation, route);
+                      const criterionRealisation = getRealisationCriterion(realisation);
+                      const modeLabel = REALISATION_MODE_LABELS[modeRealisation] || modeRealisation;
+                      const criterionLabel = criterionRealisation
+                        ? REALISATION_CRITERION_LABELS[criterionRealisation]
+                        : "Critère non précisé (historique)";
+                      const forcedMoulinette = Boolean(route?.moulinetteOnly);
+                      return (
+                        <details className="subcard editable-realisation-card" key={realisation.id}>
+                          <summary className="card-header realisation-summary">
+                            <div>
+                              <strong>{route ? formatRouteForRealisation(route) : "Voie inconnue"}</strong>
+                              <div className="small">{formatDateShortFr(realisation.dateRealisation?.slice(0, 10))} · {modeLabel} · {criterionLabel}</div>
+                            </div>
+                          </summary>
+                          {isOwnProfile && (
+                            <div className="group" style={{ justifyContent: "flex-end", marginBottom: 8 }}>
+                              <Button variant="danger" onClick={() => deleteOwnRealisation(realisation)}>Supprimer</Button>
+                            </div>
+                          )}
+                          <div className="grid two">
+                            <div className="realisation-mode-field" data-context="existing">
+                              <label>Mode</label>
+                              <select
+                                className="realisation-mode-select"
+                                aria-label="Mode de réalisation"
+                                value={modeRealisation}
+                                disabled={!isOwnProfile || forcedMoulinette}
+                                onChange={(event) => updateOwnRealisation(realisation.id, { modeRealisation: event.target.value })}
+                              >
+                                {Object.entries(REALISATION_MODE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                              </select>
+                              {forcedMoulinette && <div className="small">Cette voie est configurée en moulinette uniquement.</div>}
+                            </div>
+                            <div>
+                              <label>Critère</label>
+                              <select
+                                value={criterionRealisation}
+                                disabled={!isOwnProfile}
+                                onChange={(event) => updateOwnRealisation(realisation.id, { styleRealisation: event.target.value })}
+                              >
+                                {!criterionRealisation && <option value="" disabled>Non précisé (historique)</option>}
+                                {Object.entries(REALISATION_CRITERION_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <label>Commentaire</label>
+                              <input
+                                value={realisation.commentaire || ""}
+                                disabled={!isOwnProfile}
+                                onChange={(event) => updateOwnRealisation(realisation.id, { commentaire: event.target.value })}
+                              />
+                            </div>
                           </div>
-                        </summary>
-                        {isOwnProfile && (
-                          <div className="group" style={{ justifyContent: "flex-end", marginBottom: 8 }}>
-                            <Button variant="danger" onClick={() => deleteOwnRealisation(realisation)}>Supprimer</Button>
-                          </div>
-                        )}
-                        <div className="grid two">
-                          <div className="realisation-mode-field" data-context="existing">
-                            <label>Mode</label>
-                            <select
-                              className="realisation-mode-select"
-                              aria-label="Mode de réalisation"
-                              value={modeRealisation}
-                              disabled={!isOwnProfile || forcedMoulinette}
-                              onChange={(event) => updateOwnRealisation(realisation.id, { modeRealisation: event.target.value })}
-                            >
-                              {Object.entries(REALISATION_MODE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                            </select>
-                            {forcedMoulinette && <div className="small">Cette voie est configurée en moulinette uniquement.</div>}
-                          </div>
-                          <div>
-                            <label>Critère</label>
-                            <select
-                              value={criterionRealisation}
-                              disabled={!isOwnProfile}
-                              onChange={(event) => updateOwnRealisation(realisation.id, { styleRealisation: event.target.value })}
-                            >
-                              {!criterionRealisation && <option value="" disabled>Non précisé (historique)</option>}
-                              {Object.entries(REALISATION_CRITERION_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label>Commentaire</label>
-                            <input
-                              value={realisation.commentaire || ""}
-                              disabled={!isOwnProfile}
-                              onChange={(event) => updateOwnRealisation(realisation.id, { commentaire: event.target.value })}
-                            />
-                          </div>
-                        </div>
 
-                        <RealisationVideoAnalysis
-                          realisation={realisation}
-                          route={route}
-                          editable={isOwnProfile}
-                          onUpdate={(patch) => updateOwnRealisation(realisation.id, patch)}
-                          onRefresh={refreshRealisations}
-                        />
-                      </details>
-                    );
-                  })}
+                          <RealisationVideoAnalysis
+                            realisation={realisation}
+                            route={route}
+                            editable={isOwnProfile}
+                            onUpdate={(patch) => updateOwnRealisation(realisation.id, patch)}
+                            onRefresh={refreshRealisations}
+                          />
+                        </details>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              </details>
 
               {isOwnProfile && (
                 <div className="card">
