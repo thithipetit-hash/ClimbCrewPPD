@@ -223,6 +223,7 @@ create table if not exists realisations (
   rating integer check (rating between 1 and 5),
   tags text[] not null default '{}',
   video_urls jsonb not null default '[]'::jsonb,
+  technical_analysis jsonb not null default '{"version":1,"videos":{}}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
