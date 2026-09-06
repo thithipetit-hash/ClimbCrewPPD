@@ -161,107 +161,109 @@ export default function ProfileRealisationRecorder({
   }
 
   return (
-    <div className="card profile-realisation-recorder">
-      <div className="card-header">
-        <div>
-          <h3 style={{ margin: 0 }}>Enregistrer une réalisation</h3>
-          <div className="small">Ajoutez votre passage directement depuis Profil, avec une vidéo si vous le souhaitez.</div>
-        </div>
+    <details className="card profile-realisation-recorder">
+      <summary className="card-header" style={{ cursor: "pointer" }}>
+        <h3 style={{ margin: 0 }}>Enregistrer une réalisation</h3>
+        <span className="small">Cliquer pour afficher</span>
+      </summary>
+
+      <div style={{ marginTop: 10 }}>
+        <div className="small">Ajoutez votre passage directement depuis Profil, avec une vidéo si vous le souhaitez.</div>
+
+        {sessions.length === 0 ? (
+          <div className="muted-box" style={{ marginTop: 8 }}>
+            Aucune séance inscrite n’est disponible pour enregistrer une réalisation.
+          </div>
+        ) : (
+          <form className="stack" onSubmit={saveRealisation} style={{ marginTop: 10 }}>
+            <div className="grid two">
+              <div>
+                <label htmlFor="profile-realisation-session">Séance</label>
+                <select
+                  id="profile-realisation-session"
+                  value={sessionId}
+                  onChange={(event) => setSessionId(event.target.value)}
+                >
+                  {sessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {formatDateShortFr(String(session.date).slice(0, 10))} · {session.slot || "séance"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="profile-realisation-route">Voie</label>
+                <select
+                  id="profile-realisation-route"
+                  value={routeId}
+                  onChange={(event) => setRouteId(event.target.value)}
+                >
+                  {routes.map((route) => (
+                    <option key={route.id} value={route.id}>{formatRouteForRealisation(route)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="profile-realisation-mode">Mode</label>
+                <select
+                  id="profile-realisation-mode"
+                  value={selectedRoute?.moulinetteOnly ? "moulinette" : mode}
+                  disabled={Boolean(selectedRoute?.moulinetteOnly)}
+                  onChange={(event) => setMode(event.target.value)}
+                >
+                  {Object.entries(REALISATION_MODE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="profile-realisation-criterion">Critère</label>
+                <select
+                  id="profile-realisation-criterion"
+                  value={criterion}
+                  onChange={(event) => setCriterion(event.target.value)}
+                >
+                  {Object.entries(REALISATION_CRITERION_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="profile-realisation-comment">Commentaire</label>
+              <input
+                id="profile-realisation-comment"
+                value={comment}
+                onChange={(event) => setComment(event.target.value)}
+                placeholder="Optionnel"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="profile-realisation-video">Vidéo du passage (optionnelle)</label>
+              <input
+                ref={fileRef}
+                id="profile-realisation-video"
+                type="file"
+                accept="video/mp4,video/webm,video/ogg,video/quicktime,.mp4,.webm,.ogg,.ogv,.mov"
+                onChange={(event) => selectVideo(event.target.files?.[0])}
+              />
+              <div className="small">MP4, WebM, OGG ou MOV · 50 Mo maximum. Le transfert est découpé automatiquement pour les vidéos volumineuses.</div>
+            </div>
+
+            {videoFile && <div className="small">Vidéo prête : {videoFile.name} · {(videoFile.size / (1024 * 1024)).toFixed(2)} Mo</div>}
+            {error && <div className="error" role="alert">{error}</div>}
+            {notice && <div className="muted-box" role="status">{notice}</div>}
+
+            <div className="group">
+              <Button type="submit" disabled={saving || !sessionId || !routeId}>
+                {saving ? "Enregistrement…" : videoFile ? "Enregistrer réalisation + vidéo" : "Enregistrer la réalisation"}
+              </Button>
+            </div>
+          </form>
+        )}
       </div>
-
-      {sessions.length === 0 ? (
-        <div className="muted-box" style={{ marginTop: 8 }}>
-          Aucune séance inscrite n’est disponible pour enregistrer une réalisation.
-        </div>
-      ) : (
-        <form className="stack" onSubmit={saveRealisation} style={{ marginTop: 10 }}>
-          <div className="grid two">
-            <div>
-              <label htmlFor="profile-realisation-session">Séance</label>
-              <select
-                id="profile-realisation-session"
-                value={sessionId}
-                onChange={(event) => setSessionId(event.target.value)}
-              >
-                {sessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {formatDateShortFr(String(session.date).slice(0, 10))} · {session.slot || "séance"}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="profile-realisation-route">Voie</label>
-              <select
-                id="profile-realisation-route"
-                value={routeId}
-                onChange={(event) => setRouteId(event.target.value)}
-              >
-                {routes.map((route) => (
-                  <option key={route.id} value={route.id}>{formatRouteForRealisation(route)}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="profile-realisation-mode">Mode</label>
-              <select
-                id="profile-realisation-mode"
-                value={selectedRoute?.moulinetteOnly ? "moulinette" : mode}
-                disabled={Boolean(selectedRoute?.moulinetteOnly)}
-                onChange={(event) => setMode(event.target.value)}
-              >
-                {Object.entries(REALISATION_MODE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="profile-realisation-criterion">Critère</label>
-              <select
-                id="profile-realisation-criterion"
-                value={criterion}
-                onChange={(event) => setCriterion(event.target.value)}
-              >
-                {Object.entries(REALISATION_CRITERION_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="profile-realisation-comment">Commentaire</label>
-            <input
-              id="profile-realisation-comment"
-              value={comment}
-              onChange={(event) => setComment(event.target.value)}
-              placeholder="Optionnel"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="profile-realisation-video">Vidéo du passage (optionnelle)</label>
-            <input
-              ref={fileRef}
-              id="profile-realisation-video"
-              type="file"
-              accept="video/mp4,video/webm,video/ogg,video/quicktime,.mp4,.webm,.ogg,.ogv,.mov"
-              onChange={(event) => selectVideo(event.target.files?.[0])}
-            />
-            <div className="small">MP4, WebM, OGG ou MOV · 50 Mo maximum. Le transfert est découpé automatiquement pour les vidéos volumineuses.</div>
-          </div>
-
-          {videoFile && <div className="small">Vidéo prête : {videoFile.name} · {(videoFile.size / (1024 * 1024)).toFixed(2)} Mo</div>}
-          {error && <div className="error" role="alert">{error}</div>}
-          {notice && <div className="muted-box" role="status">{notice}</div>}
-
-          <div className="group">
-            <Button type="submit" disabled={saving || !sessionId || !routeId}>
-              {saving ? "Enregistrement…" : videoFile ? "Enregistrer réalisation + vidéo" : "Enregistrer la réalisation"}
-            </Button>
-          </div>
-        </form>
-      )}
-    </div>
+    </details>
   );
 }
