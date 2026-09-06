@@ -259,6 +259,57 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
     },
   );
 
+  app.delete("/routes/:id/videos/:videoId", requireAuth, requireAdmin, async (req, res) => {
+    await ensureVideoSchema();
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const deleted = await client.query(
+        `delete from route_videos where id = $1 and route_id = $2 returning file_name`,
+        [req.params.videoId, req.params.id],
+      );
+      if (!deleted.rowCount) {
+        await client.query("rollback");
+        return res.status(404).json({ error: "Vidéo introuvable" });
+      }
+
+      const url = `/routes/${encodeURIComponent(req.params.id)}/videos/${req.params.videoId}`;
+      const updated = await client.query(
+        `update routes set video_urls = array_remove(video_urls, $2), updated_at = now() where id = $1 returning *`,
+        [req.params.id, url],
+      );
+      if (!updated.rowCount) {
+        await client.query("rollback");
+        return res.status(404).json({ error: "Voie introuvable" });
+      }
+
+      await client.query(
+        `
+          insert into access_logs (user_id, event_type, success, ip_address, user_agent, details)
+          values ($1, 'route_video_delete', true, $2, $3, $4::jsonb)
+        `,
+        [
+          req.auth?.user?.id || null,
+          req.ip || null,
+          req.headers["user-agent"] || null,
+          JSON.stringify({
+            route_id: req.params.id,
+            video_id: req.params.videoId,
+            file_name: deleted.rows[0].file_name,
+          }),
+        ],
+      );
+      await client.query("commit");
+      return res.json({ ok: true, route: routeDbToApi(updated.rows[0]) });
+    } catch (error) {
+      await client.query("rollback");
+      console.error("DELETE /routes/:id/videos/:videoId", error);
+      return res.status(500).json({ error: error.message || "Suppression de la vidéo impossible" });
+    } finally {
+      client.release();
+    }
+  });
+
   app.post("/routes", requireAuth, requireAdmin, async (req, res) => {
     try {
       await ensureVideoSchema();
