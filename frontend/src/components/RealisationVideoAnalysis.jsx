@@ -1,7 +1,7 @@
 import React from "react";
 import Button from "./Button.jsx";
 import VideoTechnicalAnalysis from "./VideoTechnicalAnalysis.jsx";
-import { API_BASE, apiFetch, apiUpload } from "../lib/api.js";
+import { API_BASE, apiFetch, apiUploadVideoInChunks } from "../lib/api.js";
 
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const ACCEPTED_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/ogg", "video/quicktime"]);
@@ -76,7 +76,6 @@ export default function RealisationVideoAnalysis({
   const selectedVideoUrls = uniqueVideoUrls(localSelectedUrls);
   const routeVideoUrls = uniqueVideoUrls(route?.videoUrls, selectedVideoUrls, uploadedRouteUrls);
   const availableRouteUrls = routeVideoUrls.filter((url) => !selectedVideoUrls.includes(url));
-  const comparableUrls = selectedVideoUrls.filter(isLocalVideoUrl);
   const limitReached = selectedVideoUrls.length >= 3;
 
   async function handleUpload(file) {
@@ -100,10 +99,16 @@ export default function RealisationVideoAnalysis({
 
     try {
       setUploading(true);
-      const result = await apiUpload(
-        `/realisations/${encodeURIComponent(realisation.id)}/videos`,
+      setUploadStatus("Préparation du transfert…");
+      const result = await apiUploadVideoInChunks(
+        `/realisations/${encodeURIComponent(realisation.id)}/video-uploads`,
         file,
-        { headers: { "Content-Type": mimeType } },
+        {
+          mimeType,
+          onProgress: ({ uploadedParts, totalParts }) => {
+            setUploadStatus(`Transfert de la vidéo… ${uploadedParts}/${totalParts}`);
+          },
+        },
       );
       const nextSelected = Array.isArray(result?.videoUrls)
         ? result.videoUrls
@@ -116,6 +121,7 @@ export default function RealisationVideoAnalysis({
       setUploadStatus("Vidéo chargée et associée à cette réalisation.");
       if (typeof onRefresh === "function") await onRefresh();
     } catch (error) {
+      setUploadStatus("");
       setUploadError(error.message || "Chargement de la vidéo impossible.");
     } finally {
       setUploading(false);
