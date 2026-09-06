@@ -11,7 +11,9 @@ test("le chargement vidéo d'une réalisation reste limité au propriétaire et 
   assert.match(source, /where id = \$1 and participant_id = \$2[\s\S]*for update/i);
   assert.match(source, /Cette réalisation ne vous appartient pas/);
   assert.match(source, /currentRealisationUrls\.length >= 3/);
-  assert.match(source, /currentRouteUrls\.length >= 10/);
+  assert.doesNotMatch(source, /currentRouteUrls\.length >= 10/);
+  assert.doesNotMatch(source, /update routes set video_urls = array_append\(video_urls/);
+  assert.match(source, /routeVideoUrls: currentRouteUrls/);
   assert.match(source, /await client\.query\("begin"\)/);
   assert.match(source, /await client\.query\("commit"\)/);
   assert.match(source, /await client\.query\("rollback"\)/);
