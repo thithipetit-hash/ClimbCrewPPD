@@ -9,6 +9,7 @@ const STATUS_MESSAGES = {
   403: "Vous n’avez pas l’autorisation d’effectuer cette action.",
   404: "Le service demandé est introuvable.",
   409: "Cette opération entre en conflit avec des données existantes.",
+  413: "Le fichier est trop volumineux pour le serveur ou son proxy. Taille maximale : 50 Mo.",
   422: "Certaines informations saisies sont invalides.",
   429: "Trop de tentatives. Réessayez dans quelques instants.",
 };
