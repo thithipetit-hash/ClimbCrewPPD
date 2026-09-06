@@ -168,7 +168,8 @@ export async function listRealisationsWithPrivacy(req, res) {
           r.rating,
           r.chute,
           r.assureur_id as "assureurId",
-          r.video_urls as "videoUrls"
+          r.video_urls as "videoUrls",
+          r.technical_analysis as "technicalAnalysis"
         from realisations r
         left join participants p on p.id::text = r.participant_id::text
         where $1::boolean = true
