@@ -1,7 +1,7 @@
 import React from "react";
 import Button from "./Button.jsx";
 import VideoTechnicalAnalysis from "./VideoTechnicalAnalysis.jsx";
-import { API_BASE, apiFetch, apiUploadVideoInChunks } from "../lib/api.js";
+import { apiFetch, apiUploadVideoInChunks } from "../lib/api.js";
 
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const ACCEPTED_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/ogg", "video/quicktime"]);
@@ -13,10 +13,6 @@ const VIDEO_TYPE_BY_EXTENSION = Object.freeze({
   mov: "video/quicktime",
 });
 
-function isLocalVideoUrl(url) {
-  return /^\/routes\/[^/]+\/videos\/[^/]+$/.test(String(url || ""));
-}
-
 function parseLocalVideoUrl(url) {
   const match = String(url || "").match(/^\/routes\/([^/]+)\/videos\/([^/]+)$/);
   if (!match) return null;
@@ -24,11 +20,6 @@ function parseLocalVideoUrl(url) {
     routeId: decodeURIComponent(match[1]),
     videoId: decodeURIComponent(match[2]),
   };
-}
-
-function playableVideoUrl(url) {
-  if (String(url || "").startsWith("/")) return `${API_BASE}${url}`;
-  return String(url || "");
 }
 
 function uniqueVideoUrls(...groups) {
@@ -54,7 +45,6 @@ export default function RealisationVideoAnalysis({
   const [localSelectedUrls, setLocalSelectedUrls] = React.useState(() => (
     Array.isArray(realisation?.videoUrls) ? realisation.videoUrls : []
   ));
-  const [compareUrls, setCompareUrls] = React.useState([]);
   const [uploading, setUploading] = React.useState(false);
   const [deletingUrl, setDeletingUrl] = React.useState("");
   const [uploadStatus, setUploadStatus] = React.useState("");
@@ -63,14 +53,12 @@ export default function RealisationVideoAnalysis({
   React.useEffect(() => {
     const urls = Array.isArray(realisation?.videoUrls) ? realisation.videoUrls : [];
     setLocalSelectedUrls(urls);
-    setCompareUrls((current) => current.filter((url) => urls.includes(url)).slice(0, 2));
   }, [realisation?.id, realisation?.videoUrls]);
 
   React.useEffect(() => {
     setUploadedRouteUrls([]);
     setUploadStatus("");
     setUploadError("");
-    setCompareUrls([]);
   }, [route?.id]);
 
   const selectedVideoUrls = uniqueVideoUrls(localSelectedUrls);
@@ -148,14 +136,12 @@ export default function RealisationVideoAnalysis({
           ? result.videoUrls
           : selectedVideoUrls.filter((item) => item !== url);
         setLocalSelectedUrls(nextSelected);
-        setCompareUrls((current) => current.filter((item) => item !== url));
         setUploadStatus(result?.deletedPermanently
           ? "Vidéo effacée définitivement. Les mesures d’analyse restent conservées."
           : "Vidéo retirée de cette réalisation. Les mesures d’analyse restent conservées.");
       } else if (typeof onUpdate === "function") {
         const nextSelected = selectedVideoUrls.filter((item) => item !== url);
         setLocalSelectedUrls(nextSelected);
-        setCompareUrls((current) => current.filter((item) => item !== url));
         await onUpdate({ videoUrls: nextSelected });
         setUploadStatus("Lien vidéo retiré de cette réalisation.");
       }
@@ -167,21 +153,13 @@ export default function RealisationVideoAnalysis({
     }
   }
 
-  function toggleCompare(url) {
-    setCompareUrls((current) => {
-      if (current.includes(url)) return current.filter((item) => item !== url);
-      if (current.length >= 2) return current;
-      return [...current, url];
-    });
-  }
-
   return (
     <>
       <div className="subcard" style={{ marginTop: 10 }}>
         <div className="card-header">
           <div>
             <strong>Vidéos de cette réalisation</strong>
-            <div className="small">Chargez, effacez ou sélectionnez deux vidéos pour les comparer.</div>
+            <div className="small">Chargez ou effacez les vidéos associées à cette réalisation.</div>
           </div>
           {editable && (
             <>
@@ -211,43 +189,25 @@ export default function RealisationVideoAnalysis({
           <div className="small" style={{ marginTop: 8 }}>Aucune vidéo associée à cette réalisation.</div>
         ) : (
           <div className="stack" style={{ marginTop: 8 }}>
-            {selectedVideoUrls.map((url, index) => {
-              const local = isLocalVideoUrl(url);
-              const compareChecked = compareUrls.includes(url);
-              return (
-                <div className="subcard" key={url}>
-                  <div className="card-header">
-                    <div>
-                      <strong>Vidéo {index + 1}</strong>
-                      <div className="small">{local ? "Chargée dans ClimbCrew" : "Lien externe"}</div>
-                    </div>
-                    <div className="group">
-                      {local && (
-                        <label className="checkbox-field" style={{ width: "auto" }}>
-                          <input
-                            type="checkbox"
-                            checked={compareChecked}
-                            disabled={!compareChecked && compareUrls.length >= 2}
-                            onChange={() => toggleCompare(url)}
-                          />
-                          <span>Comparer</span>
-                        </label>
-                      )}
-                      {editable && (
-                        <Button
-                          type="button"
-                          variant="danger"
-                          disabled={Boolean(deletingUrl)}
-                          onClick={() => handleDeleteVideo(url)}
-                        >
-                          {deletingUrl === url ? "Suppression…" : "Effacer"}
-                        </Button>
-                      )}
-                    </div>
+            {selectedVideoUrls.map((url, index) => (
+              <div className="subcard" key={url}>
+                <div className="card-header">
+                  <div>
+                    <strong>Vidéo {index + 1}</strong>
                   </div>
+                  {editable && (
+                    <Button
+                      type="button"
+                      variant="danger"
+                      disabled={Boolean(deletingUrl)}
+                      onClick={() => handleDeleteVideo(url)}
+                    >
+                      {deletingUrl === url ? "Suppression…" : "Effacer"}
+                    </Button>
+                  )}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
 
@@ -280,45 +240,6 @@ export default function RealisationVideoAnalysis({
             : "3 vidéos maximum par réalisation · 50 Mo maximum par fichier."}
         </div>
       </div>
-
-      {compareUrls.length > 0 && (
-        <div className="subcard" style={{ marginTop: 10 }}>
-          <div className="card-header">
-            <div>
-              <strong>Comparaison vidéo</strong>
-              <div className="small">
-                {compareUrls.length === 2
-                  ? "Les deux vidéos peuvent être lues côte à côte et positionnées indépendamment."
-                  : "Sélectionnez une deuxième vidéo pour comparer deux passages."}
-              </div>
-            </div>
-            <Button type="button" variant="secondary" onClick={() => setCompareUrls([])}>Réinitialiser</Button>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-              gap: 10,
-              marginTop: 8,
-            }}
-          >
-            {compareUrls.map((url, index) => (
-              <div key={url}>
-                <div className="small">Vidéo {selectedVideoUrls.indexOf(url) + 1 || index + 1}</div>
-                <video
-                  controls
-                  playsInline
-                  preload="metadata"
-                  src={playableVideoUrl(url)}
-                  style={{ width: "100%", maxHeight: "55vh", borderRadius: 12, background: "#000", marginTop: 4 }}
-                >
-                  Votre navigateur ne permet pas la lecture de cette vidéo.
-                </video>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <VideoTechnicalAnalysis
         videoUrls={selectedVideoUrls}
