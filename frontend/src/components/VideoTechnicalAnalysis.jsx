@@ -1,6 +1,6 @@
 import React from "react";
 import Button from "./Button.jsx";
-import { API_BASE } from "../lib/api.js";
+import { API_BASE, apiFetch } from "../lib/api.js";
 import { analyzeClimbingVideo } from "../lib/mediapipe-video-analysis.js";
 import { fetchVideoAnalysisRules } from "../lib/video-analysis-rules.js";
 
@@ -19,6 +19,19 @@ function formatTimestamp(seconds) {
   return `${minutes}:${String(rounded % 60).padStart(2, "0")}`;
 }
 
+function formatSavedAt(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function Metric({ label, value }) {
   return (
     <div className="stat">
@@ -28,41 +41,66 @@ function Metric({ label, value }) {
   );
 }
 
-export default function VideoTechnicalAnalysis({ videoUrls = [] }) {
+export default function VideoTechnicalAnalysis({
+  videoUrls = [],
+  realisationId = "",
+  technicalAnalysis = null,
+  editable = false,
+  onSaved,
+}) {
   const analyzableUrls = React.useMemo(
     () => [...new Set((videoUrls || []).filter(isLocalVideoUrl))],
     [videoUrls],
   );
-  const [selectedUrl, setSelectedUrl] = React.useState(analyzableUrls[0] || "");
-  const [analysis, setAnalysis] = React.useState(null);
+  const storedVideos = React.useMemo(() => {
+    const videos = technicalAnalysis?.videos;
+    return videos && typeof videos === "object" && !Array.isArray(videos) ? videos : {};
+  }, [technicalAnalysis]);
+  const savedUrls = React.useMemo(
+    () => Object.keys(storedVideos).filter(isLocalVideoUrl),
+    [storedVideos],
+  );
+  const selectionUrls = React.useMemo(
+    () => [...new Set([...analyzableUrls, ...savedUrls])],
+    [analyzableUrls, savedUrls],
+  );
+
+  const [selectedUrl, setSelectedUrl] = React.useState(selectionUrls[0] || "");
+  const [analysis, setAnalysis] = React.useState(() => storedVideos[selectionUrls[0]] || null);
   const [progress, setProgress] = React.useState(0);
   const [error, setError] = React.useState("");
+  const [saveError, setSaveError] = React.useState("");
+  const [saveStatus, setSaveStatus] = React.useState("");
   const [analyzing, setAnalyzing] = React.useState(false);
   const videoRef = React.useRef(null);
   const abortRef = React.useRef(null);
 
   React.useEffect(() => {
-    if (!analyzableUrls.length) {
-      setSelectedUrl("");
-      setAnalysis(null);
+    const nextUrl = selectionUrls.includes(selectedUrl) ? selectedUrl : (selectionUrls[0] || "");
+    if (nextUrl !== selectedUrl) {
+      setSelectedUrl(nextUrl);
       return;
     }
-    if (!analyzableUrls.includes(selectedUrl)) {
-      setSelectedUrl(analyzableUrls[0]);
-      setAnalysis(null);
-    }
-  }, [analyzableUrls, selectedUrl]);
+    setAnalysis(nextUrl ? (storedVideos[nextUrl] || null) : null);
+    setError("");
+    setSaveError("");
+    setSaveStatus("");
+  }, [selectionUrls, selectedUrl, storedVideos]);
 
   React.useEffect(() => () => abortRef.current?.abort(), []);
 
+  const videoAvailable = analyzableUrls.includes(selectedUrl);
+
   async function runAnalysis() {
-    if (!videoRef.current || !selectedUrl) return;
+    if (!videoRef.current || !selectedUrl || !videoAvailable || !editable) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     setAnalyzing(true);
     setAnalysis(null);
     setError("");
+    setSaveError("");
+    setSaveStatus("");
     setProgress(0);
     try {
       const rules = await fetchVideoAnalysisRules();
@@ -72,6 +110,26 @@ export default function VideoTechnicalAnalysis({ videoUrls = [] }) {
         onProgress: setProgress,
       });
       setAnalysis(result);
+
+      if (!realisationId) {
+        setSaveError("Analyse calculée, mais la réalisation ne peut pas être identifiée pour enregistrer les mesures.");
+        return;
+      }
+
+      try {
+        const saved = await apiFetch(
+          `/realisations/${encodeURIComponent(realisationId)}/technical-analysis`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ videoUrl: selectedUrl, analysis: result }),
+          },
+        );
+        setAnalysis(saved?.analysis || result);
+        setSaveStatus("Mesures enregistrées avec cette réalisation.");
+        if (typeof onSaved === "function") await onSaved(saved?.technicalAnalysis);
+      } catch (saveFailure) {
+        setSaveError(`Analyse calculée, mais enregistrement impossible : ${saveFailure.message || saveFailure}`);
+      }
     } catch (caughtError) {
       if (caughtError?.name !== "AbortError") {
         setError(String(caughtError?.message || caughtError || "Analyse impossible."));
@@ -86,7 +144,7 @@ export default function VideoTechnicalAnalysis({ videoUrls = [] }) {
     abortRef.current?.abort();
   }
 
-  if (!analyzableUrls.length) {
+  if (!selectionUrls.length) {
     return (
       <div className="muted-box" style={{ marginTop: 10 }}>
         Associez d’abord à cette réalisation une vidéo chargée dans ClimbCrew. Les liens YouTube ou externes peuvent être conservés, mais ne sont pas analysés automatiquement.
@@ -95,6 +153,9 @@ export default function VideoTechnicalAnalysis({ videoUrls = [] }) {
   }
 
   const metrics = analysis?.metrics;
+  const pauses = Array.isArray(metrics?.pauses) ? metrics.pauses : [];
+  const recommendations = Array.isArray(analysis?.recommendations) ? analysis.recommendations : [];
+  const analyzedAt = formatSavedAt(analysis?.analyzedAt);
 
   return (
     <div className="subcard" style={{ marginTop: 10 }}>
@@ -102,87 +163,116 @@ export default function VideoTechnicalAnalysis({ videoUrls = [] }) {
         <div>
           <strong>Analyse technique vidéo</strong>
           <div className="small">MediaPipe Pose · traitement de l’image sur cet appareil · règles globales du club · aucun coût par analyse</div>
+          {analysis && analyzedAt && (
+            <div className="small" style={{ marginTop: 4 }}>Mesures enregistrées le {analyzedAt}.</div>
+          )}
         </div>
-        {analyzableUrls.length > 1 && (
+        {selectionUrls.length > 1 && (
           <select
-            aria-label="Vidéo à analyser"
+            aria-label="Vidéo ou analyse technique"
             value={selectedUrl}
             onChange={(event) => {
               setSelectedUrl(event.target.value);
-              setAnalysis(null);
               setError("");
+              setSaveError("");
+              setSaveStatus("");
             }}
-            style={{ width: "auto", minWidth: 130 }}
+            style={{ width: "auto", minWidth: 150 }}
           >
-            {analyzableUrls.map((url, index) => <option key={url} value={url}>Vidéo {index + 1}</option>)}
+            {selectionUrls.map((url) => {
+              const currentIndex = analyzableUrls.indexOf(url);
+              const savedIndex = savedUrls.indexOf(url);
+              const label = currentIndex >= 0
+                ? `Vidéo ${currentIndex + 1}`
+                : `Mesures conservées ${savedIndex + 1}`;
+              return <option key={url} value={url}>{label}</option>;
+            })}
           </select>
         )}
       </div>
 
-      <video
-        ref={videoRef}
-        controls
-        playsInline
-        preload="metadata"
-        src={playableVideoUrl(selectedUrl)}
-        style={{ width: "100%", maxHeight: "58vh", marginTop: 8, borderRadius: 12, background: "#000" }}
-      >
-        Votre navigateur ne permet pas la lecture de cette vidéo.
-      </video>
+      {videoAvailable ? (
+        <video
+          ref={videoRef}
+          controls
+          playsInline
+          preload="metadata"
+          src={playableVideoUrl(selectedUrl)}
+          style={{ width: "100%", maxHeight: "58vh", marginTop: 8, borderRadius: 12, background: "#000" }}
+        >
+          Votre navigateur ne permet pas la lecture de cette vidéo.
+        </video>
+      ) : (
+        <div className="muted-box" style={{ marginTop: 8 }}>
+          La vidéo n’est plus disponible, mais les mesures de son analyse technique sont conservées avec la réalisation.
+        </div>
+      )}
 
-      <div className="group" style={{ marginTop: 10 }}>
-        <Button onClick={runAnalysis} disabled={analyzing}>{analysis ? "Relancer l’analyse" : "Analyser la technique"}</Button>
-        {analyzing && <Button variant="secondary" onClick={cancelAnalysis}>Annuler</Button>}
-        {analyzing && <span className="small">Analyse {Math.round(progress * 100)} %</span>}
-      </div>
+      {videoAvailable && editable && (
+        <div className="group" style={{ marginTop: 10 }}>
+          <Button onClick={runAnalysis} disabled={analyzing}>{analysis ? "Relancer l’analyse" : "Analyser la technique"}</Button>
+          {analyzing && <Button variant="secondary" onClick={cancelAnalysis}>Annuler</Button>}
+          {analyzing && <span className="small">Analyse {Math.round(progress * 100)} %</span>}
+        </div>
+      )}
 
       {analyzing && (
         <progress value={progress} max={1} style={{ width: "100%", marginTop: 8 }} aria-label="Progression de l’analyse vidéo" />
       )}
 
       {error && <div className="error" style={{ marginTop: 10 }}>{error}</div>}
+      {saveError && <div className="error" style={{ marginTop: 10 }}>{saveError}</div>}
+      {saveStatus && <div className="small" role="status" style={{ marginTop: 10 }}>{saveStatus}</div>}
 
       {analysis && metrics && (
         <div style={{ marginTop: 12 }}>
           <div className="stats-grid">
-            <Metric label="Corps détecté" value={analysis.display.detection} />
-            <Metric label="Pauses" value={metrics.pauses.length} />
-            <Metric label="Ajustements pieds" value={metrics.footAdjustments.total} />
-            <Metric label="Pics dynamiques" value={metrics.dynamicMoves} />
-            <Metric label="Bras gauche fléchi" value={analysis.display.bentLeft} />
-            <Metric label="Bras droit fléchi" value={analysis.display.bentRight} />
+            <Metric label="Corps détecté" value={analysis.display?.detection || `${Math.round((Number(metrics.detectionRatio) || 0) * 100)} %`} />
+            <Metric label="Pauses" value={pauses.length} />
+            <Metric label="Ajustements pieds" value={Number(metrics.footAdjustments?.total || 0)} />
+            <Metric label="Pics dynamiques" value={Number(metrics.dynamicMoves || 0)} />
+            <Metric label="Bras gauche fléchi" value={analysis.display?.bentLeft || formatTimestamp(metrics.bentArmSeconds?.left)} />
+            <Metric label="Bras droit fléchi" value={analysis.display?.bentRight || formatTimestamp(metrics.bentArmSeconds?.right)} />
           </div>
 
-          {metrics.pauses.length > 0 && (
+          {pauses.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <strong>Passages à revoir</strong>
               <div className="group" style={{ marginTop: 6 }}>
-                {metrics.pauses.slice(0, 8).map((pause, index) => (
-                  <button
-                    type="button"
-                    className="pill"
-                    key={`${pause.start}-${index}`}
-                    onClick={() => {
-                      if (!videoRef.current) return;
-                      videoRef.current.currentTime = pause.start;
-                      videoRef.current.play().catch(() => {});
-                    }}
-                  >
-                    {formatTimestamp(pause.start)}–{formatTimestamp(pause.end)}
-                  </button>
+                {pauses.slice(0, 8).map((pause, index) => (
+                  videoAvailable ? (
+                    <button
+                      type="button"
+                      className="pill"
+                      key={`${pause.start}-${index}`}
+                      onClick={() => {
+                        if (!videoRef.current) return;
+                        videoRef.current.currentTime = pause.start;
+                        videoRef.current.play().catch(() => {});
+                      }}
+                    >
+                      {formatTimestamp(pause.start)}–{formatTimestamp(pause.end)}
+                    </button>
+                  ) : (
+                    <span className="pill" key={`${pause.start}-${index}`}>
+                      {formatTimestamp(pause.start)}–{formatTimestamp(pause.end)}
+                    </span>
+                  )
                 ))}
               </div>
             </div>
           )}
 
-          <div className="stack" style={{ marginTop: 12 }}>
-            {analysis.recommendations.map((recommendation) => (
-              <div className={recommendation.severity === "warning" ? "muted-box" : "subcard"} key={recommendation.code}>
-                <strong>{recommendation.title}</strong>
-                <div className="small" style={{ marginTop: 4 }}>{recommendation.detail}</div>
-              </div>
-            ))}
-          </div>
+          {recommendations.length > 0 && (
+            <div className="stack" style={{ marginTop: 12 }}>
+              {recommendations.map((recommendation) => (
+                <div className={recommendation.severity === "warning" ? "muted-box" : "subcard"} key={recommendation.code}>
+                  <strong>{recommendation.title}</strong>
+                  <div className="small" style={{ marginTop: 4 }}>{recommendation.detail}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="small" style={{ marginTop: 10 }}>
             Ces résultats sont des indicateurs mécaniques expérimentaux, pas un jugement automatique de la qualité du geste. Les seuils sont ajustables dans Administration → Analyse technique.
