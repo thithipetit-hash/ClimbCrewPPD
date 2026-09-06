@@ -111,7 +111,12 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
         created_at timestamptz not null default now()
       )
     `);
+    await pool.query(`
+      alter table route_videos
+      add column if not exists source_realisation_id text
+    `);
     await pool.query(`create index if not exists idx_route_videos_route on route_videos(route_id)`);
+    await pool.query(`create index if not exists idx_route_videos_source_realisation on route_videos(source_realisation_id)`);
     videoSchemaReady = true;
   }
 
@@ -146,19 +151,51 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
     try {
       await ensureVideoSchema();
       const result = await pool.query(
-        `select file_name, mime_type, content from route_videos where id = $1 and route_id = $2`,
+        `
+          select
+            rv.file_name,
+            rv.mime_type,
+            rv.content,
+            rv.source_realisation_id,
+            re.participant_id as source_participant_id,
+            coalesce(p.profile_public, false) as source_profile_public
+          from route_videos rv
+          left join realisations re on re.id = rv.source_realisation_id
+          left join participants p on p.id::text = re.participant_id::text
+          where rv.id = $1 and rv.route_id = $2
+          limit 1
+        `,
         [req.params.videoId, req.params.id],
       );
       if (!result.rowCount) return res.status(404).json({ error: "Vidéo introuvable" });
 
       const video = result.rows[0];
+      if (video.source_realisation_id) {
+        const requesterParticipantId = String(req.auth?.user?.participantId || "");
+        const sourceParticipantId = String(video.source_participant_id || "");
+        const canReadPersonalVideo = Boolean(sourceParticipantId) && (
+          req.auth?.user?.role === "admin"
+          || requesterParticipantId === sourceParticipantId
+          || video.source_profile_public === true
+        );
+
+        // Échoue volontairement comme une ressource inexistante : un membre non
+        // autorisé ne doit pas pouvoir déduire qu'une vidéo privée existe.
+        if (!canReadPersonalVideo) {
+          return res.status(404).json({ error: "Vidéo introuvable" });
+        }
+      }
+
       const content = Buffer.isBuffer(video.content) ? video.content : Buffer.from(video.content || "");
       const totalLength = content.length;
       const disposition = req.query.download === "1" ? "attachment" : "inline";
 
       res.setHeader("Content-Type", video.mime_type);
       res.setHeader("Content-Disposition", `${disposition}; filename*=UTF-8''${encodeURIComponent(video.file_name)}`);
-      res.setHeader("Cache-Control", "private, max-age=3600");
+      res.setHeader(
+        "Cache-Control",
+        video.source_realisation_id ? "private, no-store" : "private, max-age=3600",
+      );
       res.setHeader("Accept-Ranges", "bytes");
 
       if (req.query.download === "1") {
@@ -320,7 +357,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
       const result = await pool.query(`
         insert into routes (
           id, numero_voie_unique, numero_corde, couleur_prises, cotation_reference,
-          cotation_ajustee, nom_voie, nom_ouvreur, moulinette_only, active, date_creation, tags, video_urls
+          cotation_ajustee, nom_vo2ie, nom_ouvreur, moulinette_only, active, date_creation, tags, video_urls
         ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *
       `, [
         id,
