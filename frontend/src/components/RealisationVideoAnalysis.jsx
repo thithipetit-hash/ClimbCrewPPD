@@ -133,7 +133,7 @@ export default function RealisationVideoAnalysis({
     if (!editable || !realisation?.id || deletingUrl) return;
     const localVideo = parseLocalVideoUrl(url);
     const label = selectedVideoUrls.indexOf(url) + 1;
-    if (!window.confirm(`Effacer la vidéo ${label > 0 ? label : ""} de cette réalisation ?`)) return;
+    if (!window.confirm(`Effacer la vidéo ${label > 0 ? label : ""} de cette réalisation ? Les mesures d’analyse déjà enregistrées seront conservées.`)) return;
 
     setUploadError("");
     setUploadStatus("");
@@ -150,8 +150,8 @@ export default function RealisationVideoAnalysis({
         setLocalSelectedUrls(nextSelected);
         setCompareUrls((current) => current.filter((item) => item !== url));
         setUploadStatus(result?.deletedPermanently
-          ? "Vidéo effacée définitivement."
-          : "Vidéo retirée de cette réalisation.");
+          ? "Vidéo effacée définitivement. Les mesures d’analyse restent conservées."
+          : "Vidéo retirée de cette réalisation. Les mesures d’analyse restent conservées.");
       } else if (typeof onUpdate === "function") {
         const nextSelected = selectedVideoUrls.filter((item) => item !== url);
         setLocalSelectedUrls(nextSelected);
@@ -320,7 +320,15 @@ export default function RealisationVideoAnalysis({
         </div>
       )}
 
-      <VideoTechnicalAnalysis videoUrls={selectedVideoUrls} />
+      <VideoTechnicalAnalysis
+        videoUrls={selectedVideoUrls}
+        realisationId={realisation?.id || ""}
+        technicalAnalysis={realisation?.technicalAnalysis || null}
+        editable={editable}
+        onSaved={async () => {
+          if (typeof onRefresh === "function") await onRefresh();
+        }}
+      />
     </>
   );
 }
