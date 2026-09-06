@@ -113,6 +113,9 @@ async function persistRealisationVideo({
     throw error;
   }
 
+  // Une vidéo personnelle de réalisation ne consomme pas la capacité des
+  // vidéos partagées de la voie. La voie est verrouillée uniquement pour
+  // vérifier qu'elle existe et retourner sa liste partagée inchangée.
   const routeResult = await client.query(
     `select video_urls from routes where id = $1 for update`,
     [realisation.voie_id],
@@ -125,11 +128,6 @@ async function persistRealisationVideo({
   const currentRouteUrls = Array.isArray(routeResult.rows[0].video_urls)
     ? routeResult.rows[0].video_urls.map(String)
     : [];
-  if (currentRouteUrls.length >= 10) {
-    const error = new Error("10 vidéos maximum par voie.");
-    error.status = 400;
-    throw error;
-  }
 
   const videoId = crypto.randomUUID();
   const url = `/routes/${encodeURIComponent(realisation.voie_id)}/videos/${videoId}`;
@@ -137,10 +135,6 @@ async function persistRealisationVideo({
   await client.query(
     `insert into route_videos (id, route_id, file_name, mime_type, content, source_realisation_id) values ($1,$2,$3,$4,$5,$6)`,
     [videoId, realisation.voie_id, fileName, mimeType, content, realisationId],
-  );
-  const updatedRoute = await client.query(
-    `update routes set video_urls = array_append(video_urls, $2), updated_at = now() where id = $1 returning video_urls`,
-    [realisation.voie_id, url],
   );
   const nextRealisationUrls = [...currentRealisationUrls, url];
   await client.query(
@@ -169,56 +163,11 @@ async function persistRealisationVideo({
   return {
     url,
     videoUrls: nextRealisationUrls,
-    routeVideoUrls: Array.isArray(updatedRoute.rows[0]?.video_urls)
-      ? updatedRoute.rows[0].video_urls.map(String)
-      : [...currentRouteUrls, url],
+    routeVideoUrls: currentRouteUrls,
   };
 }
 
 export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
-  let videoSchemaReady = false;
-  async function ensureVideoSchema() {
-    if (videoSchemaReady) return;
-    await pool.query(`
-      alter table routes
-      add column if not exists video_urls text[] not null default '{}'
-    `);
-    await pool.query(`
-      create table if not exists route_videos (
-        id text primary key,
-        route_id text not null references routes(id) on delete cascade,
-        file_name text not null default 'video',
-        mime_type text not null,
-        content bytea not null,
-        created_at timestamptz not null default now()
-      )
-    `);
-    await pool.query(`
-      alter table route_videos
-      add column if not exists source_realisation_id text
-    `);
-    await pool.query(`
-      create table if not exists route_video_upload_chunks (
-        participant_id text not null,
-        upload_id text not null,
-        part_number integer not null,
-        realisation_id text not null,
-        route_id text not null,
-        file_name text not null default 'video',
-        mime_type text not null,
-        total_parts integer not null,
-        total_bytes bigint not null,
-        content bytea not null,
-        created_at timestamptz not null default now(),
-        primary key (participant_id, upload_id, part_number)
-      )
-    `);
-    await pool.query(`create index if not exists idx_route_videos_route on route_videos(route_id)`);
-    await pool.query(`create index if not exists idx_route_videos_source_realisation on route_videos(source_realisation_id)`);
-    await pool.query(`create index if not exists idx_route_video_upload_chunks_realisation on route_video_upload_chunks(realisation_id, participant_id)`);
-    videoSchemaReady = true;
-  }
-
   app.post("/realisations", requireAuth, async (req, res) => {
     try {
       const participantId = req.auth?.user?.participantId;
@@ -252,8 +201,6 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
     }
   });
 
-  // Compatibilité avec les anciens clients. Les nouveaux écrans Profil utilisent
-  // le transfert fractionné ci-dessous pour traverser les proxies limités à 1 Mo.
   app.post(
     "/realisations/:id/videos",
     requireAuth,
@@ -275,7 +222,6 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
 
       let client;
       try {
-        await ensureVideoSchema();
         client = await pool.connect();
         await client.query("begin");
         const result = await persistRealisationVideo({
@@ -340,7 +286,6 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
       }
 
       try {
-        await ensureVideoSchema();
         await pool.query(`delete from route_video_upload_chunks where created_at < now() - interval '24 hours'`);
 
         const realisationResult = await pool.query(
@@ -410,7 +355,6 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
 
     let client;
     try {
-      await ensureVideoSchema();
       client = await pool.connect();
       await client.query("begin");
 
@@ -504,7 +448,6 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
 
     let client;
     try {
-      await ensureVideoSchema();
       client = await pool.connect();
       await client.query("begin");
 
