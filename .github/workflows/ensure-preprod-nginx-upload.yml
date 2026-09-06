@@ -217,34 +217,35 @@ jobs:
             exit 1
           fi
 
-          # Le certificat installé sur cette machine correspond au server_name
-          # réellement actif. L'alias pre-climbcrew peut ne pas figurer dans le
-          # certificat : le contrôle HTTPS utilise donc le premier nom détecté.
+          # Le runner voit le frontal via un chemin réseau interne dont le
+          # certificat ne correspond pas nécessairement au nom public. Pour ce
+          # test uniquement, on ignore la validation TLS : le but est de prouver
+          # qu'un corps >10 Mo franchit bien le Nginx actif et atteint l'API.
           PROBE_DOMAIN="$(tr ' ' '\n' < "$DETECTED_DOMAINS_FILE" | sed '/^$/d' | head -n 1)"
           if [ -z "$PROBE_DOMAIN" ]; then
             PROBE_DOMAIN="$EXPECTED_DOMAIN"
           fi
-          echo "Domaine utilisé pour le contrôle public : $PROBE_DOMAIN"
+          echo "Domaine utilisé pour le contrôle du proxy : $PROBE_DOMAIN"
 
           PROBE_FILE="$(mktemp)"
           trap 'rm -f "$PROBE_FILE" "$DETECTED_DOMAINS_FILE"' EXIT
           dd if=/dev/zero of="$PROBE_FILE" bs=1M count=12 status=none
-          HTTP_CODE="$(curl --silent --show-error --output /tmp/climbcrew-upload-probe-response.txt \
+          HTTP_CODE="$(curl --insecure --silent --show-error --output /tmp/climbcrew-upload-probe-response.txt \
             --write-out '%{http_code}' --max-time 60 \
             -X POST -H 'Content-Type: video/mp4' \
             --data-binary "@$PROBE_FILE" \
             "https://${PROBE_DOMAIN}/api/realisations/proxy-limit-probe/videos" || true)"
 
-          echo "Réponse du test public 12 Mo : HTTP $HTTP_CODE"
+          echo "Réponse du test 12 Mo : HTTP $HTTP_CODE"
           if [ "$HTTP_CODE" = "413" ]; then
-            echo "ERROR: le reverse proxy public refuse encore les fichiers de plus de 10 Mo."
+            echo "ERROR: le reverse proxy refuse encore les fichiers de plus de 10 Mo."
             exit 1
           fi
           if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" = "000" ] || [[ "$HTTP_CODE" =~ ^5 ]]; then
-            echo "ERROR: le contrôle public du proxy n'a pas abouti correctement."
+            echo "ERROR: le contrôle du proxy n'a pas abouti correctement."
             exit 1
           fi
 
           trap - ERR
           echo "Nginx actif validé : client_max_body_size ${REQUIRED_LIMIT};"
-          echo "Un corps de 12 Mo franchit désormais le reverse proxy public (HTTP ${HTTP_CODE})."
+          echo "Un corps de 12 Mo franchit désormais le reverse proxy (HTTP ${HTTP_CODE})."
