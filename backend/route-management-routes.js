@@ -357,7 +357,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
       const result = await pool.query(`
         insert into routes (
           id, numero_voie_unique, numero_corde, couleur_prises, cotation_reference,
-          cotation_ajustee, nom_vo2ie, nom_ouvreur, moulinette_only, active, date_creation, tags, video_urls
+          cotation_ajustee, nom_voie, nom_ouvreur, moulinette_only, active, date_creation, tags, video_urls
         ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *
       `, [
         id,
