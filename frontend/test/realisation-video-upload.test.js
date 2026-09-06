@@ -12,8 +12,8 @@ test("Profil propose le chargement direct d'une vidéo sur une réalisation", as
   ]);
 
   assert.match(componentSource, /Charger une vidéo/);
-  assert.match(componentSource, /apiUpload\(/);
-  assert.match(componentSource, /`\/realisations\/\$\{encodeURIComponent\(realisation\.id\)\}\/videos`/);
+  assert.match(componentSource, /apiUploadVideoInChunks/);
+  assert.match(componentSource, /`\/realisations\/\$\{encodeURIComponent\(realisation\.id\)\}\/video-uploads`/);
   assert.match(componentSource, /MAX_VIDEO_BYTES = 50 \* 1024 \* 1024/);
   assert.match(componentSource, /selectedVideoUrls\.length >= 3/);
   assert.match(componentSource, /Vidéo chargée et associée à cette réalisation/);

@@ -1,6 +1,6 @@
 import React from "react";
 import Button from "./Button.jsx";
-import { apiFetch, apiUpload } from "../lib/api.js";
+import { apiFetch, apiUploadVideoInChunks } from "../lib/api.js";
 import { formatDateShortFr, formatRouteForRealisation } from "../lib/domain.js";
 import {
   REALISATION_CRITERION_LABELS,
@@ -129,10 +129,16 @@ export default function ProfileRealisationRecorder({
 
       if (videoFile) {
         try {
-          await apiUpload(
-            `/realisations/${encodeURIComponent(createdId)}/videos`,
+          setNotice("Réalisation enregistrée. Transfert de la vidéo…");
+          await apiUploadVideoInChunks(
+            `/realisations/${encodeURIComponent(createdId)}/video-uploads`,
             videoFile,
-            { headers: { "Content-Type": resolveVideoType(videoFile) } },
+            {
+              mimeType: resolveVideoType(videoFile),
+              onProgress: ({ uploadedParts, totalParts }) => {
+                setNotice(`Réalisation enregistrée. Transfert vidéo ${uploadedParts}/${totalParts}…`);
+              },
+            },
           );
           setNotice("Réalisation et vidéo enregistrées dans Profil.");
         } catch (uploadError) {
@@ -242,7 +248,7 @@ export default function ProfileRealisationRecorder({
               accept="video/mp4,video/webm,video/ogg,video/quicktime,.mp4,.webm,.ogg,.ogv,.mov"
               onChange={(event) => selectVideo(event.target.files?.[0])}
             />
-            <div className="small">MP4, WebM, OGG ou MOV · 50 Mo maximum.</div>
+            <div className="small">MP4, WebM, OGG ou MOV · 50 Mo maximum. Le transfert est découpé automatiquement pour les vidéos volumineuses.</div>
           </div>
 
           {videoFile && <div className="small">Vidéo prête : {videoFile.name} · {(videoFile.size / (1024 * 1024)).toFixed(2)} Mo</div>}
