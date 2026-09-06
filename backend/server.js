@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { readFile } from "node:fs/promises";
 import { installRouteManagementRoutes } from "./route-management-routes.js";
 import { installRealisationManagementRoutes } from "./realisation-management-routes.js";
+import { installRealisationTechnicalAnalysisRoutes } from "./realisation-technical-analysis-routes.js";
 import { installSessionReadRoutes } from "./session-read-routes.js";
 import { installParticipantCreationRoute } from "./participant-creation-route.js";
 import { installBroadcastMessageRoutes } from "./broadcast-message-routes.js";
@@ -121,6 +122,7 @@ installExplicitAdminUserRoutes(app, {
 installBroadcastMessageRoutes(app, { requireAuth, requireAdmin, pool });
 installEvolutionRequestRoutes(app, { requireAuth, requireAdmin, pool });
 installRealisationManagementRoutes(app, { requireAuth, pool });
+installRealisationTechnicalAnalysisRoutes(app, { requireAuth, pool });
 installRouteManagementRoutes(app, { requireAuth, requireAdmin, pool });
 
 app.get("/", (_req, res) => {
