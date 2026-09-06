@@ -2,16 +2,52 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const MIGRATIONS_DIR = fileURLToPath(new URL("./migrations/", import.meta.url));
 const MIGRATION_FILE_PATTERN = /^\d{3,}_[a-z0-9][a-z0-9_-]*\.sql$/i;
 const MIGRATION_LOCK_ID = 947_220_830;
 
-async function listMigrationFiles() {
-  const entries = await readdir(MIGRATIONS_DIR, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isFile() && MIGRATION_FILE_PATTERN.test(entry.name))
-    .map((entry) => entry.name)
-    .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+// Deux répertoires de migrations existent historiquement. Ils sont désormais
+// exécutés par un seul moteur, sous un seul verrou PostgreSQL et avec la même
+// table schema_migrations. L'ordre conserve exactement le démarrage historique :
+// migrations de la base principale, puis migrations des modules admin.
+const MIGRATION_SOURCES = [
+  {
+    name: "database",
+    directory: fileURLToPath(new URL("./migrations/", import.meta.url)),
+  },
+  {
+    name: "legacy-admin",
+    directory: fileURLToPath(new URL("../migrations/", import.meta.url)),
+  },
+];
+
+export async function listMigrationFiles() {
+  const migrations = [];
+  const versions = new Set();
+
+  for (const source of MIGRATION_SOURCES) {
+    const entries = await readdir(source.directory, { withFileTypes: true });
+    const filenames = entries
+      .filter((entry) => entry.isFile() && MIGRATION_FILE_PATTERN.test(entry.name))
+      .map((entry) => entry.name)
+      .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+
+    for (const version of filenames) {
+      if (versions.has(version)) {
+        throw new Error(
+          `Nom de migration PostgreSQL dupliqué : ${version}. `
+          + "Chaque migration doit avoir un nom unique, même entre les répertoires historiques.",
+        );
+      }
+      versions.add(version);
+      migrations.push({
+        version,
+        source: source.name,
+        filePath: path.join(source.directory, version),
+      });
+    }
+  }
+
+  return migrations;
 }
 
 async function ensureMigrationTable(client) {
@@ -44,15 +80,17 @@ export async function runDatabaseMigrations(pool, { logger = console } = {}) {
       "select version from schema_migrations order by version"
     );
     const applied = new Set(appliedResult.rows.map((row) => String(row.version)));
-    const files = await listMigrationFiles();
+    const migrations = await listMigrationFiles();
+    const files = migrations.map((migration) => migration.version);
     const executed = [];
 
-    for (const filename of files) {
-      if (applied.has(filename)) continue;
+    for (const migration of migrations) {
+      const { version, source, filePath } = migration;
+      if (applied.has(version)) continue;
 
-      const sql = await readFile(path.join(MIGRATIONS_DIR, filename), "utf8");
+      const sql = await readFile(filePath, "utf8");
       if (!sql.trim()) {
-        throw new Error(`Migration vide interdite : ${filename}`);
+        throw new Error(`Migration vide interdite : ${version}`);
       }
 
       await client.query("begin");
@@ -60,14 +98,14 @@ export async function runDatabaseMigrations(pool, { logger = console } = {}) {
         await client.query(sql);
         await client.query(
           "insert into schema_migrations (version) values ($1)",
-          [filename]
+          [version]
         );
         await client.query("commit");
-        executed.push(filename);
-        logger.info?.(`Migration appliquée : ${filename}`);
+        executed.push(version);
+        logger.info?.(`Migration appliquée : ${version} (${source})`);
       } catch (error) {
         await client.query("rollback");
-        error.message = `Échec de la migration ${filename}: ${error.message}`;
+        error.message = `Échec de la migration ${version}: ${error.message}`;
         throw error;
       }
     }
@@ -94,7 +132,8 @@ export async function getDatabaseMigrationStatus(pool) {
   const client = await pool.connect();
   try {
     await ensureMigrationTable(client);
-    const files = await listMigrationFiles();
+    const migrations = await listMigrationFiles();
+    const files = migrations.map((migration) => migration.version);
     const appliedResult = await client.query(
       "select version, applied_at from schema_migrations order by version"
     );
