@@ -53,7 +53,15 @@ docker compose --env-file .env.production -f docker-compose.prod.yml config
 Adapter `deploy/nginx/climbcrew.reverse-proxy.example.conf` :
 
 - `/` vers `http://127.0.0.1:8080` ;
-- `/api/` vers `http://127.0.0.1:3000`.
+- `/api/` vers `http://127.0.0.1:3000` ;
+- conserver `client_max_body_size 55m;` sur le serveur HTTPS : les vidéos ClimbCrew sont autorisées jusqu’à 50 Mo et le proxy externe ne doit pas les rejeter avant l’API.
+
+Après une modification de la configuration Nginx hôte, valider puis recharger :
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
 
 ## Sécurité
 
