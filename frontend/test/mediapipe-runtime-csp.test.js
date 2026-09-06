@@ -13,8 +13,9 @@ test("MediaPipe utilise uniquement des URL même origine dans le navigateur", ()
   assert.doesNotMatch(analysisSource, /https:\/\/storage\.googleapis\.com/);
 });
 
-test("Nginx relaie MediaPipe sans assouplir la CSP", () => {
-  assert.match(nginxConfig, /script-src 'self'/);
+test("Nginx relaie MediaPipe et autorise seulement la compilation WebAssembly", () => {
+  assert.match(nginxConfig, /script-src 'self' 'wasm-unsafe-eval'/);
+  assert.doesNotMatch(nginxConfig, /script-src[^;]*'unsafe-eval'/);
   assert.match(nginxConfig, /connect-src 'self'/);
   assert.match(nginxConfig, /location \/mediapipe-runtime\//);
   assert.match(nginxConfig, /proxy_pass https:\/\/cdn\.jsdelivr\.net\/npm\/@mediapipe\/tasks-vision@1\.0\.1\//);
