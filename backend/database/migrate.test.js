@@ -1,14 +1,9 @@
 import assert from "node:assert/strict";
-import { readdir } from "node:fs/promises";
 import test from "node:test";
-import { runDatabaseMigrations } from "./migrate.js";
+import { listMigrationFiles, runDatabaseMigrations } from "./migrate.js";
 
 async function migrationFiles() {
-  const entries = await readdir(new URL("./migrations/", import.meta.url), { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isFile() && /^\d{3,}_[a-z0-9][a-z0-9_-]*\.sql$/i.test(entry.name))
-    .map((entry) => entry.name)
-    .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+  return (await listMigrationFiles()).map((migration) => migration.version);
 }
 
 function createPool({ applied = [] } = {}) {

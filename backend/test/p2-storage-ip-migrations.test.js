@@ -6,7 +6,8 @@ import { trustedClientIpMiddleware } from "../admin-users/client-ip-hardening.js
 const enhancementsSource = await readFile(new URL("../deployment-bootstrap.js", import.meta.url), "utf8");
 const httpStackSource = await readFile(new URL("../middleware/http-stack.js", import.meta.url), "utf8");
 const explicitRoutesSource = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
-const migrationServiceSource = await readFile(new URL("../admin-users/migration-service.js", import.meta.url), "utf8");
+const migrationEngineSource = await readFile(new URL("../database/migrate.js", import.meta.url), "utf8");
+const applicationBootstrapSource = await readFile(new URL("../bootstrap/application-bootstrap.js", import.meta.url), "utf8");
 const databaseSource = await readFile(new URL("../admin-users/database.js", import.meta.url), "utf8");
 const authMiddlewareSource = await readFile(new URL("../auth-middleware.js", import.meta.url), "utf8");
 const migrationSql = await readFile(new URL("../migrations/001_integrity_constraints.sql", import.meta.url), "utf8");
@@ -37,13 +38,18 @@ test("le durcissement IP est installé explicitement avant l'intégration des lo
   assert.doesNotMatch(enhancementsSource, /installClientIpHardening|installRateLimitLogIntegration|installExpressIntegration/);
 });
 
-test("les migrations versionnées sont appliquées explicitement avant l'écoute réseau", () => {
-  assert.match(migrationServiceSource, /create table if not exists schema_migrations/);
-  assert.match(migrationServiceSource, /insert into schema_migrations \(version\)/);
-  assert.doesNotMatch(migrationServiceSource, /express\.application\.listen/);
+test("un seul moteur applique les migrations versionnées avant l'écoute réseau", () => {
+  assert.match(migrationEngineSource, /create table if not exists schema_migrations/);
+  assert.match(migrationEngineSource, /insert into schema_migrations \(version\)/);
+  assert.match(migrationEngineSource, /pg_advisory_lock/);
+  assert.match(migrationEngineSource, /\.\/migrations\//);
+  assert.match(migrationEngineSource, /\.\.\/migrations\//);
+  assert.doesNotMatch(migrationEngineSource, /express\.application\.listen/);
   assert.doesNotMatch(enhancementsSource, /installMigrationHook/);
-  const migrationIndex = explicitRoutesSource.indexOf("await runDatabaseMigrations();");
-  const adminSchemaIndex = explicitRoutesSource.indexOf("await ensureAdminUserSchema();");
+  assert.doesNotMatch(explicitRoutesSource, /runDatabaseMigrations/);
+
+  const migrationIndex = applicationBootstrapSource.indexOf("await runDatabaseMigrations(pool);");
+  const adminSchemaIndex = applicationBootstrapSource.indexOf("await initializeAdminUserEnhancements();");
   assert.ok(migrationIndex >= 0);
   assert.ok(adminSchemaIndex >= 0);
   assert.ok(migrationIndex < adminSchemaIndex);
