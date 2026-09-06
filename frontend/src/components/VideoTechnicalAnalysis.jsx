@@ -1,6 +1,7 @@
 import React from "react";
 import Button from "./Button.jsx";
 import { API_BASE, apiFetch } from "../lib/api.js";
+import { buildClimbingCoach } from "../lib/climbing-coach.js";
 import { analyzeClimbingVideo } from "../lib/mediapipe-video-analysis.js";
 import { fetchVideoAnalysisRules } from "../lib/video-analysis-rules.js";
 
@@ -109,7 +110,11 @@ export default function VideoTechnicalAnalysis({
         signal: controller.signal,
         onProgress: setProgress,
       });
-      setAnalysis(result);
+      const resultWithCoach = {
+        ...result,
+        coach: buildClimbingCoach(result.metrics, result.rules),
+      };
+      setAnalysis(resultWithCoach);
 
       if (!realisationId) {
         setSaveError("Analyse calculée, mais la réalisation ne peut pas être identifiée pour enregistrer les mesures.");
@@ -121,11 +126,11 @@ export default function VideoTechnicalAnalysis({
           `/realisations/${encodeURIComponent(realisationId)}/technical-analysis`,
           {
             method: "PUT",
-            body: JSON.stringify({ videoUrl: selectedUrl, analysis: result }),
+            body: JSON.stringify({ videoUrl: selectedUrl, analysis: resultWithCoach }),
           },
         );
-        setAnalysis(saved?.analysis || result);
-        setSaveStatus("Mesures enregistrées avec cette réalisation.");
+        setAnalysis(saved?.analysis || resultWithCoach);
+        setSaveStatus("Mesures et conseils entraîneur enregistrés avec cette réalisation.");
         if (typeof onSaved === "function") await onSaved(saved?.technicalAnalysis);
       } catch (saveFailure) {
         setSaveError(`Analyse calculée, mais enregistrement impossible : ${saveFailure.message || saveFailure}`);
@@ -155,6 +160,8 @@ export default function VideoTechnicalAnalysis({
   const metrics = analysis?.metrics;
   const pauses = Array.isArray(metrics?.pauses) ? metrics.pauses : [];
   const recommendations = Array.isArray(analysis?.recommendations) ? analysis.recommendations : [];
+  const coach = analysis?.coach || (metrics ? buildClimbingCoach(metrics, analysis?.rules || {}) : null);
+  const coachPriorities = Array.isArray(coach?.priorities) ? coach.priorities : [];
   const analyzedAt = formatSavedAt(analysis?.analyzedAt);
 
   return (
@@ -235,6 +242,26 @@ export default function VideoTechnicalAnalysis({
             <Metric label="Bras droit fléchi" value={analysis.display?.bentRight || formatTimestamp(metrics.bentArmSeconds?.right)} />
           </div>
 
+          {coachPriorities.length > 0 && (
+            <div className="subcard" style={{ marginTop: 12 }}>
+              <strong>Couche entraîneur</strong>
+              <div className="small" style={{ marginTop: 4 }}>{coach?.summary}</div>
+              <div className="stack" style={{ marginTop: 8 }}>
+                {coachPriorities.map((item, index) => (
+                  <div className="muted-box" key={item.code}>
+                    <strong>{index + 1}. {item.title}</strong>
+                    <div className="small" style={{ marginTop: 4 }}><b>Pourquoi :</b> {item.reason}</div>
+                    <div className="small" style={{ marginTop: 4 }}><b>Consigne :</b> {item.cue}</div>
+                    <div className="small" style={{ marginTop: 4 }}><b>Exercice :</b> {item.exercise}</div>
+                    <div className="small" style={{ marginTop: 4 }}><b>Volume :</b> {item.dose}</div>
+                    {item.caution && <div className="small" style={{ marginTop: 4 }}><b>À confirmer :</b> {item.caution}</div>}
+                  </div>
+                ))}
+              </div>
+              {coach?.note && <div className="small" style={{ marginTop: 8 }}>{coach.note}</div>}
+            </div>
+          )}
+
           {pauses.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <strong>Passages à revoir</strong>
@@ -265,6 +292,7 @@ export default function VideoTechnicalAnalysis({
 
           {recommendations.length > 0 && (
             <div className="stack" style={{ marginTop: 12 }}>
+              <strong>Constats mécaniques</strong>
               {recommendations.map((recommendation) => (
                 <div className={recommendation.severity === "warning" ? "muted-box" : "subcard"} key={recommendation.code}>
                   <strong>{recommendation.title}</strong>
