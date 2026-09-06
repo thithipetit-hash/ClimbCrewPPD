@@ -243,6 +243,125 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
     },
   );
 
+  app.delete("/realisations/:id/videos/:videoId", requireAuth, async (req, res) => {
+    const participantId = req.auth?.user?.participantId;
+    if (!participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
+
+    let client;
+    try {
+      await ensureVideoSchema();
+      client = await pool.connect();
+      await client.query("begin");
+
+      const realisationResult = await client.query(
+        `
+          select voie_id, video_urls
+          from realisations
+          where id = $1 and participant_id = $2
+          for update
+        `,
+        [req.params.id, participantId],
+      );
+      if (!realisationResult.rowCount) {
+        const error = new Error("Cette réalisation ne vous appartient pas");
+        error.status = 403;
+        throw error;
+      }
+
+      const realisation = realisationResult.rows[0];
+      const url = `/routes/${encodeURIComponent(realisation.voie_id)}/videos/${encodeURIComponent(req.params.videoId)}`;
+      const currentRealisationUrls = Array.isArray(realisation.video_urls)
+        ? realisation.video_urls.map(String)
+        : [];
+      if (!currentRealisationUrls.includes(url)) {
+        const error = new Error("Cette vidéo n’est pas associée à cette réalisation.");
+        error.status = 404;
+        throw error;
+      }
+
+      const videoResult = await client.query(
+        `select id from route_videos where id = $1 and route_id = $2 for update`,
+        [req.params.videoId, realisation.voie_id],
+      );
+      if (!videoResult.rowCount) {
+        const error = new Error("Vidéo introuvable");
+        error.status = 404;
+        throw error;
+      }
+
+      const uploaderResult = await client.query(
+        `
+          select 1
+          from access_logs
+          where user_id = $1
+            and event_type = 'realisation_video_upload'
+            and details ->> 'video_id' = $2
+          limit 1
+        `,
+        [req.auth?.user?.id || null, req.params.videoId],
+      );
+      if (!uploaderResult.rowCount && req.auth?.user?.role !== "admin") {
+        const error = new Error("Vous pouvez supprimer uniquement les vidéos que vous avez chargées.");
+        error.status = 403;
+        throw error;
+      }
+
+      await client.query(
+        `delete from route_videos where id = $1 and route_id = $2`,
+        [req.params.videoId, realisation.voie_id],
+      );
+      const updatedRoute = await client.query(
+        `
+          update routes
+          set video_urls = array_remove(video_urls, $2), updated_at = now()
+          where id = $1
+          returning video_urls
+        `,
+        [realisation.voie_id, url],
+      );
+      await client.query(
+        `
+          update realisations
+          set video_urls = coalesce(video_urls, '[]'::jsonb) - $2, updated_at = now()
+          where voie_id = $1 and coalesce(video_urls, '[]'::jsonb) ? $2
+        `,
+        [realisation.voie_id, url],
+      );
+      await client.query(
+        `
+          insert into access_logs (user_id, event_type, success, ip_address, user_agent, details)
+          values ($1, 'realisation_video_delete', true, $2, $3, $4::jsonb)
+        `,
+        [
+          req.auth?.user?.id || null,
+          req.ip || null,
+          req.headers["user-agent"] || null,
+          JSON.stringify({
+            realisation_id: req.params.id,
+            route_id: realisation.voie_id,
+            video_id: req.params.videoId,
+          }),
+        ],
+      );
+
+      await client.query("commit");
+      return res.json({
+        ok: true,
+        videoUrls: currentRealisationUrls.filter((item) => item !== url),
+        routeVideoUrls: Array.isArray(updatedRoute.rows[0]?.video_urls)
+          ? updatedRoute.rows[0].video_urls.map(String)
+          : [],
+      });
+    } catch (error) {
+      if (client) {
+        try { await client.query("rollback"); } catch { /* transaction déjà terminée */ }
+      }
+      return res.status(error.status || 500).json({ error: error.message || "Suppression de la vidéo impossible." });
+    } finally {
+      client?.release();
+    }
+  });
+
   app.put("/realisations/:id", requireAuth, async (req, res) => {
     try {
       const participantId = req.auth?.user?.participantId;
