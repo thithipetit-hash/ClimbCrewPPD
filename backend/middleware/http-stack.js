@@ -7,6 +7,56 @@ import { preBodyRequestGuard } from "../admin-users/prebody-rate-limit.js";
 import { trustedClientIpMiddleware } from "../admin-users/client-ip-hardening.js";
 import { rateLimitLogMiddleware } from "../admin-users/rate-limit-log-integration.js";
 
+const EXPRESS4_ASYNC_WRAPPED = Symbol("climbcrew.express4AsyncWrapped");
+const EXPRESS_REGISTRATION_METHODS = ["use", "all", "get", "post", "put", "patch", "delete", "options", "head"];
+
+function wrapExpress4AsyncHandler(handler) {
+  if (typeof handler !== "function") return handler;
+  if (handler[EXPRESS4_ASYNC_WRAPPED]) return handler;
+  if (handler.constructor?.name !== "AsyncFunction") return handler;
+
+  let wrapped;
+  if (handler.length === 4) {
+    wrapped = function express4AsyncErrorHandler(error, req, res, next) {
+      Promise.resolve(handler(error, req, res, next)).catch(next);
+    };
+  } else {
+    wrapped = function express4AsyncHandler(req, res, next) {
+      Promise.resolve(handler(req, res, next)).catch(next);
+    };
+  }
+
+  Object.defineProperty(wrapped, EXPRESS4_ASYNC_WRAPPED, { value: true });
+  Object.defineProperty(wrapped, "name", {
+    value: handler.name ? `asyncSafe_${handler.name}` : "asyncSafeHandler",
+    configurable: true,
+  });
+  return wrapped;
+}
+
+function wrapRegistrationArgument(argument) {
+  if (Array.isArray(argument)) return argument.map(wrapRegistrationArgument);
+  return wrapExpress4AsyncHandler(argument);
+}
+
+/**
+ * Express 4 ne propage pas nativement les Promise rejetées vers next(error).
+ * Le serveur enregistre beaucoup de contrôleurs async : on sécurise donc les
+ * méthodes d'enregistrement une fois, avant l'installation des routes.
+ */
+export function installExpress4AsyncSafety(app) {
+  for (const method of EXPRESS_REGISTRATION_METHODS) {
+    const original = app[method];
+    if (typeof original !== "function" || original[EXPRESS4_ASYNC_WRAPPED]) continue;
+
+    const safeRegistration = function safeExpressRegistration(...args) {
+      return original.apply(this, args.map(wrapRegistrationArgument));
+    };
+    Object.defineProperty(safeRegistration, EXPRESS4_ASYNC_WRAPPED, { value: true });
+    app[method] = safeRegistration;
+  }
+}
+
 export function normalizeApiPath(url) {
   const value = String(url || "/");
   const queryIndex = value.indexOf("?");
@@ -54,6 +104,7 @@ function createRateLimiter({ keyPrefix, windowMs, max, getClientIp }) {
 }
 
 export function installHttpStack(app, config, { isSafeMethod, getClientIp }) {
+  installExpress4AsyncSafety(app);
   app.disable("x-powered-by");
   app.use(sanitizeMalformedCookieHeader);
   app.use(createCrossOriginCsrfBridge());
