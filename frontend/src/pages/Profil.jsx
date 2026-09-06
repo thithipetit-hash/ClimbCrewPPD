@@ -13,6 +13,7 @@ import {
   formatDateShortFr,
   formatRouteForRealisation,
   gradeToIndex,
+  normalizeRopeNumber,
 } from "../lib/domain.js";
 import {
   REALISATION_CRITERION_LABELS,
@@ -27,6 +28,30 @@ function sortParticipantsForProfile(participants, myParticipantId) {
     const bIsMe = String(b.id) === String(myParticipantId || "");
     if (aIsMe !== bIsMe) return aIsMe ? -1 : 1;
     return fullName(a).localeCompare(fullName(b), "fr");
+  });
+}
+
+function sortRealisationsForDisplay(realisations, routesById, sortBy) {
+  return [...realisations].sort((a, b) => {
+    const dateOrder = String(b.dateRealisation || "").localeCompare(String(a.dateRealisation || ""));
+    if (sortBy === "date") return dateOrder;
+
+    const routeA = routesById[a.voieId];
+    const routeB = routesById[b.voieId];
+
+    if (sortBy === "rope") {
+      const ropeOrder = normalizeRopeNumber(routeA?.numeroCorde) - normalizeRopeNumber(routeB?.numeroCorde);
+      return ropeOrder || dateOrder;
+    }
+
+    if (sortBy === "difficulty") {
+      const gradeA = routeA?.cotationAjustee || routeA?.cotationReference || "";
+      const gradeB = routeB?.cotationAjustee || routeB?.cotationReference || "";
+      const gradeOrder = gradeToIndex(gradeB) - gradeToIndex(gradeA);
+      return gradeOrder || normalizeRopeNumber(routeA?.numeroCorde) - normalizeRopeNumber(routeB?.numeroCorde) || dateOrder;
+    }
+
+    return dateOrder;
   });
 }
 
@@ -52,6 +77,7 @@ export default function Profil({
   const [participants, setParticipants] = React.useState(() => myParticipant ? [myParticipant] : []);
   const [selectedParticipantId, setSelectedParticipantId] = React.useState(() => String(myParticipantId || ""));
   const [realisations, setRealisations] = React.useState(() => Array.isArray(allRealisations) ? allRealisations : []);
+  const [realisationSort, setRealisationSort] = React.useState("date");
   const [profileError, setProfileError] = React.useState("");
 
   React.useEffect(() => {
@@ -90,6 +116,7 @@ export default function Profil({
   const selectedRealisations = realisations
     .filter((realisation) => String(realisation.participantId) === String(selectedParticipantId))
     .sort((a, b) => String(b.dateRealisation || "").localeCompare(String(a.dateRealisation || "")));
+  const displayedRealisations = sortRealisationsForDisplay(selectedRealisations, routesById, realisationSort);
   const cpr = cprByParticipantId[selectedParticipantId] || {};
   const points = pointsByParticipantId[selectedParticipantId] || 0;
   const participations = sessionStats.participationCount[selectedParticipantId] || 0;
@@ -240,13 +267,30 @@ export default function Profil({
 
               <div className="card">
                 <div className="card-header">
-                  <h3>Réalisations</h3>
-                  <span className="badge">{selectedRealisations.length}</span>
+                  <div className="group">
+                    <h3>Réalisations</h3>
+                    <span className="badge">{selectedRealisations.length}</span>
+                  </div>
+                  {selectedRealisations.length > 1 && (
+                    <label className="group" htmlFor="profile-realisation-sort">
+                      <span className="small">Trier par</span>
+                      <select
+                        id="profile-realisation-sort"
+                        value={realisationSort}
+                        onChange={(event) => setRealisationSort(event.target.value)}
+                        style={{ width: "auto", maxWidth: "100%" }}
+                      >
+                        <option value="date">Date</option>
+                        <option value="rope">Corde</option>
+                        <option value="difficulty">Difficulté</option>
+                      </select>
+                    </label>
+                  )}
                 </div>
                 <div className="stack">
-                  {selectedRealisations.length === 0 ? (
+                  {displayedRealisations.length === 0 ? (
                     <div className="muted-box">Aucune réalisation enregistrée.</div>
-                  ) : selectedRealisations.map((realisation) => {
+                  ) : displayedRealisations.map((realisation) => {
                     const route = routesById[realisation.voieId];
                     const modeRealisation = getRealisationMode(realisation, route);
                     const criterionRealisation = getRealisationCriterion(realisation);
@@ -262,8 +306,12 @@ export default function Profil({
                             <strong>{route ? formatRouteForRealisation(route) : "Voie inconnue"}</strong>
                             <div className="small">{formatDateShortFr(realisation.dateRealisation?.slice(0, 10))} · {modeLabel} · {criterionLabel}</div>
                           </div>
-                          {isOwnProfile && <Button variant="danger" onClick={(event) => { event.preventDefault(); event.stopPropagation(); deleteOwnRealisation(realisation); }}>Supprimer</Button>}
                         </summary>
+                        {isOwnProfile && (
+                          <div className="group" style={{ justifyContent: "flex-end", marginBottom: 8 }}>
+                            <Button variant="danger" onClick={() => deleteOwnRealisation(realisation)}>Supprimer</Button>
+                          </div>
+                        )}
                         <div className="grid two">
                           <div className="realisation-mode-field" data-context="existing">
                             <label>Mode</label>
