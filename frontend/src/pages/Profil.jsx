@@ -3,6 +3,7 @@ import Button from "../components/Button.jsx";
 import ClimberProfilePanel from "../components/ClimberProfilePanel.jsx";
 import ParticipantBadges from "../components/ParticipantBadges.jsx";
 import ProfileGecko from "../components/ProfileGecko.jsx";
+import ProfileRealisationRecorder from "../components/ProfileRealisationRecorder.jsx";
 import RealisationVideoAnalysis from "../components/RealisationVideoAnalysis.jsx";
 import CprEvolutionChart from "../sections/CprEvolutionChart.jsx";
 import { apiFetch } from "../lib/api.js";
@@ -227,6 +228,15 @@ export default function Profil({
               <ClimberProfilePanel realisations={selectedRealisations} routesById={routesById} cprGrade={cpr.currentGrade || ""} />
               <ParticipantBadges participant={selectedParticipant} realisations={selectedRealisations} allRealisations={realisations} routesById={routesById} sessions={getParticipantSessions(selectedParticipantId)} />
               <div className="card"><CprEvolutionChart realisations={selectedRealisations} routesById={routesById} /></div>
+
+              {isOwnProfile && (
+                <ProfileRealisationRecorder
+                  myParticipantId={myParticipantId}
+                  routesById={routesById}
+                  getParticipantSessions={getParticipantSessions}
+                  onSaved={refreshRealisations}
+                />
+              )}
 
               <div className="card">
                 <div className="card-header">
