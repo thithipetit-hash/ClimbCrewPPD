@@ -7,7 +7,6 @@ import {
   restoreBackup,
   sendBackupByEmail,
 } from "./backup-service.js";
-import { requireAdmin } from "./admin-users/security.js";
 
 function restartProcessSoon(exitCode = 0) {
   setTimeout(() => process.exit(exitCode), 1200).unref?.();
@@ -29,9 +28,11 @@ function emailRuntimeConfig() {
 
 /**
  * Routes d'exploitation réservées aux administrateurs authentifiés.
+ * Le middleware administrateur canonique est injecté par server.js via
+ * explicit-routes.js afin qu'il n'existe plus de second chemin d'authentification.
  * Les dumps restent dans /backups et ne sont jamais exposés comme fichiers statiques.
  */
-export function installBackupRoutes(app) {
+export function installBackupRoutes(app, { requireAdmin }) {
   app.get("/admin/backups", requireAdmin, async (_req, res) => {
     try {
       const backups = await listBackups();
