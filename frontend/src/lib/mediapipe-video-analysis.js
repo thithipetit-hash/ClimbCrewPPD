@@ -20,7 +20,7 @@ const LANDMARK = Object.freeze({
   RIGHT_ANKLE: 28,
 });
 
-let poseLandmarkerPromise = null;
+let visionRuntimePromise = null;
 
 function distance(a, b) {
   if (!a || !b) return 0;
@@ -93,25 +93,30 @@ function buildFramePose(landmarks, rules) {
   };
 }
 
-export async function getPoseLandmarker() {
-  if (!poseLandmarkerPromise) {
-    poseLandmarkerPromise = (async () => {
+async function getVisionRuntime() {
+  if (!visionRuntimePromise) {
+    visionRuntimePromise = (async () => {
       const { FilesetResolver, PoseLandmarker } = await import(/* @vite-ignore */ MEDIAPIPE_MODULE_URL);
       const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
-      return PoseLandmarker.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: POSE_MODEL_URL },
-        runningMode: "VIDEO",
-        numPoses: 1,
-        minPoseDetectionConfidence: 0.45,
-        minPosePresenceConfidence: 0.45,
-        minTrackingConfidence: 0.45,
-      });
+      return { vision, PoseLandmarker };
     })().catch((error) => {
-      poseLandmarkerPromise = null;
+      visionRuntimePromise = null;
       throw error;
     });
   }
-  return poseLandmarkerPromise;
+  return visionRuntimePromise;
+}
+
+export async function getPoseLandmarker() {
+  const { vision, PoseLandmarker } = await getVisionRuntime();
+  return PoseLandmarker.createFromOptions(vision, {
+    baseOptions: { modelAssetPath: POSE_MODEL_URL },
+    runningMode: "VIDEO",
+    numPoses: 1,
+    minPoseDetectionConfidence: 0.45,
+    minPosePresenceConfidence: 0.45,
+    minTrackingConfidence: 0.45,
+  });
 }
 
 function waitForEvent(target, eventName) {
@@ -242,6 +247,9 @@ export async function analyzeClimbingVideo(video, options = {}) {
   if (!Number.isFinite(duration) || duration <= 0) throw new Error("Durée vidéo invalide.");
   if (duration > MAX_ANALYSIS_SECONDS) throw new Error("Analyse limitée aux vidéos de 8 minutes maximum.");
 
+  // Un PoseLandmarker VIDEO conserve la dernière position temporelle reçue.
+  // Chaque analyse utilise donc sa propre instance afin que sa timeline puisse
+  // repartir de 0 sans provoquer de Packet timestamp mismatch lors d'une relance.
   const poseLandmarker = await getPoseLandmarker();
   const sampleStep = 1 / Math.max(1, rules.sampleFps);
   const sampleTimes = [];
@@ -370,6 +378,11 @@ export async function analyzeClimbingVideo(video, options = {}) {
     } catch {
       // La restauration de lecture ne doit pas masquer le résultat de l’analyse.
     }
+    try {
+      poseLandmarker.close?.();
+    } catch {
+      // La fermeture du graphe ne doit pas masquer le résultat de l’analyse.
+    }
   }
 
   const detectionRatio = sampleTimes.length ? validSamples / sampleTimes.length : 0;
@@ -397,7 +410,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
 
   return {
     engine: "MediaPipe Pose Landmarker Lite",
-    engineVersion: "1.0.1",
+    engineVersion: "1.0.2",
     localProcessing: true,
     rules,
     metrics,
