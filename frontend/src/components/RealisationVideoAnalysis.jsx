@@ -13,6 +13,10 @@ const VIDEO_TYPE_BY_EXTENSION = Object.freeze({
   mov: "video/quicktime",
 });
 
+function isLocalVideoUrl(url) {
+  return /^\/routes\/[^/]+\/videos\/[^/]+$/.test(String(url || ""));
+}
+
 function parseLocalVideoUrl(url) {
   const match = String(url || "").match(/^\/routes\/([^/]+)\/videos\/([^/]+)$/);
   if (!match) return null;
@@ -189,25 +193,29 @@ export default function RealisationVideoAnalysis({
           <div className="small" style={{ marginTop: 8 }}>Aucune vidéo associée à cette réalisation.</div>
         ) : (
           <div className="stack" style={{ marginTop: 8 }}>
-            {selectedVideoUrls.map((url, index) => (
-              <div className="subcard" key={url}>
-                <div className="card-header">
-                  <div>
-                    <strong>Vidéo {index + 1}</strong>
+            {selectedVideoUrls.map((url, index) => {
+              const local = isLocalVideoUrl(url);
+              return (
+                <div className="subcard" key={url}>
+                  <div className="card-header">
+                    <div>
+                      <strong>Vidéo {index + 1}</strong>
+                      <div className="small">{local ? "Chargée dans ClimbCrew" : "Lien externe"}</div>
+                    </div>
+                    {editable && (
+                      <Button
+                        type="button"
+                        variant="danger"
+                        disabled={Boolean(deletingUrl)}
+                        onClick={() => handleDeleteVideo(url)}
+                      >
+                        {deletingUrl === url ? "Suppression…" : "Effacer"}
+                      </Button>
+                    )}
                   </div>
-                  {editable && (
-                    <Button
-                      type="button"
-                      variant="danger"
-                      disabled={Boolean(deletingUrl)}
-                      onClick={() => handleDeleteVideo(url)}
-                    >
-                      {deletingUrl === url ? "Suppression…" : "Effacer"}
-                    </Button>
-                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
