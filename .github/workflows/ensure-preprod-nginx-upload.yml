@@ -26,7 +26,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          DOMAIN="pre-climbcrew.dip-tcs.com"
+          EXPECTED_DOMAIN="pre-climbcrew.dip-tcs.com"
           REQUIRED_LIMIT="55m"
           BACKUP_DIR="/tmp/climbcrew-nginx-backup-$(date +%s)"
           mkdir -p "$BACKUP_DIR"
@@ -45,11 +45,11 @@ jobs:
             | grep -E '^(# configuration file |[[:space:]]*(server_name|proxy_pass|client_max_body_size)[[:space:]])' \
             | head -n 250 || true
 
-          # Le serveur de préproduction a historiquement utilisé un bloc générique
-          # (sans le nom DNS pre-climbcrew). On privilégie donc le nom de domaine,
-          # puis on reconnaît le proxy ClimbCrew grâce à ses upstreams locaux.
+          # La machine de préproduction conserve historiquement un server_name
+          # différent de son alias DNS. On reconnaît donc le bloc ClimbCrew par
+          # le nom attendu OU par ses upstreams backend/frontend locaux.
           mapfile -t MATCHING_FILES < <(
-            printf '%s\n' "$NGINX_DUMP" | awk -v domain="$DOMAIN" '
+            printf '%s\n' "$NGINX_DUMP" | awk -v domain="$EXPECTED_DOMAIN" '
               /^# configuration file / {
                 file=$4
                 sub(/:$/, "", file)
@@ -95,12 +95,15 @@ jobs:
           trap 'restore_backups' ERR
 
           EDITED_BLOCKS=0
+          DETECTED_DOMAINS_FILE="$(mktemp)"
+          trap 'rm -f "$DETECTED_DOMAINS_FILE"' EXIT
+
           for target in "${RESOLVED_FILES[@]}"; do
             backup="$BACKUP_DIR/$(printf '%s' "$target" | sed 's#/#_#g')"
             sudo cp "$target" "$backup"
             sudo chown "$(id -u):$(id -g)" "$backup"
 
-            edited="$(python3 - "$target" "$DOMAIN" "$REQUIRED_LIMIT" <<'PY'
+            result="$(python3 - "$target" "$EXPECTED_DOMAIN" "$REQUIRED_LIMIT" <<'PY'
           import pathlib
           import re
           import subprocess
@@ -108,7 +111,7 @@ jobs:
           import tempfile
 
           path = pathlib.Path(sys.argv[1])
-          domain = sys.argv[2]
+          expected_domain = sys.argv[2]
           limit = sys.argv[3]
           text = subprocess.run(
               ["sudo", "cat", str(path)],
@@ -119,10 +122,11 @@ jobs:
           lines = text.splitlines(keepends=True)
           i = 0
           edited_blocks = 0
+          detected_domains = []
 
           def is_climbcrew_server(block: str) -> bool:
               explicit_domain = re.search(
-                  rf"\bserver_name\b[^;]*\b{re.escape(domain)}\b[^;]*;",
+                  rf"\bserver_name\b[^;]*\b{re.escape(expected_domain)}\b[^;]*;",
                   block,
               )
               local_upstream = re.search(
@@ -147,6 +151,11 @@ jobs:
               block = "".join(block_lines)
               if not is_climbcrew_server(block):
                   continue
+
+              for match in re.finditer(r"\bserver_name\s+([^;]+);", block):
+                  for candidate in match.group(1).split():
+                      if candidate not in {"_", "localhost"} and "*" not in candidate and candidate not in detected_domains:
+                          detected_domains.append(candidate)
 
               directive_indexes = [
                   idx for idx, line in enumerate(block_lines)
@@ -182,9 +191,15 @@ jobs:
               pathlib.Path(temp_name).unlink(missing_ok=True)
 
           print(edited_blocks)
+          print(" ".join(detected_domains))
           PY
           )"
+            edited="$(printf '%s\n' "$result" | sed -n '1p')"
+            domains="$(printf '%s\n' "$result" | sed -n '2p')"
             EDITED_BLOCKS=$((EDITED_BLOCKS + edited))
+            if [ -n "$domains" ]; then
+              printf '%s\n' "$domains" >> "$DETECTED_DOMAINS_FILE"
+            fi
           done
 
           if [ "$EDITED_BLOCKS" -lt 1 ]; then
@@ -196,24 +211,29 @@ jobs:
           sudo nginx -t
           sudo systemctl reload nginx
 
-          # Contrôle de configuration chargé après reload.
           RELOADED_DUMP="$(sudo nginx -T 2>&1)"
           if ! printf '%s\n' "$RELOADED_DUMP" | grep -qE 'client_max_body_size[[:space:]]+55m;'; then
             echo "ERROR: la limite 55m n'apparaît pas dans la configuration Nginx rechargée."
             exit 1
           fi
 
-          # Contrôle de bout en bout : 12 Mo doivent franchir le proxy. Le backend
-          # peut répondre 401/403/404 sans authentification ; 413 signifie que le
-          # corps est encore bloqué avant d'atteindre l'application.
+          # Le certificat installé sur cette machine correspond au server_name
+          # réellement actif. L'alias pre-climbcrew peut ne pas figurer dans le
+          # certificat : le contrôle HTTPS utilise donc le premier nom détecté.
+          PROBE_DOMAIN="$(tr ' ' '\n' < "$DETECTED_DOMAINS_FILE" | sed '/^$/d' | head -n 1)"
+          if [ -z "$PROBE_DOMAIN" ]; then
+            PROBE_DOMAIN="$EXPECTED_DOMAIN"
+          fi
+          echo "Domaine utilisé pour le contrôle public : $PROBE_DOMAIN"
+
           PROBE_FILE="$(mktemp)"
-          trap 'rm -f "$PROBE_FILE"' EXIT
+          trap 'rm -f "$PROBE_FILE" "$DETECTED_DOMAINS_FILE"' EXIT
           dd if=/dev/zero of="$PROBE_FILE" bs=1M count=12 status=none
           HTTP_CODE="$(curl --silent --show-error --output /tmp/climbcrew-upload-probe-response.txt \
             --write-out '%{http_code}' --max-time 60 \
             -X POST -H 'Content-Type: video/mp4' \
             --data-binary "@$PROBE_FILE" \
-            "https://${DOMAIN}/api/realisations/proxy-limit-probe/videos" || true)"
+            "https://${PROBE_DOMAIN}/api/realisations/proxy-limit-probe/videos" || true)"
 
           echo "Réponse du test public 12 Mo : HTTP $HTTP_CODE"
           if [ "$HTTP_CODE" = "413" ]; then
