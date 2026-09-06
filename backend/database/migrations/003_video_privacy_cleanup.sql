@@ -47,11 +47,11 @@ set video_urls = coalesce((
 ), '{}'::text[])
 where exists (
   select 1
-  from unnest(coalesce(r.video_urls, '{}'::text[])) as current_url
+  from unnest(coalesce(r.video_urls, '{}'::text[])) as current_item(url)
   join route_videos rv
     on rv.route_id = r.id
    and rv.source_realisation_id is not null
-   and split_part(current_url, '/videos/', 2) = rv.id
+   and split_part(current_item.url, '/videos/', 2) = rv.id
 );
 
 -- Une vidéo personnelle ne doit pas rester attachée à la réalisation d'un
@@ -78,6 +78,24 @@ where exists (
    and rv.source_realisation_id <> re.id
    and split_part(current_item.url, '/videos/', 2) = rv.id
 );
+
+-- Élimine les fichiers déjà orphelins avant de poser l'intégrité référentielle.
+delete from route_videos rv
+where rv.source_realisation_id is not null
+  and not exists (
+    select 1
+    from realisations re
+    where re.id = rv.source_realisation_id
+  );
+
+alter table route_videos
+  drop constraint if exists fk_route_videos_source_realisation;
+
+alter table route_videos
+  add constraint fk_route_videos_source_realisation
+  foreign key (source_realisation_id)
+  references realisations(id)
+  on delete cascade;
 
 -- Empêche toute réintroduction future d'une vidéo personnelle dans la liste
 -- partagée d'une voie, y compris via une ancienne version du backend.
