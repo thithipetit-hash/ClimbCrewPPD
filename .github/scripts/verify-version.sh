@@ -3,7 +3,8 @@ set -euo pipefail
 
 VERSION_FILE="VERSION"
 LEGACY_FRONTEND_VERSION_FILE="frontend/src/lib/version.js"
-VERSION_PATTERN='^[0-9]{8}\.[0-9]{3}$'
+CURRENT_VERSION_PATTERN='^[0-9]{6}\.[0-9]{3}$'
+REFERENCE_VERSION_PATTERN='^([0-9]{6}|[0-9]{8})\.[0-9]{3}$'
 BASE_REF="${BASE_REF:-}"
 BEFORE_SHA="${BEFORE_SHA:-}"
 VERSION_CONSISTENCY_ONLY="${VERSION_CONSISTENCY_ONLY:-0}"
@@ -17,11 +18,25 @@ extract_version_from_ref() {
   git show "${ref}:${VERSION_FILE}" 2>/dev/null | tr -d '[:space:]'
 }
 
+version_compare_key() {
+  local version="$1"
+  local date_part="${version%%.*}"
+  local sequence_part="${version##*.}"
+
+  # Compatibilité de transition : les versions historiques AAAAMMJJ.NNN sont
+  # comparées à leur équivalent AAMMJJ.NNN sans modifier l'historique Git.
+  if [ "${#date_part}" -eq 8 ]; then
+    date_part="${date_part:2:6}"
+  fi
+
+  printf '%s%s\n' "$date_part" "$sequence_part"
+}
+
 CURRENT_VERSION="$(extract_canonical_version "$VERSION_FILE")"
 
-if [[ ! "$CURRENT_VERSION" =~ $VERSION_PATTERN ]]; then
+if [[ ! "$CURRENT_VERSION" =~ $CURRENT_VERSION_PATTERN ]]; then
   echo "ERROR: VERSION absente ou invalide : '$CURRENT_VERSION'"
-  echo "Format attendu : AAAAMMJJ.NNN."
+  echo "Format attendu : AAMMJJ.NNN."
   exit 1
 fi
 
@@ -63,7 +78,7 @@ if [ -z "$BASE_VERSION" ]; then
   exit 0
 fi
 
-if [[ ! "$BASE_VERSION" =~ $VERSION_PATTERN ]]; then
+if [[ ! "$BASE_VERSION" =~ $REFERENCE_VERSION_PATTERN ]]; then
   echo "ERROR: version de référence invalide sur ${BASE_LABEL} : '$BASE_VERSION'"
   exit 1
 fi
@@ -71,7 +86,10 @@ fi
 echo "Version de référence : $BASE_VERSION (${BASE_LABEL})"
 echo "Version proposée     : $CURRENT_VERSION"
 
-if [[ "$CURRENT_VERSION" == "$BASE_VERSION" || "$CURRENT_VERSION" < "$BASE_VERSION" ]]; then
+CURRENT_KEY="$(version_compare_key "$CURRENT_VERSION")"
+BASE_KEY="$(version_compare_key "$BASE_VERSION")"
+
+if [[ "$CURRENT_KEY" == "$BASE_KEY" || "$CURRENT_KEY" < "$BASE_KEY" ]]; then
   echo "ERROR: toute évolution doit incrémenter VERSION."
   echo "La version proposée doit être strictement supérieure à $BASE_VERSION."
   exit 1

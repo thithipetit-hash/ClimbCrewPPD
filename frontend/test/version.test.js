@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 
-const versionPattern = /^\d{8}\.\d{3}$/;
+const versionPattern = /^\d{6}\.\d{3}$/;
 
 test("VERSION est l'unique numéro de version applicative", async () => {
   const [canonical, versionSource, viteSource, dockerfileSource, composeSource] = await Promise.all([
@@ -14,7 +14,7 @@ test("VERSION est l'unique numéro de version applicative", async () => {
   ]);
   const version = canonical.trim();
   assert.match(version, versionPattern);
-  assert.doesNotMatch(versionSource, /20\d{6}\.\d{3}/);
+  assert.doesNotMatch(versionSource, /(?:20)?\d{6}\.\d{3}/);
   assert.match(versionSource, /import\.meta\.env\?\.VITE_APP_VERSION/);
   assert.match(viteSource, /new URL\("\.\.\/VERSION", import\.meta\.url\)/);
   assert.match(viteSource, /process\.env\.VITE_APP_VERSION/);
