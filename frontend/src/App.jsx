@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect } from "react";
 
 import Button from "./components/Button.jsx";
 import AuthPage from "./components/AuthPage.jsx";
@@ -26,25 +26,16 @@ import {
   formatRouteName,
   formatRouteForRealisation,
   normalizeRopeNumber,
-  todayIso,
-  defaultSessionStatus,
   normalizePassport,
   getPassportStyle,
   getPassportDotStyle,
-  gradeToIndex,
   getRouteCardStyle,
   formatDateFr,
   formatDateShortFr,
   formatPoints,
   nextBusinessDay,
-  calculateSimpleCpr,
-  isSuccessfulLeadRealisation,
   isSuccessfulRealisation,
   getRealisationWeight,
-  calculateLeadRealisationStats,
-  calculateLeadPoints,
-  calculateRouteAggregates,
-  calculateWallOfFameCategories,
 } from "./lib/domain.js";
 import { USE_API, apiFetch, downloadFile } from "./lib/api.js";
 import { normalizeAppData } from "./lib/normalize.js";
@@ -57,16 +48,12 @@ import { useAppBootstrap } from "./hooks/useAppBootstrap.js";
 import { useParticipantEditorState } from "./hooks/useParticipantEditorState.js";
 import { useRouteEditorState } from "./hooks/useRouteEditorState.js";
 import { useRealisationEditorState } from "./hooks/useRealisationEditorState.js";
+import { useAppDerivedData } from "./hooks/useAppDerivedData.js";
+import { useSessionActions } from "./hooks/useSessionActions.js";
+import { useRouteActions } from "./hooks/useRouteActions.js";
+import { useRealisationActions } from "./hooks/useRealisationActions.js";
 import { PASSWORD_RULE_TEXT, isStrongPassword } from "./lib/password-policy.js";
-import { buildRouteDisplayGroups } from "./lib/route-display-groups.js";
 import { theCragStyleForRealisation } from "./lib/thecrag.js";
-import {
-  buildRealisationDraft,
-  buildRealisationPayload,
-  getParticipantSessionDays,
-  isManagedSession,
-  resolveSessionIdForRealisation,
-} from "./lib/realisation-workflow.js";
 
 const ADMIN_CODE = import.meta.env.VITE_LEGACY_ADMIN_CODE || "";
 
@@ -189,152 +176,49 @@ function App() {
     }
   }, [tab, canManageAccountsAndLogs, authUser?.id]);
 
-  const participantsById = useMemo(
-    () => Object.fromEntries(state.participants.map((p) => [p.id, p])),
-    [state.participants]
-  );
-  const routesById = useMemo(
-    () => Object.fromEntries(state.routes.map((r) => [r.id, r])),
-    [state.routes]
-  );
-
-  const routeDisplayGroups = useMemo(
-    () => buildRouteDisplayGroups({
-      routes: state.routes,
-      ropes: state.ropes,
-      sortMode: routeSortMode,
-    }),
-    [routeSortMode, state.routes, state.ropes],
-  );
-
-  const sessionsById = useMemo(
-    () => Object.fromEntries(state.sessions.map((s) => [s.id, s])),
-    [state.sessions]
-  );
-
-  const realisationModalRoute = realisationModalRouteId ? routesById[realisationModalRouteId] : null;
-
-  const sortedSessionsByDate = useMemo(() => {
-    return [...state.sessions].sort((a, b) => {
-      const dateCompare = b.date.localeCompare(a.date);
-      if (dateCompare !== 0) return dateCompare;
-      return a.slot.localeCompare(b.slot);
-    });
-  }, [state.sessions]);
-
-  const modalAllAvailableDays = useMemo(() => {
-    return [...new Set(
-      sortedSessionsByDate
-        .filter(isManagedSession)
-        .map((session) => session.date)
-    )];
-  }, [sortedSessionsByDate]);
-
-  const modalAllEligibleParticipants = useMemo(() => {
-    return [...state.participants]
-      .filter((participant) => Boolean(participant.cotisation))
-      .filter((participant) => getParticipantSessionDays(state.sessions, participant.id).length > 0)
-      .sort((a, b) => fullName(a).localeCompare(fullName(b), "fr"));
-  }, [state.participants, state.sessions]);
-
-  const modalAvailableDays = useMemo(() => {
-    if (!newRealisation.participantId) return modalAllAvailableDays;
-    return getParticipantSessionDays(state.sessions, newRealisation.participantId);
-  }, [newRealisation.participantId, modalAllAvailableDays, state.sessions]);
-
-  const modalEligibleParticipants = useMemo(() => {
-    if (!newRealisation.selectedDay) return modalAllEligibleParticipants;
-
-    const participantIdsForSelectedDay = new Set(
-      state.sessions
-        .filter((session) => session.date === newRealisation.selectedDay)
-        .filter(isManagedSession)
-        .flatMap((session) => session.participantIds || [])
-    );
-
-    return modalAllEligibleParticipants.filter((participant) => participantIdsForSelectedDay.has(participant.id));
-  }, [newRealisation.selectedDay, modalAllEligibleParticipants, state.sessions]);
-
-  const selectedDate = state.selectedDate || todayIso();
-
-  const daySessions = useMemo(() => {
-    return ["midi", "soir", "matin"].map((slot) => {
-      const found = state.sessions.find((s) => s.date === selectedDate && s.slot === slot);
-      return found || {
-        id: `${selectedDate}-${slot}`,
-        date: selectedDate,
-        slot,
-        status: defaultSessionStatus(selectedDate, slot),
-        encadrantId: null,
-        referentId: null,
-        participantIds: [],
-      };
-    });
-  }, [selectedDate, state.sessions]);
-
-  const weekDates = useMemo(() => {
-    const current = new Date(`${selectedDate}T12:00:00`);
-    const day = current.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    const monday = new Date(current);
-    monday.setDate(current.getDate() + diff);
-    return Array.from({ length: 5 }, (_, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      return d.toISOString().slice(0, 10);
-    });
-  }, [selectedDate]);
-
-  const weekSessions = useMemo(() => {
-    return weekDates.map((date) => ({
-      date,
-      sessions: ["midi", "soir", "matin"].map((slot) => {
-        const found = state.sessions.find((s) => s.date === date && s.slot === slot);
-        return found || {
-          id: `${date}-${slot}`,
-          date,
-          slot,
-          status: defaultSessionStatus(date, slot),
-          encadrantId: null,
-          referentId: null,
-          participantIds: [],
-        };
-      }),
-    }));
-  }, [weekDates, state.sessions]);
-
-  const selectedParticipantRealisations = useMemo(() => {
-    return state.realisations
-      .filter((r) => r.participantId === state.selectedParticipantProgress)
-      .sort((a, b) => a.dateRealisation.localeCompare(b.dateRealisation));
-  }, [state.realisations, state.selectedParticipantProgress]);
-
-  const participantProgressStats = useMemo(() => {
-    const gradesAll = selectedParticipantRealisations.map((r) => routesById[r.voieId]?.cotationAjustee).filter(Boolean);
-    const bestAll = gradesAll.length
-      ? gradesAll.reduce((best, current) => (gradeToIndex(current) > gradeToIndex(best) ? current : best))
-      : null;
-
-    return {
-      count: selectedParticipantRealisations.length,
-      bestAll,
-      cpr: calculateSimpleCpr(selectedParticipantRealisations, routesById),
-    };
-  }, [selectedParticipantRealisations, routesById]);
-
-  const selectedRouteRealisations = useMemo(() => {
-    if (!selectedRouteProgress) return [];
-    return state.realisations
-      .filter((realisation) => realisation.voieId === selectedRouteProgress)
-      .sort((a, b) => b.dateRealisation.localeCompare(a.dateRealisation));
-  }, [state.realisations, selectedRouteProgress]);
-
-  const progressViewRealisations = state.selectedParticipantProgress
-    ? [...selectedParticipantRealisations].sort((a, b) => b.dateRealisation.localeCompare(a.dateRealisation))
-    : selectedRouteRealisations;
-
-  const allProgressRealisationsExpanded = progressViewRealisations.length > 0
-    && progressViewRealisations.every((realisation) => expandedRealisationIds.includes(realisation.id));
+  const {
+    participantsById,
+    routesById,
+    routeDisplayGroups,
+    sessionsById,
+    realisationModalRoute,
+    modalAvailableDays,
+    modalEligibleParticipants,
+    selectedDate,
+    daySessions,
+    weekSessions,
+    selectedParticipantRealisations,
+    participantProgressStats,
+    progressViewRealisations,
+    allProgressRealisationsExpanded,
+    sessionStats,
+    alphabeticalParticipants,
+    cprByParticipantId,
+    pointsByParticipantId,
+    myParticipantId,
+    myParticipant,
+    myRealisations,
+    myProfileStats,
+    sortedStatsParticipants,
+    adminParticipants,
+    routeAggregatesById,
+    leadRealisationStats,
+    routeRatingsById,
+    topRouteRankings,
+    wallOfFameCategories,
+  } = useAppDerivedData({
+    state,
+    authUser,
+    newRealisation,
+    realisationModalRouteId,
+    selectedRouteProgress,
+    expandedRealisationIds,
+    routeSortMode,
+    statsSortField,
+    statsSortDirection,
+    wallOfFameSexFilter,
+    recentlyAddedParticipantIds,
+  });
 
   function toggleAllProgressRealisations() {
     const visibleIds = progressViewRealisations.map((realisation) => realisation.id);
@@ -352,347 +236,19 @@ function App() {
       : currentIds.filter((id) => id !== realisationId));
   }
 
-  const sessionStats = useMemo(() => {
-    const unique = new Set(state.sessions.flatMap((s) => s.participantIds));
-    const participationCount = {};
-    state.sessions.forEach((session) => {
-      session.participantIds.forEach((id) => {
-        participationCount[id] = (participationCount[id] || 0) + 1;
-      });
-    });
-    return {
-      nombreInscrits: unique.size,
-      nombreCotisations: state.participants.filter((p) => p.cotisation).length,
-      nombreFFME: state.participants.filter((p) => p.ffme).length,
-      nombreRealisations: state.realisations.length,
-      nombreVoiesActives: state.routes.filter((r) => r.active).length,
-      participationCount,
-      sortedParticipants: [...state.participants].sort((a, b) => fullName(a).localeCompare(fullName(b), "fr")),
-    };
-  }, [state]);
-
-  const alphabeticalParticipants = useMemo(() => {
-    return [...state.participants].sort((a, b) => fullName(a).localeCompare(fullName(b), "fr"));
-  }, [state.participants]);
-
-  const cprByParticipantId = useMemo(() => {
-    return Object.fromEntries(
-      state.participants.map((participant) => [
-        participant.id,
-        calculateSimpleCpr(
-          state.realisations.filter((realisation) => String(realisation.participantId) === String(participant.id)),
-          routesById
-        ),
-      ])
-    );
-  }, [state.participants, state.realisations, routesById]);
-
-  const pointsByParticipantId = useMemo(
-    () => calculateLeadPoints(state.participants, state.routes, state.realisations),
-    [state.participants, state.routes, state.realisations],
-  );
-
-  const myParticipantId = authUser?.participantId ? String(authUser.participantId) : "";
-  const myParticipant = participantsById[myParticipantId] || null;
-
-  const myRealisations = useMemo(() => {
-    if (!myParticipantId) return [];
-    return state.realisations
-      .filter((r) => String(r.participantId) === myParticipantId)
-      .sort((a, b) => b.dateRealisation.localeCompare(a.dateRealisation));
-  }, [state.realisations, myParticipantId]);
-
-  const myProfileStats = useMemo(() => {
-    const gradesAll = myRealisations.map((r) => routesById[r.voieId]?.cotationAjustee).filter(Boolean);
-    const bestAll = gradesAll.length
-      ? gradesAll.reduce((best, current) => (gradeToIndex(current) > gradeToIndex(best) ? current : best))
-      : null;
-
-    return { count: myRealisations.length, bestAll };
-  }, [myRealisations, routesById]);
-
-  const sortedStatsParticipants = useMemo(() => {
-    const direction = statsSortDirection === "asc" ? 1 : -1;
-    return [...state.participants].sort((a, b) => {
-      let left;
-      let right;
-
-      if (statsSortField === "name") {
-        left = fullName(a);
-        right = fullName(b);
-        return left.localeCompare(right, "fr") * direction;
-      }
-
-      if (statsSortField === "passport") {
-        left = a.passport || "";
-        right = b.passport || "";
-        return left.localeCompare(right, "fr") * direction;
-      }
-
-      if (statsSortField === "cotisation") {
-        left = a.cotisation ? 1 : 0;
-        right = b.cotisation ? 1 : 0;
-        return (left - right) * direction;
-      }
-
-      if (statsSortField === "ffme") {
-        left = a.ffme ? 1 : 0;
-        right = b.ffme ? 1 : 0;
-        return (left - right) * direction;
-      }
-
-      if (statsSortField === "cpr") {
-        left = cprByParticipantId[a.id]?.averageIndex;
-        right = cprByParticipantId[b.id]?.averageIndex;
-        const normalizedLeft = Number.isFinite(left) ? left : -1;
-        const normalizedRight = Number.isFinite(right) ? right : -1;
-        return (normalizedLeft - normalizedRight) * direction;
-      }
-
-      if (statsSortField === "points") {
-        left = pointsByParticipantId[a.id] || 0;
-        right = pointsByParticipantId[b.id] || 0;
-        return (left - right) * direction;
-      }
-
-      if (statsSortField === "participations") {
-        left = sessionStats.participationCount[a.id] || 0;
-        right = sessionStats.participationCount[b.id] || 0;
-        return (left - right) * direction;
-      }
-
-      return fullName(a).localeCompare(fullName(b), "fr") * direction;
-    });
-  }, [state.participants, sessionStats.participationCount, cprByParticipantId, pointsByParticipantId, statsSortField, statsSortDirection]);
-
-  const adminParticipants = useMemo(() => {
-    const recentSet = new Set(recentlyAddedParticipantIds.map(String));
-    const recentParticipants = recentlyAddedParticipantIds
-      .map((id) => state.participants.find((p) => String(p.id) === String(id)))
-      .filter(Boolean);
-
-    const alphabeticalParticipants = state.participants
-      .filter((p) => !recentSet.has(String(p.id)))
-      .sort((a, b) => fullName(a).localeCompare(fullName(b), "fr"));
-
-    return [...recentParticipants, ...alphabeticalParticipants];
-  }, [state.participants, recentlyAddedParticipantIds]);
-
-  const routeAggregatesById = useMemo(
-    () => calculateRouteAggregates(state.routes, state.realisations, cprByParticipantId),
-    [state.routes, state.realisations, cprByParticipantId],
-  );
-
-  const leadRealisationStats = useMemo(
-    () => calculateLeadRealisationStats(state.routes, state.realisations, routesById),
-    [state.routes, state.realisations, routesById],
-  );
-
-  const routeRatingsById = useMemo(() => {
-    const ratings = {};
-    state.realisations.forEach((realisation) => {
-      const rating = Number(realisation.rating);
-      if (!Number.isInteger(rating) || rating < 1 || rating > 5) return;
-      const current = ratings[realisation.voieId] || { total: 0, count: 0, average: 0 };
-      current.total += rating;
-      current.count += 1;
-      current.average = current.total / current.count;
-      ratings[realisation.voieId] = current;
-    });
-    return ratings;
-  }, [state.realisations]);
-
-  const topRouteRankings = useMemo(() => {
-    const entries = state.routes.map((route) => {
-      const routeRealisations = state.realisations.filter((item) => item.voieId === route.id);
-      const rating = routeRatingsById[route.id] || { average: 0, count: 0 };
-      return {
-        route,
-        ratingAverage: rating.average,
-        ratingCount: rating.count,
-        realisationCount: routeRealisations.length,
-        leadCount: routeRealisations.filter((item) => isSuccessfulLeadRealisation(item, route)).length,
-      };
-    });
-    const takeFive = (items, compare) => [...items].sort(compare).slice(0, 5);
-    return [
-      {
-        title: "Voies les mieux notées",
-        entries: takeFive(entries.filter((item) => item.ratingCount > 0), (a, b) => b.ratingAverage - a.ratingAverage || b.ratingCount - a.ratingCount),
-        value: (item) => `★ ${item.ratingAverage.toFixed(1)} (${item.ratingCount})`,
-      },
-      {
-        title: "Voies les plus réalisées",
-        entries: takeFive(entries.filter((item) => item.realisationCount > 0), (a, b) => b.realisationCount - a.realisationCount),
-        value: (item) => `${item.realisationCount} réalisation${item.realisationCount > 1 ? "s" : ""}`,
-      },
-      {
-        title: "Voies les plus réalisées en tête",
-        entries: takeFive(entries.filter((item) => item.leadCount > 0), (a, b) => b.leadCount - a.leadCount),
-        value: (item) => `${item.leadCount} en tête`,
-      },
-      {
-        title: "Mieux notées avec au moins 3 avis",
-        entries: takeFive(entries.filter((item) => item.ratingCount >= 3), (a, b) => b.ratingAverage - a.ratingAverage || b.ratingCount - a.ratingCount),
-        value: (item) => `★ ${item.ratingAverage.toFixed(1)} (${item.ratingCount})`,
-      },
-    ];
-  }, [state.routes, state.realisations, routeRatingsById]);
-
-  const wallOfFameCategories = useMemo(
-    () => calculateWallOfFameCategories({
-      participants: state.participants.filter((participant) => (
-        wallOfFameSexFilter === "all" || participant.sexe === wallOfFameSexFilter
-      )),
-      realisations: state.realisations,
-      routesById,
-      cprByParticipantId,
-      pointsByParticipantId,
-      participationCount: sessionStats.participationCount,
-    }),
-    [state.participants, state.realisations, routesById, cprByParticipantId, pointsByParticipantId, sessionStats.participationCount, wallOfFameSexFilter],
-  );
-
-  function setSelectedDate(date) {
-    setState((prev) => ({ ...prev, selectedDate: date }));
-  }
-
-  function buildDefaultSession(sessionId, patch = {}) {
-    const slot = sessionId.endsWith("-soir") ? "soir" : sessionId.endsWith("-matin") ? "matin" : "midi";
-    const date = sessionId.slice(0, 10);
-    return {
-      id: sessionId,
-      date,
-      slot,
-      status: defaultSessionStatus(date, slot),
-      encadrantId: null,
-      referentId: null,
-      participantIds: [],
-      ...patch,
-    };
-  }
-
-  async function syncSessionToApi(session) {
-    if (!USE_API || !session) return;
-    try {
-      await apiFetch(`/sessions/${encodeURIComponent(session.id)}`, {
-        method: "PUT",
-        body: JSON.stringify(session),
-      });
-      setSyncMessage("Séance synchronisée via l’API");
-      setConfirmationMessage("Séance enregistrée.");
-    } catch (e) {
-      setSyncMessage("Erreur synchronisation séance");
-      console.error(e);
-    }
-  }
-
-  function ensureSessionsForDate(date) {
-    const createdSessions = [];
-
-    setState((prev) => {
-      const sessions = [...prev.sessions];
-
-      ["midi", "soir", "matin"].forEach((slot) => {
-        if (!sessions.some((s) => s.date === date && s.slot === slot)) {
-          const session = {
-            id: `${date}-${slot}`,
-            date,
-            slot,
-            status: defaultSessionStatus(date, slot),
-            encadrantId: null,
-            referentId: null,
-            participantIds: [],
-          };
-          sessions.push(session);
-          createdSessions.push(session);
-        }
-      });
-
-      return { ...prev, sessions };
-    });
-
-    if (USE_API) {
-      createdSessions.forEach((session) => syncSessionToApi(session));
-    }
-  }
-
-  function updateSession(sessionId, patch) {
-    const currentSession =
-      state.sessions.find((s) => s.id === sessionId) ||
-      buildDefaultSession(sessionId);
-
-    const updatedSession = { ...currentSession, ...patch };
-
-    setState((prev) => {
-      const exists = prev.sessions.some((s) => s.id === sessionId);
-      return {
-        ...prev,
-        sessions: exists
-          ? prev.sessions.map((s) => (s.id === sessionId ? updatedSession : s))
-          : [...prev.sessions, updatedSession],
-      };
-    });
-
-    syncSessionToApi(updatedSession);
-  }
-
-  function addParticipantToSession(sessionId, participantId) {
-    const requestedId = String(participantId || "");
-    if (!requestedId) return;
-
-    const currentSession =
-      state.sessions.find((s) => s.id === sessionId) ||
-      buildDefaultSession(sessionId);
-
-    const currentParticipantIds = currentSession.participantIds.map(String);
-    const occupied =
-      currentParticipantIds.length +
-      (currentSession.encadrantId ? 1 : 0) +
-      (currentSession.referentId ? 1 : 0);
-
-    if (occupied >= MAX_PARTICIPANTS || currentParticipantIds.includes(requestedId)) return;
-
-    const updatedSession = {
-      ...currentSession,
-      participantIds: [...currentParticipantIds, requestedId],
-    };
-
-    setState((prev) => {
-      const exists = prev.sessions.some((s) => s.id === sessionId);
-      return {
-        ...prev,
-        sessions: exists
-          ? prev.sessions.map((s) => (s.id === sessionId ? updatedSession : s))
-          : [...prev.sessions, updatedSession],
-      };
-    });
-
-    syncSessionToApi(updatedSession);
-  }
-
-  function removeParticipantFromSession(sessionId, participantId) {
-    const currentSession =
-      state.sessions.find((s) => s.id === sessionId) ||
-      buildDefaultSession(sessionId);
-
-    const updatedSession = {
-      ...currentSession,
-      participantIds: currentSession.participantIds.filter((id) => id !== participantId),
-    };
-
-    setState((prev) => {
-      const exists = prev.sessions.some((s) => s.id === sessionId);
-      return {
-        ...prev,
-        sessions: exists
-          ? prev.sessions.map((s) => (s.id === sessionId ? updatedSession : s))
-          : [...prev.sessions, updatedSession],
-      };
-    });
-
-    syncSessionToApi(updatedSession);
-  }
+  const {
+    setSelectedDate,
+    ensureSessionsForDate,
+    updateSession,
+    addParticipantToSession,
+    removeParticipantFromSession,
+  } = useSessionActions({
+    useApi: USE_API,
+    state,
+    setState,
+    setSyncMessage,
+    setConfirmationMessage,
+  });
 
   async function addParticipant() {
     if (!newParticipant.nom.trim() || !newParticipant.prenom.trim()) return;
@@ -838,310 +394,49 @@ function App() {
     }
   }
 
-  async function addRoute() {
-    const numeroVoieUnique = `voie-${Date.now()}`;
-    const couleurPrises = newRoute.couleurPrises.trim();
-    const nomOuvreur = newRoute.nomOuvreur.trim();
-    if (!newRoute.numeroCorde || !couleurPrises || !newRoute.cotationReference || !nomOuvreur) {
-      return setRouteError("Renseigne la corde, la couleur, la cotation et l’ouvreur.");
-    }
-
-    const route = {
-      id: `route-${Date.now()}`,
-      numeroVoieUnique,
-      numeroCorde: Number(newRoute.numeroCorde),
-      couleurPrises,
-      cotationReference: newRoute.cotationReference,
-      cotationAjustee: newRoute.cotationReference,
-      nomVoie: newRoute.nomVoie.trim(),
-      nomOuvreur,
-      moulinetteOnly: newRoute.moulinetteOnly,
-      active: true,
-      dateCreation: selectedDate,
-      tags: newRoute.tags,
-    };
-
-    try {
-      const savedRoute = USE_API
-        ? await apiFetch("/routes", { method: "POST", body: JSON.stringify(route) })
-        : route;
-      setState((prev) => ({ ...prev, routes: [...prev.routes, savedRoute] }));
-      setRouteError("");
-      setNewRoute({
-        numeroCorde: "", couleurPrises: "", cotationReference: "", nomVoie: "", nomOuvreur: "", moulinetteOnly: false, tags: [],
-      });
-      setConfirmationMessage("Voie ajoutée.");
-    } catch (error) {
-      setRouteError(error.message || "Création de la voie impossible.");
-    }
-  }
-
-  function startRouteEdition(route) {
-    setEditingRouteId(route.id);
-    setRouteEditDraft({
-      numeroCorde: String(route.numeroCorde ?? 0),
-      couleurPrises: route.couleurPrises || "Blanc",
-      cotationReference: route.cotationReference || route.cotationAjustee || "5c",
-      nomVoie: route.nomVoie || "",
-      nomOuvreur: route.nomOuvreur || "",
-      moulinetteOnly: Boolean(route.moulinetteOnly),
-      tags: route.tags || [],
-    });
-    setRouteError("");
-  }
-
-  function cancelRouteEdition() {
-    setEditingRouteId("");
-    setRouteEditDraft(null);
-  }
-
-  async function deleteRoute(route) {
-    if (!route?.id) return;
-    const relatedRealisations = state.realisations.filter(
-      (item) => String(item.voieId) === String(route.id)
-    ).length;
-    const routeLabel = formatRouteName(route);
-    const warning = relatedRealisations
-      ? ` Cette action supprimera aussi ${relatedRealisations} réalisation(s).`
-      : "";
-    if (!window.confirm(`Supprimer définitivement la voie « ${routeLabel} » ?${warning}`)) return;
-
-    try {
-      if (USE_API) {
-        await apiFetch(`/routes/${encodeURIComponent(route.id)}`, { method: "DELETE" });
-      }
-      setState((prev) => ({
-        ...prev,
-        routes: prev.routes.filter((item) => item.id !== route.id),
-        realisations: prev.realisations.filter((item) => item.voieId !== route.id),
-      }));
-      cancelRouteEdition();
-      setConfirmationMessage("Voie supprimée.");
-    } catch (error) {
-      setRouteError(error.message || "Suppression de la voie impossible.");
-    }
-  }
-
-  async function saveRouteEdition(route) {
-    if (!routeEditDraft) return;
-    setRouteError("");
-    const couleurPrises = routeEditDraft.couleurPrises.trim();
-    const nomOuvreur = routeEditDraft.nomOuvreur.trim();
-    if (!couleurPrises || !nomOuvreur) {
-      setRouteError("Renseigne au moins la couleur et l’ouvreur.");
-      return;
-    }
-
-    const routePatch = {
-      numeroCorde: Number(routeEditDraft.numeroCorde),
-      couleurPrises,
-      cotationReference: routeEditDraft.cotationReference,
-      cotationAjustee: routeEditDraft.cotationReference,
-      nomVoie: routeEditDraft.nomVoie.trim(),
-      nomOuvreur,
-      moulinetteOnly: routeEditDraft.moulinetteOnly,
-      tags: routeEditDraft.tags,
-    };
-    const updatedRoute = { ...route, ...routePatch };
-
-    setSavingRouteId(route.id);
-    try {
-      const savedRoute = USE_API
-        ? await apiFetch(`/routes/${encodeURIComponent(route.id)}`, {
-            method: "PUT",
-            body: JSON.stringify(routePatch),
-          })
-        : updatedRoute;
-      setState((prev) => ({
-        ...prev,
-        routes: prev.routes.map((item) => (item.id === route.id ? savedRoute : item)),
-      }));
-      cancelRouteEdition();
-      setSyncMessage("Voie mise à jour.");
-      setConfirmationMessage("Voie modifiée.");
-    } catch (error) {
-      setRouteError(error.message || "Modification de la voie impossible.");
-    } finally {
-      setSavingRouteId("");
-    }
-  }
-
-  function getParticipantSessions(participantId) {
-    if (!participantId) return [];
-
-    return state.sessions
-      .filter((session) => session.participantIds?.includes(participantId))
-      .sort((a, b) => {
-        const dateCompare = b.date.localeCompare(a.date);
-        if (dateCompare !== 0) return dateCompare;
-        return a.slot.localeCompare(b.slot);
-      });
-  }
-
-  async function syncRealisationPatch(realisationId, patch) {
-    try {
-      await updateRealisationInApi(realisationId, patch);
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  function updateRealisation(realisationId, patch) {
-    const target = state.realisations.find((item) => String(item.id) === String(realisationId));
-    if (!target || String(target.participantId) !== String(myParticipantId)) {
-      alert("Vous pouvez modifier uniquement vos propres réalisations.");
-      return;
-    }
-    syncRealisationPatch(realisationId, patch);
-    setState((prev) => ({
-      ...prev,
-      realisations: prev.realisations.map((realisation) => {
-        if (realisation.id !== realisationId) return realisation;
-
-        const next = { ...realisation, ...patch };
-
-        // Si on change la séance, la date de réalisation suit la date de la séance.
-        if (patch.sessionId) {
-          const session = sessionsById[patch.sessionId];
-          if (session) {
-            next.dateRealisation = `${session.date}T12:00:00`;
-          }
-        }
-
-        return next;
-      }),
-    }));
-  }
-
-  function openRealisationModal(routeId, requestedParticipantId = "") {
-    const route = routesById[routeId];
-    requestedParticipantId = myParticipantId || "";
-    const requestedParticipant = participantsById[requestedParticipantId];
-    const latestRegisteredDay = requestedParticipant?.cotisation
-      ? getParticipantSessionDays(state.sessions, requestedParticipantId)[0] || ""
-      : "";
-    const defaultParticipantId = latestRegisteredDay ? requestedParticipantId : "";
-
-    setNewRealisation((previous) => buildRealisationDraft({
-      previous,
-      route,
-      routeId,
-      participantId: defaultParticipantId,
-      selectedDay: latestRegisteredDay,
-      sessionId: defaultParticipantId && latestRegisteredDay
-        ? resolveSessionIdForRealisation(state.sessions, defaultParticipantId, latestRegisteredDay)
-        : "",
-    }));
-
-    setRealisationModalRouteId(routeId || "");
-  }
-
-  function closeRealisationModal() {
-    setRealisationModalRouteId(null);
-  }
-
-
-async function persistRealisationToApi(realisation) {
-  if (!USE_API) return realisation;
-  if (!authUser) {
-    throw new Error("Connexion requise pour enregistrer une réalisation.");
-  }
-  return await apiFetch("/realisations", {
-    method: "POST",
-    body: JSON.stringify(realisation),
+  const {
+    addRoute,
+    startRouteEdition,
+    cancelRouteEdition,
+    deleteRoute,
+    saveRouteEdition,
+  } = useRouteActions({
+    useApi: USE_API,
+    state,
+    setState,
+    newRoute,
+    setNewRoute,
+    selectedDate,
+    routeEditDraft,
+    setRouteEditDraft,
+    setEditingRouteId,
+    setSavingRouteId,
+    setRouteError,
+    setSyncMessage,
+    setConfirmationMessage,
   });
-}
 
-async function updateRealisationInApi(realisationId, patch) {
-  if (!USE_API || !authUser) return;
-  await apiFetch(`/realisations/${realisationId}`, {
-    method: "PUT",
-    body: JSON.stringify(patch),
+  const {
+    getParticipantSessions,
+    updateRealisation,
+    openRealisationModal,
+    closeRealisationModal,
+    deleteRealisation,
+    addRealisation,
+  } = useRealisationActions({
+    useApi: USE_API,
+    authUser,
+    state,
+    setState,
+    myParticipantId,
+    sessionsById,
+    routesById,
+    participantsById,
+    newRealisation,
+    setNewRealisation,
+    setRealisationModalRouteId,
+    setConfirmationMessage,
   });
-}
-
-async function deleteRealisation(realisation) {
-  if (!realisation?.id) return;
-  if (String(realisation.participantId) !== String(myParticipantId)) {
-    alert("Vous pouvez supprimer uniquement vos propres réalisations.");
-    return;
-  }
-
-  const route = routesById[realisation.voieId];
-  const routeLabel = route ? formatRouteName(route) : "la voie concernée";
-  const dateLabel = realisation.dateRealisation
-    ? formatDateShortFr(realisation.dateRealisation.slice(0, 10))
-    : "date inconnue";
-
-  if (!window.confirm(`Supprimer définitivement la réalisation « ${routeLabel} » du ${dateLabel} ?`)) return;
-
-  const previousRealisations = state.realisations;
-  setState((prev) => ({
-    ...prev,
-    realisations: prev.realisations.filter((item) => item.id !== realisation.id),
-  }));
-
-  try {
-    if (USE_API) {
-      await apiFetch(`/realisations/${encodeURIComponent(realisation.id)}`, {
-        method: "DELETE",
-      });
-    }
-    setConfirmationMessage("Réalisation supprimée.");
-  } catch (error) {
-    setState((prev) => ({ ...prev, realisations: previousRealisations }));
-    alert(`Suppression impossible : ${error.message || error}`);
-  }
-}
-
-  async function addRealisation() {
-    if (!myParticipantId || String(newRealisation.participantId) !== String(myParticipantId)) {
-      alert("Vous pouvez enregistrer uniquement vos propres réalisations.");
-      return;
-    }
-    if (!newRealisation.participantId || !newRealisation.selectedDay || !newRealisation.voieId) {
-      alert("Sélectionne un jour, un participant et une voie.");
-      return;
-    }
-
-    const participant = participantsById[newRealisation.participantId];
-    if (!participant?.cotisation) {
-      alert("Le participant doit avoir payé sa cotisation pour enregistrer une réalisation.");
-      return;
-    }
-
-    const sessionId = resolveSessionIdForRealisation(state.sessions, newRealisation.participantId, newRealisation.selectedDay);
-    if (!sessionId) {
-      alert("Le participant doit être inscrit à au moins une séance ce jour-là pour enregistrer une réalisation.");
-      return;
-    }
-
-    const realisation = buildRealisationPayload({
-      draft: newRealisation,
-      sessionId,
-      route: routesById[newRealisation.voieId],
-    });
-
-    try {
-      const savedRealisation = await persistRealisationToApi(realisation);
-      setState((prev) => ({ ...prev, realisations: [...prev.realisations, savedRealisation || realisation] }));
-      setNewRealisation((prev) => ({
-        ...prev,
-        participantId: "",
-        selectedDay: "",
-        sessionId: "",
-        commentaire: "",
-        cotationProposee: "",
-        rating: 0,
-        chute: false,
-        assureurId: "",
-      }));
-      setRealisationModalRouteId(null);
-      setConfirmationMessage("Réalisation enregistrée.");
-    } catch (error) {
-      alert(String(error.message || error));
-    }
-  }
 
   async function loadAdminAccessData() {
     if (authUser?.role !== "admin") return;
