@@ -2,11 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [importSource, routesSource, exportSource, serverSource] = await Promise.all([
+const [importSource, routesSource, exportSource, serverSource, legacyCliSource] = await Promise.all([
   readFile(new URL("../admin-users/secure-import-service.js", import.meta.url), "utf8"),
   readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8"),
   readFile(new URL("../admin-users/export-service.js", import.meta.url), "utf8"),
   readFile(new URL("../server.js", import.meta.url), "utf8"),
+  readFile(new URL("../tools/import-legacy.mjs", import.meta.url), "utf8"),
 ]);
 
 test("l'import administrateur utilise le contrôleur sécurisé", () => {
@@ -51,6 +52,8 @@ test("une réalisation historique sans note reste réimportable", () => {
   assert.match(exportSource, /rating: row\.rating === null \|\| row\.rating === undefined \? "" : Number\(row\.rating\)/);
 });
 
-test("la route fichier legacy reste bloquée en production", () => {
-  assert.match(serverSource, /app\.post\("\/import-data", blockLegacyFileImportInProduction, requireSetupAccess, async/);
+test("l'import fichier legacy est uniquement disponible hors API via la commande protégée", () => {
+  assert.doesNotMatch(serverSource, /app\.post\("\/import-data"/);
+  assert.match(legacyCliSource, /--confirm=oui/);
+  assert.match(legacyCliSource, /config\.isProduction && !hasFlag\("allow-production"\)/);
 });
