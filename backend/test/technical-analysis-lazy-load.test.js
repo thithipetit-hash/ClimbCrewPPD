@@ -8,7 +8,7 @@ const routesSource = await readFile(new URL("../realisation-technical-analysis-r
 test("GET /realisations reste léger et ne sélectionne plus le JSON d'analyse", () => {
   const listSection = privacySource.split("export async function listRealisationsWithPrivacy")[1] || "";
   assert.doesNotMatch(listSection, /technical_analysis as/);
-  assert.match(listSection, /GET \/realisations\/:id\/technical-analysis/);
+  assert.match(routesSource, /app\.get\("\/realisations\/:id\/technical-analysis"/);
 });
 
 test("l'analyse dispose d'une lecture dédiée avec confidentialité propriétaire/admin/public", () => {
