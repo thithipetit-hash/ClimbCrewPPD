@@ -25,6 +25,7 @@ test("un seul répertoire canonique conserve toutes les versions historiques dan
     "005_video_analysis.sql",
     "006_realisation_technical_analysis.sql",
     "007_runtime_schema_consolidation.sql",
+    "008_video_upload_cleanup.sql",
   ]);
   assert.equal(new Set(versions).size, versions.length);
   assert.ok(migrations.every((migration) => migration.source === "database"));
@@ -33,6 +34,13 @@ test("un seul répertoire canonique conserve toutes les versions historiques dan
     access(legacyMigrationsUrl, constants.F_OK),
     /ENOENT/,
   );
+});
+
+test("la version historique 005 reste traçable mais ne rejoue plus le DDL de 002", async () => {
+  const duplicate = await readFile(new URL("../database/migrations/005_video_analysis.sql", import.meta.url), "utf8");
+  assert.match(duplicate, /Version historique conservée/);
+  assert.match(duplicate, /select 1;/i);
+  assert.doesNotMatch(duplicate, /alter\s+table|create\s+table/i);
 });
 
 test("les routes admin ne démarrent plus un second moteur ni du DDL hors migrations", async () => {
