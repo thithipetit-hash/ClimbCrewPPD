@@ -6,8 +6,8 @@ const rootVersionUrl = new URL("../VERSION", import.meta.url);
 const appVersion = String(process.env.VITE_APP_VERSION || "").trim()
   || (existsSync(rootVersionUrl) ? readFileSync(rootVersionUrl, "utf8").trim() : "");
 
-if (!/^\d{8}\.\d{3}$/.test(appVersion)) {
-  throw new Error("VITE_APP_VERSION ou VERSION racine doit fournir une version AAAAMMJJ.NNN valide.");
+if (!/^\d{6}\.\d{3}$/.test(appVersion)) {
+  throw new Error("VITE_APP_VERSION ou VERSION racine doit fournir une version AAMMJJ.NNN valide.");
 }
 
 export default defineConfig({
