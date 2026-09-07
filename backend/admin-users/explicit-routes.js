@@ -1,4 +1,3 @@
-import { ensureAdminUserSchema } from "./database.js";
 import {
   changePassword,
   confirmEmailChange,
@@ -90,12 +89,13 @@ export function installExplicitAdminUserRoutes(app, {
   app.put("/admin/participants/:participantId/account-notifications", requireAuth, requireAdmin, updateManagedAccountNotificationPreference);
   app.put("/admin/participants/:id/qualifications", requireAuth, requireAdmin, updateParticipantInitiatorQualifications);
   installVideoAnalysisSettingsRoutes(app, { requireAuth, requireAdmin });
-  installBackupRoutes(app);
+  installBackupRoutes(app, { requireAuth, requireAdmin });
 }
 
-export async function initializeAdminUserEnhancements() {
-  await ensureAdminUserSchema();
-}
+// Le schéma est désormais intégralement géré par backend/database/migrate.js.
+// Cette étape est conservée temporairement dans le contrat de bootstrap afin de
+// ne pas modifier davantage le démarrage dans cette évolution.
+export async function initializeAdminUserEnhancements() {}
 
 export async function startAdminUserSchedulers() {
   startBackupScheduler();

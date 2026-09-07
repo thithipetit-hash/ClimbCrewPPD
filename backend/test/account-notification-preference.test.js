@@ -4,11 +4,11 @@ import { readFile } from "node:fs/promises";
 
 const service = await readFile(new URL("../admin-users/account-notification-preference-service.js", import.meta.url), "utf8");
 const approvalFlow = await readFile(new URL("../admin-users/account-approval-flow-service.js", import.meta.url), "utf8");
-const database = await readFile(new URL("../admin-users/database.js", import.meta.url), "utf8");
+const migration = await readFile(new URL("../migrations/007_runtime_schema_consolidation.sql", import.meta.url), "utf8");
 const routes = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
 
 test("la préférence de notification est désactivée par défaut", () => {
-  assert.match(database, /receive_account_notifications boolean not null default false/);
+  assert.match(migration, /receive_account_notifications boolean not null default false/);
 });
 
 test("la préférence est administrable depuis la gestion des participants", () => {

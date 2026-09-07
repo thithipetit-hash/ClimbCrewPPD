@@ -53,6 +53,26 @@ export async function startApplication({
   await ensureDefaultAdmin();
   await cleanupExpiredSecurityData(pool);
 
+  // Placé après l'enregistrement de toutes les routes : les handlers async
+  // sécurisés pour Express 4 transmettent ici leurs Promise rejetées.
+  app.use((error, req, res, next) => {
+    console.error("Erreur HTTP non gérée :", error);
+    if (res.headersSent) return next(error);
+
+    const requestedStatus = Number(error?.status);
+    const status = Number.isInteger(requestedStatus) && requestedStatus >= 400 && requestedStatus < 600
+      ? requestedStatus
+      : 500;
+    const message = status < 500 && error?.message
+      ? String(error.message)
+      : "Erreur interne du serveur";
+
+    return res.status(status).json({
+      error: message,
+      requestId: req.requestId || null,
+    });
+  });
+
   app.listen(port, () => {
     console.log(`ClimbCrew API listening on port ${port}`);
   });

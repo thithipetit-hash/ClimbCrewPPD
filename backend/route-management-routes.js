@@ -94,32 +94,6 @@ function parseByteRange(rangeHeader, totalLength) {
 }
 
 export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, pool }) {
-  let videoSchemaReady = false;
-  async function ensureVideoSchema() {
-    if (videoSchemaReady) return;
-    await pool.query(`
-      alter table routes
-      add column if not exists video_urls text[] not null default '{}'
-    `);
-    await pool.query(`
-      create table if not exists route_videos (
-        id text primary key,
-        route_id text not null references routes(id) on delete cascade,
-        file_name text not null default 'video',
-        mime_type text not null,
-        content bytea not null,
-        created_at timestamptz not null default now()
-      )
-    `);
-    await pool.query(`
-      alter table route_videos
-      add column if not exists source_realisation_id text
-    `);
-    await pool.query(`create index if not exists idx_route_videos_route on route_videos(route_id)`);
-    await pool.query(`create index if not exists idx_route_videos_source_realisation on route_videos(source_realisation_id)`);
-    videoSchemaReady = true;
-  }
-
   app.get("/ropes", requireAuth, async (_req, res) => {
     try {
       const result = await pool.query(`select numero_corde, actif, couleur_corde from ropes order by numero_corde asc`);
@@ -132,7 +106,6 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
 
   app.get("/routes", requireAuth, async (_req, res) => {
     try {
-      await ensureVideoSchema();
       const result = await pool.query(`
         select r.*, coalesce(avg(re.rating), 0)::float as rating_average, count(re.rating)::integer as rating_count
         from routes r
@@ -149,7 +122,6 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
 
   app.get("/routes/:id/videos/:videoId", requireAuth, async (req, res) => {
     try {
-      await ensureVideoSchema();
       const result = await pool.query(
         `
           select
@@ -178,9 +150,6 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
           || requesterParticipantId === sourceParticipantId
           || video.source_profile_public === true
         );
-
-        // Échoue volontairement comme une ressource inexistante : un membre non
-        // autorisé ne doit pas pouvoir déduire qu'une vidéo privée existe.
         if (!canReadPersonalVideo) {
           return res.status(404).json({ error: "Vidéo introuvable" });
         }
@@ -233,7 +202,6 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
     express.raw({ type: ["video/*", "application/octet-stream"], limit: LOCAL_VIDEO_MAX_BYTES }),
     async (req, res) => {
       try {
-        await ensureVideoSchema();
         const mimeType = String(req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
         if (!LOCAL_VIDEO_TYPES.has(mimeType)) return res.status(400).json({ error: "Format vidéo refusé. Utilisez MP4, WebM, OGG ou MOV." });
         if (!Buffer.isBuffer(req.body) || req.body.length === 0) return res.status(400).json({ error: "Fichier vidéo vide." });
@@ -297,7 +265,6 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
   );
 
   app.delete("/routes/:id/videos/:videoId", requireAuth, requireAdmin, async (req, res) => {
-    await ensureVideoSchema();
     const client = await pool.connect();
     try {
       await client.query("begin");
@@ -349,7 +316,6 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
 
   app.post("/routes", requireAuth, requireAdmin, async (req, res) => {
     try {
-      await ensureVideoSchema();
       const requestedRoute = req.body || {};
       const id = requestedRoute.id || `route-${Date.now()}`;
       const route = validateRoutePayload({ ...requestedRoute, id, numeroVoieUnique: requestedRoute.numeroVoieUnique || id });
@@ -383,7 +349,6 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
 
   app.put("/routes/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
-      await ensureVideoSchema();
       const route = validateRoutePayload(req.body || {}, { partial: true });
       route.videoUrls = normalizeVideoUrls(req.body?.videoUrls);
       const result = await pool.query(`
