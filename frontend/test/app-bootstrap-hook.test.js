@@ -21,6 +21,12 @@ test("le hook attend l'identité avant de charger une seule fois les données m�
   assert.match(hook, /return \{ reloadApiState \}/);
 });
 
+test("les réalisations utilisent le contrat limit offset préparé par le backend", () => {
+  assert.match(hook, /fetchPaginatedCollection\(/);
+  assert.match(hook, /\?limit=\$\{limit\}&offset=\$\{offset\}/);
+  assert.match(hook, /pageSize: REALISATIONS_PAGE_SIZE/);
+});
+
 test("une collection vide réussie remplace les anciennes données", () => {
   const previous = {
     participants: [{ id: "p1" }],
