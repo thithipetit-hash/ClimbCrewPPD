@@ -9,6 +9,7 @@ import { rateLimitLogMiddleware } from "../admin-users/rate-limit-log-integratio
 
 const EXPRESS4_ASYNC_WRAPPED = Symbol("climbcrew.express4AsyncWrapped");
 const EXPRESS_REGISTRATION_METHODS = ["use", "all", "get", "post", "put", "patch", "delete", "options", "head"];
+const SLOW_REQUEST_THRESHOLD_MS = 1000;
 
 function wrapExpress4AsyncHandler(handler) {
   if (typeof handler !== "function") return handler;
@@ -79,6 +80,20 @@ export function publicServerErrorBody(requestId = null) {
   };
 }
 
+export function requestPerformanceRecord(req, res, durationMs) {
+  const path = String(req?.url || "/").split("?", 1)[0] || "/";
+  const normalizedDuration = Math.max(0, Number(durationMs) || 0);
+  return {
+    event: "http_request",
+    requestId: req?.requestId || null,
+    method: String(req?.method || "GET").toUpperCase(),
+    path,
+    status: Number(res?.statusCode) || 0,
+    durationMs: Math.round(normalizedDuration * 10) / 10,
+    slow: normalizedDuration >= SLOW_REQUEST_THRESHOLD_MS,
+  };
+}
+
 function installOutboundErrorSanitizer(req, res) {
   const originalSend = res.send.bind(res);
   res.send = function hardenedSend(body) {
@@ -88,6 +103,18 @@ function installOutboundErrorSanitizer(req, res) {
     }
     return originalSend(body);
   };
+}
+
+function installProductionRequestMetrics(req, res, next) {
+  const startedAt = process.hrtime.bigint();
+  res.once("finish", () => {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    const record = requestPerformanceRecord(req, res, durationMs);
+    const serialized = JSON.stringify(record);
+    if (record.status >= 500 || record.slow) console.warn(serialized);
+    else console.info(serialized);
+  });
+  next();
 }
 
 function createRateLimiter({ keyPrefix, windowMs, max, getClientIp }) {
@@ -149,6 +176,10 @@ export function installHttpStack(app, config, { isSafeMethod, getClientIp }) {
     req.url = normalizeApiPath(req.url);
     next();
   });
+
+  if (config.isProduction) {
+    app.use(installProductionRequestMetrics);
+  }
 
   app.use(preBodyRequestGuard);
   app.use(trustedClientIpMiddleware);
