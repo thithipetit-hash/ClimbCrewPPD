@@ -12,19 +12,28 @@ test("App délègue le bootstrap API et authentification", () => {
   assert.doesNotMatch(app, /Recharge toutes les données depuis le backend/);
 });
 
-test("le hook attend l'identité avant de charger une seule fois les données métier", () => {
+test("le bootstrap initial libère l'authentification après la page récente puis hydrate l'historique", () => {
   assert.match(hook, /apiFetch\("\/auth\/me"/);
-  assert.match(hook, /BUSINESS_BOOTSTRAP_ENDPOINTS\.map/);
-  assert.equal((hook.match(/reloadApiState\(\{ isMounted/g) || []).length, 1);
+  assert.match(hook, /recentOnly: true/);
+  assert.match(hook, /setAuthLoading\(false\);\s*\n\s*if \(recentState\?\.realisations\?\.length/);
+  assert.match(hook, /void hydrateRealisations\(/);
+  assert.match(hook, /historyTokenRef/);
   assert.match(hook, /apiFetch\("\/auth\/broadcast-messages\/pending"/);
   assert.doesNotMatch(hook, /authApiFetch|authToken|setAuthToken/);
   assert.match(hook, /return \{ reloadApiState \}/);
 });
 
-test("les réalisations utilisent le contrat limit offset préparé par le backend", () => {
+test("les réalisations récentes utilisent la première page puis l'historique reprend à offset 200", () => {
+  assert.match(hook, /\?limit=\$\{REALISATIONS_PAGE_SIZE\}&offset=0/);
   assert.match(hook, /fetchPaginatedCollection\(/);
-  assert.match(hook, /\?limit=\$\{limit\}&offset=\$\{offset\}/);
-  assert.match(hook, /pageSize: REALISATIONS_PAGE_SIZE/);
+  assert.match(hook, /startOffset: REALISATIONS_PAGE_SIZE/);
+  assert.match(hook, /initialItems/);
+});
+
+test("un rafraîchissement manuel invalide l'hydratation différée et recharge tout", () => {
+  assert.match(hook, /recentOnly = false/);
+  assert.match(hook, /if \(!recentOnly\) historyTokenRef\.current = null/);
+  assert.match(hook, /loadBootstrapEndpoint\(endpoint, \{ recentOnly \}\)/);
 });
 
 test("une collection vide réussie remplace les anciennes données", () => {
