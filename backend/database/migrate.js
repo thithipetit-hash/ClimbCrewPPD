@@ -4,50 +4,51 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATION_FILE_PATTERN = /^\d{3,}_[a-z0-9][a-z0-9_-]*\.sql$/i;
 const MIGRATION_LOCK_ID = 947_220_830;
+const MIGRATION_DIRECTORY = fileURLToPath(new URL("./migrations/", import.meta.url));
 
-// Deux répertoires de migrations existent historiquement. Ils sont désormais
-// exécutés par un seul moteur, sous un seul verrou PostgreSQL et avec la même
-// table schema_migrations. L'ordre conserve exactement le démarrage historique :
-// migrations de la base principale, puis migrations des modules admin.
-const MIGRATION_SOURCES = [
-  {
-    name: "database",
-    directory: fileURLToPath(new URL("./migrations/", import.meta.url)),
-  },
-  {
-    name: "legacy-admin",
-    directory: fileURLToPath(new URL("../migrations/", import.meta.url)),
-  },
+// Ces trois versions appartenaient historiquement au premier répertoire de
+// migrations et étaient exécutées avant toutes les migrations admin héritées.
+// Les garder en tête préserve exactement l'ordre des bases neuves sans renommer
+// les versions déjà enregistrées dans schema_migrations.
+const EARLY_DATABASE_MIGRATIONS = [
+  "001_baseline.sql",
+  "002_video_analysis.sql",
+  "003_video_privacy_cleanup.sql",
 ];
+const EARLY_DATABASE_ORDER = new Map(
+  EARLY_DATABASE_MIGRATIONS.map((version, index) => [version, index]),
+);
+
+function compareMigrationVersions(a, b) {
+  const earlyA = EARLY_DATABASE_ORDER.get(a);
+  const earlyB = EARLY_DATABASE_ORDER.get(b);
+  if (earlyA !== undefined || earlyB !== undefined) {
+    if (earlyA === undefined) return 1;
+    if (earlyB === undefined) return -1;
+    return earlyA - earlyB;
+  }
+  return a.localeCompare(b, "en", { numeric: true });
+}
 
 export async function listMigrationFiles() {
-  const migrations = [];
+  const entries = await readdir(MIGRATION_DIRECTORY, { withFileTypes: true });
+  const filenames = entries
+    .filter((entry) => entry.isFile() && MIGRATION_FILE_PATTERN.test(entry.name))
+    .map((entry) => entry.name)
+    .sort(compareMigrationVersions);
+
   const versions = new Set();
-
-  for (const source of MIGRATION_SOURCES) {
-    const entries = await readdir(source.directory, { withFileTypes: true });
-    const filenames = entries
-      .filter((entry) => entry.isFile() && MIGRATION_FILE_PATTERN.test(entry.name))
-      .map((entry) => entry.name)
-      .sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
-
-    for (const version of filenames) {
-      if (versions.has(version)) {
-        throw new Error(
-          `Nom de migration PostgreSQL dupliqué : ${version}. `
-          + "Chaque migration doit avoir un nom unique, même entre les répertoires historiques.",
-        );
-      }
-      versions.add(version);
-      migrations.push({
-        version,
-        source: source.name,
-        filePath: path.join(source.directory, version),
-      });
+  return filenames.map((version) => {
+    if (versions.has(version)) {
+      throw new Error(`Nom de migration PostgreSQL dupliqué : ${version}.`);
     }
-  }
-
-  return migrations;
+    versions.add(version);
+    return {
+      version,
+      source: "database",
+      filePath: path.join(MIGRATION_DIRECTORY, version),
+    };
+  });
 }
 
 async function ensureMigrationTable(client) {
@@ -131,12 +132,21 @@ export async function runDatabaseMigrations(pool, { logger = console } = {}) {
 export async function getDatabaseMigrationStatus(pool) {
   const client = await pool.connect();
   try {
-    await ensureMigrationTable(client);
     const migrations = await listMigrationFiles();
     const files = migrations.map((migration) => migration.version);
-    const appliedResult = await client.query(
-      "select version, applied_at from schema_migrations order by version"
-    );
+    let appliedResult;
+    try {
+      appliedResult = await client.query(
+        "select version, applied_at from schema_migrations order by version"
+      );
+    } catch (error) {
+      // Un endpoint de statut doit rester en lecture seule. Sur une base encore
+      // vierge, l'absence de schema_migrations signifie simplement tout pending.
+      if (error?.code === "42P01") {
+        return { total: files.length, applied: [], pending: files };
+      }
+      throw error;
+    }
     const appliedByVersion = new Map(
       appliedResult.rows.map((row) => [String(row.version), row.applied_at])
     );
