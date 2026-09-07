@@ -145,8 +145,8 @@ export async function listParticipantsWithPrivacy(req, res) {
  *
  * Les réalisations constituent la progression personnelle : celles d'un profil
  * privé ne sont donc visibles que par leur propriétaire et les administrateurs.
- * Les casts vers text maintiennent la compatibilité pendant la migration des
- * identifiants participants de text vers bigint.
+ * L'analyse technique n'est volontairement pas incluse dans cette liste : elle
+ * est chargée à la demande par GET /realisations/:id/technical-analysis.
  */
 export async function listRealisationsWithPrivacy(req, res) {
   try {
@@ -168,8 +168,7 @@ export async function listRealisationsWithPrivacy(req, res) {
           r.rating,
           r.chute,
           r.assureur_id as "assureurId",
-          r.video_urls as "videoUrls",
-          r.technical_analysis as "technicalAnalysis"
+          r.video_urls as "videoUrls"
         from realisations r
         left join participants p on p.id::text = r.participant_id::text
         where $1::boolean = true

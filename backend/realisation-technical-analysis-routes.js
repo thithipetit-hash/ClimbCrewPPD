@@ -1,4 +1,5 @@
-const MAX_TECHNICAL_ANALYSIS_BYTES = 128 * 1024;
+import { normalizeTechnicalAnalysis } from "./technical-analysis-validation.js";
+
 const LOCAL_VIDEO_URL_PATTERN = /^\/routes\/([^/]+)\/videos\/([^/]+)$/;
 
 function badRequest(message) {
@@ -15,37 +16,6 @@ function normalizeVideoUrl(value) {
   return videoUrl;
 }
 
-function normalizeAnalysis(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw badRequest("Le résultat d’analyse technique est invalide.");
-  }
-  if (!value.metrics || typeof value.metrics !== "object" || Array.isArray(value.metrics)) {
-    throw badRequest("Les mesures de l’analyse technique sont absentes.");
-  }
-  if (value.recommendations !== undefined && !Array.isArray(value.recommendations)) {
-    throw badRequest("Les recommandations de l’analyse technique sont invalides.");
-  }
-
-  let serialized;
-  try {
-    serialized = JSON.stringify(value);
-  } catch {
-    throw badRequest("Le résultat d’analyse technique ne peut pas être enregistré.");
-  }
-  if (!serialized || Buffer.byteLength(serialized, "utf8") > MAX_TECHNICAL_ANALYSIS_BYTES) {
-    throw badRequest("Le résultat d’analyse technique est trop volumineux.");
-  }
-
-  const cloned = JSON.parse(serialized);
-  return {
-    ...cloned,
-    engine: String(cloned.engine || "").slice(0, 120),
-    engineVersion: String(cloned.engineVersion || "").slice(0, 40),
-    analyzedAt: new Date().toISOString(),
-    storageVersion: 1,
-  };
-}
-
 function currentAnalysisDocument(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { version: 1, videos: {} };
@@ -57,6 +27,37 @@ function currentAnalysisDocument(value) {
 }
 
 export function installRealisationTechnicalAnalysisRoutes(app, { requireAuth, pool }) {
+  app.get("/realisations/:id/technical-analysis", requireAuth, async (req, res) => {
+    try {
+      const ownParticipantId = String(req.auth?.user?.participantId || "");
+      const isAdmin = req.auth?.user?.role === "admin";
+      const result = await pool.query(
+        `
+          select
+            r.participant_id,
+            r.technical_analysis,
+            coalesce(p.profile_public, false) as profile_public
+          from realisations r
+          left join participants p on p.id::text = r.participant_id::text
+          where r.id = $1
+          limit 1
+        `,
+        [req.params.id],
+      );
+      if (!result.rowCount) return res.status(404).json({ error: "Réalisation introuvable" });
+
+      const row = result.rows[0];
+      const canRead = isAdmin
+        || String(row.participant_id || "") === ownParticipantId
+        || row.profile_public === true;
+      if (!canRead) return res.status(404).json({ error: "Réalisation introuvable" });
+
+      return res.json({ technicalAnalysis: currentAnalysisDocument(row.technical_analysis) });
+    } catch (error) {
+      return res.status(500).json({ error: error.message || "Chargement de l’analyse technique impossible." });
+    }
+  });
+
   app.put("/realisations/:id/technical-analysis", requireAuth, async (req, res) => {
     const participantId = req.auth?.user?.participantId;
     if (!participantId) {
@@ -66,7 +67,7 @@ export function installRealisationTechnicalAnalysisRoutes(app, { requireAuth, po
     let client;
     try {
       const videoUrl = normalizeVideoUrl(req.body?.videoUrl);
-      const analysis = normalizeAnalysis(req.body?.analysis);
+      const analysis = normalizeTechnicalAnalysis(req.body?.analysis);
       const parsedUrl = videoUrl.match(LOCAL_VIDEO_URL_PATTERN);
       const routeIdFromUrl = decodeURIComponent(parsedUrl[1]);
 

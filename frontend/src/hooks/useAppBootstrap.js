@@ -1,6 +1,11 @@
 import { useCallback, useEffect } from "react";
 
 import { apiFetch } from "../lib/api.js";
+import {
+  BUSINESS_BOOTSTRAP_ENDPOINTS,
+  mergeBootstrapCollections,
+  summarizeBootstrapResults,
+} from "../lib/bootstrap-data.js";
 
 export function useAppBootstrap({
   useApi,
@@ -18,30 +23,24 @@ export function useAppBootstrap({
   const reloadApiState = useCallback(async ({ isMounted = () => true } = {}) => {
     setIsSyncing(true);
     try {
-      const [participants, sessions, realisations, ropes, routes] = await Promise.all([
-        apiFetch("/participants"),
-        apiFetch("/sessions"),
-        apiFetch("/realisations").catch(() => []),
-        apiFetch("/ropes").catch(() => []),
-        apiFetch("/routes").catch(() => []),
-      ]);
+      const settledResults = await Promise.allSettled(
+        BUSINESS_BOOTSTRAP_ENDPOINTS.map(([, path]) => apiFetch(path)),
+      );
 
       if (!isMounted()) return null;
 
-      setState((prev) => ({
-        ...prev,
-        participants: Array.isArray(participants) ? participants : prev.participants,
-        sessions: Array.isArray(sessions) && sessions.length ? sessions : prev.sessions,
-        realisations: Array.isArray(realisations) ? realisations : prev.realisations,
-        ropes: Array.isArray(ropes) && ropes.length ? ropes : prev.ropes,
-        routes: Array.isArray(routes) && routes.length ? routes : prev.routes,
-      }));
+      const summary = summarizeBootstrapResults(settledResults);
+      setState((previous) => mergeBootstrapCollections(previous, settledResults));
+      setSyncMessage(summary.failureCount ? "Données partiellement actualisées" : "Données actualisées");
 
-      setSyncMessage("Données actualisées");
-      return { participants, sessions, realisations, ropes, routes };
+      if (summary.allFailed) {
+        throw summary.firstError || new Error("API indisponible");
+      }
+
+      return mergeBootstrapCollections({}, settledResults);
     } catch (error) {
       if (isMounted()) {
-        setSyncMessage("API indisponible · fallback local");
+        setSyncMessage("API indisponible · données précédentes conservées");
         console.error(error);
       }
       throw error;
@@ -49,13 +48,6 @@ export function useAppBootstrap({
       if (isMounted()) setIsSyncing(false);
     }
   }, [setIsSyncing, setState, setSyncMessage]);
-
-  useEffect(() => {
-    if (!useApi) return undefined;
-    let mounted = true;
-    reloadApiState({ isMounted: () => mounted }).catch(() => {});
-    return () => { mounted = false; };
-  }, [reloadApiState, useApi]);
 
   useEffect(() => {
     if (!useApi) {

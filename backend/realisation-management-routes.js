@@ -7,7 +7,9 @@ const LOCAL_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 const VIDEO_UPLOAD_CHUNK_MAX_BYTES = 1024 * 1024;
 const VIDEO_UPLOAD_MAX_PARTS = 80;
 const VIDEO_UPLOAD_ID_PATTERN = /^[A-Za-z0-9._-]{8,120}$/;
+const VIDEO_CHUNK_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const LOCAL_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/ogg", "video/quicktime"]);
+let nextVideoChunkCleanupAt = 0;
 
 function normalizeVideoUrls(value) {
   if (value === undefined) return undefined;
@@ -75,6 +77,20 @@ function decodeVideoFileName(value) {
 function parseIntegerHeader(req, name) {
   const value = Number.parseInt(String(req.headers[name] || ""), 10);
   return Number.isInteger(value) ? value : NaN;
+}
+
+async function cleanupExpiredVideoChunks(pool) {
+  const now = Date.now();
+  if (now < nextVideoChunkCleanupAt) return;
+  // Réserver immédiatement le prochain créneau évite que plusieurs blocs reçus
+  // en parallèle déclenchent tous le même DELETE.
+  nextVideoChunkCleanupAt = now + VIDEO_CHUNK_CLEANUP_INTERVAL_MS;
+  try {
+    await pool.query(`delete from route_video_upload_chunks where created_at < now() - interval '24 hours'`);
+  } catch (error) {
+    nextVideoChunkCleanupAt = 0;
+    throw error;
+  }
 }
 
 async function persistRealisationVideo({
@@ -286,7 +302,7 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
       }
 
       try {
-        await pool.query(`delete from route_video_upload_chunks where created_at < now() - interval '24 hours'`);
+        await cleanupExpiredVideoChunks(pool);
 
         const realisationResult = await pool.query(
           `select voie_id, video_urls from realisations where id = $1 and participant_id = $2 limit 1`,
@@ -360,7 +376,9 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
 
       const chunksResult = await client.query(
         `
-          select part_number, realisation_id, route_id, file_name, mime_type, total_parts, total_bytes, content
+          select
+            part_number, realisation_id, route_id, file_name, mime_type,
+            total_parts, total_bytes, octet_length(content)::integer as content_bytes
           from route_video_upload_chunks
           where participant_id = $1 and upload_id = $2 and realisation_id = $3
           order by part_number asc
@@ -384,7 +402,6 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
       }
 
       let receivedBytes = 0;
-      const buffers = [];
       for (let index = 0; index < chunksResult.rows.length; index += 1) {
         const chunk = chunksResult.rows[index];
         const consistent = Number(chunk.part_number) === index
@@ -399,9 +416,7 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
           error.status = 409;
           throw error;
         }
-        const buffer = Buffer.isBuffer(chunk.content) ? chunk.content : Buffer.from(chunk.content || []);
-        receivedBytes += buffer.length;
-        buffers.push(buffer);
+        receivedBytes += Number(chunk.content_bytes || 0);
       }
       if (receivedBytes !== totalBytes || receivedBytes > LOCAL_VIDEO_MAX_BYTES) {
         const error = new Error("La taille de la vidéo assemblée est invalide.");
@@ -414,7 +429,24 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
         throw error;
       }
 
-      const content = Buffer.concat(buffers, receivedBytes);
+      // PostgreSQL assemble les fragments dans leur ordre ; Node ne conserve
+      // plus simultanément N buffers puis une seconde copie via Buffer.concat.
+      const contentResult = await client.query(
+        `
+          select string_agg(content, ''::bytea order by part_number) as content
+          from route_video_upload_chunks
+          where participant_id = $1 and upload_id = $2 and realisation_id = $3
+        `,
+        [participantId, uploadId, req.params.id],
+      );
+      const rawContent = contentResult.rows[0]?.content;
+      const content = Buffer.isBuffer(rawContent) ? rawContent : Buffer.from(rawContent || []);
+      if (content.length !== receivedBytes) {
+        const error = new Error("La vidéo assemblée ne correspond pas aux blocs reçus.");
+        error.status = 409;
+        throw error;
+      }
+
       const result = await persistRealisationVideo({
         client,
         participantId,

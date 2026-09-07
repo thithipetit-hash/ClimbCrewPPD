@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const INTRO_VIDEO_SRC = "/media/climbcrew-startup.mp4";
 const EXIT_DURATION_MS = 260;
-const SAFETY_TIMEOUT_MS = 8000;
-const VIDEO_ERROR_GRACE_MS = 1200;
+const SAFETY_TIMEOUT_MS = 2000;
+const VIDEO_ERROR_GRACE_MS = 600;
 
 export default function StartupVideoGate({ children }) {
   const [showIntro, setShowIntro] = useState(true);
@@ -24,10 +24,8 @@ export default function StartupVideoGate({ children }) {
   }, []);
 
   const handleVideoError = useCallback(() => {
-    // Ne ferme plus l'intro dans la même frame qu'une erreur média : sur certains
-    // navigateurs/PWA Android, une ancienne entrée de cache peut échouer avant
-    // que la ressource soit revalidée. Le court délai rend le branding visible et
-    // laisse le timeout de sécurité reprendre la main proprement.
+    // Une entrée PWA périmée peut échouer avant revalidation. On conserve un
+    // bref instant de branding, sans bloquer l'application plusieurs secondes.
     if (videoErrorTimerRef.current) {
       window.clearTimeout(videoErrorTimerRef.current);
     }
@@ -84,7 +82,7 @@ export default function StartupVideoGate({ children }) {
             autoPlay
             muted
             playsInline
-            preload="auto"
+            preload="metadata"
             onClick={finishIntro}
             onEnded={finishIntro}
             onError={handleVideoError}

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node --import ./deployment-bootstrap.js server.js",
-    "test": "node --test",
+    "test": "npm audit --omit=dev --audit-level=moderate && node --test",
     "backup:decrypt": "node tools/decrypt-backup.mjs"
   },
   "engines": {
@@ -18,5 +18,8 @@
     "express": "^4.21.2",
     "nodemailer": "^9.0.3",
     "pg": "^8.13.1"
+  },
+  "overrides": {
+    "qs": "6.16.0"
   }
 }

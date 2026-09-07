@@ -51,10 +51,25 @@ function createVideoHandler(videoRow) {
   };
 
   const pool = {
-    async query(sql) {
+    async query(sql, params = []) {
       const source = String(sql || "");
       if (source.includes("from route_videos rv")) {
-        return { rowCount: 1, rows: [videoRow] };
+        return {
+          rowCount: 1,
+          rows: [{
+            ...videoRow,
+            content_length: videoRow.content.length,
+          }],
+        };
+      }
+      if (source.includes("from route_videos")) {
+        let content = videoRow.content;
+        if (source.includes("substring(content")) {
+          const start = Number(params[2]) - 1;
+          const length = Number(params[3]);
+          content = content.subarray(start, start + length);
+        }
+        return { rowCount: 1, rows: [{ content }] };
       }
       return { rowCount: 0, rows: [] };
     },

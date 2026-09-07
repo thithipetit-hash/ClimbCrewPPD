@@ -3,10 +3,22 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { buildTechnicalAnalysisComparison } from "../src/lib/video-analysis-comparison.js";
 
-function analysis({ pauses = 0, footAdjustments = 0, bentLeft = 0, recommendationCode = "stable" } = {}) {
+function analysis({
+  pauses = 0,
+  footAdjustments = 0,
+  bentLeft = 0,
+  recommendationCode = "stable",
+  analyzedSeconds = 60,
+  engineVersion = "1.0.3",
+  rules = { sampleFps: 4, minVisibility: 0.5 },
+} = {}) {
   return {
+    engineVersion,
+    rules,
     metrics: {
-      detectionRatio: 0.9,
+      duration: 70,
+      analyzedSeconds,
+      detectionRatio: analyzedSeconds / 70,
       pauses: Array.from({ length: pauses }, (_, index) => ({ start: index, end: index + 1 })),
       longPauses: [],
       footAdjustments: { total: footAdjustments },
@@ -28,7 +40,28 @@ test("compare les mesures enregistrées sans dépendre des fichiers vidéo", () 
   assert.equal(result.rows.find((row) => row.key === "pauses").delta, -2);
   assert.equal(result.rows.find((row) => row.key === "footAdjustments").delta, -3);
   assert.equal(result.rows.find((row) => row.key === "bentLeft").delta, -3);
+  assert.equal(result.rows.find((row) => row.key === "pausesPerMinute").a, 3);
   assert.deepEqual(result.recommendations.map((item) => item.status).sort(), ["only-a", "only-b"]);
+});
+
+test("une mesure historique absente reste absente et ne devient jamais zéro", () => {
+  const older = analysis();
+  delete older.metrics.lockOffSeconds.left;
+  const result = buildTechnicalAnalysisComparison(older, analysis());
+  const row = result.rows.find((item) => item.key === "lockLeft");
+  assert.equal(row.a, null);
+  assert.equal(row.delta, null);
+  assert.equal(row.aDisplay, "—");
+  assert.equal(row.deltaDisplay, "—");
+});
+
+test("la comparaison signale un moteur ou des règles différents", () => {
+  const result = buildTechnicalAnalysisComparison(
+    analysis({ engineVersion: "1.0.2", rules: { sampleFps: 3, minVisibility: 0.5 } }),
+    analysis({ engineVersion: "1.0.3", rules: { sampleFps: 4, minVisibility: 0.5 } }),
+  );
+  assert.match(result.rows.find((row) => row.key === "engineVersion").deltaDisplay, /Différente/);
+  assert.match(result.rows.find((row) => row.key === "rulesCompatibility").deltaDisplay, /Différentes/);
 });
 
 test("identifie une recommandation commune aux deux analyses", () => {
