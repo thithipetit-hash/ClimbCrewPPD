@@ -6,6 +6,22 @@ const MIGRATION_FILE_PATTERN = /^\d{3,}_[a-z0-9][a-z0-9_-]*\.sql$/i;
 const MIGRATION_LOCK_ID = 947_220_830;
 const MIGRATION_DIRECTORY = fileURLToPath(new URL("./migrations/", import.meta.url));
 
+// Ces noms appartiennent à l'historique consolidé avant .020. Ils conservent
+// leurs préfixes parfois dupliqués afin de ne jamais réécrire schema_migrations.
+const HISTORICAL_MIGRATIONS = new Set([
+  "001_baseline.sql",
+  "001_integrity_constraints.sql",
+  "002_participant_initiator_qualifications.sql",
+  "002_video_analysis.sql",
+  "003_route_grade_scale.sql",
+  "003_video_privacy_cleanup.sql",
+  "004_gmail_email_normalization.sql",
+  "005_video_analysis.sql",
+  "006_realisation_technical_analysis.sql",
+  "007_runtime_schema_consolidation.sql",
+  "008_video_upload_cleanup.sql",
+]);
+
 // Ces trois versions appartenaient historiquement au premier répertoire de
 // migrations et étaient exécutées avant toutes les migrations admin héritées.
 // Les garder en tête préserve exactement l'ordre des bases neuves sans renommer
@@ -30,12 +46,38 @@ function compareMigrationVersions(a, b) {
   return a.localeCompare(b, "en", { numeric: true });
 }
 
+export function validateMigrationNumbering(filenames) {
+  const futureByNumber = new Map();
+
+  for (const filename of filenames) {
+    if (HISTORICAL_MIGRATIONS.has(filename)) continue;
+    const number = Number.parseInt(filename.slice(0, filename.indexOf("_")), 10);
+    if (!Number.isInteger(number) || number < 9) {
+      throw new Error(`Nouvelle migration PostgreSQL invalide : ${filename}. Utiliser 009 puis les numéros suivants.`);
+    }
+    if (futureByNumber.has(number)) {
+      throw new Error(`Numéro de migration PostgreSQL dupliqué : ${String(number).padStart(3, "0")}.`);
+    }
+    futureByNumber.set(number, filename);
+  }
+
+  const futureNumbers = [...futureByNumber.keys()].sort((a, b) => a - b);
+  futureNumbers.forEach((number, index) => {
+    const expected = 9 + index;
+    if (number !== expected) {
+      throw new Error(`Séquence de migrations PostgreSQL interrompue : ${String(expected).padStart(3, "0")} attendu avant ${String(number).padStart(3, "0")}.`);
+    }
+  });
+}
+
 export async function listMigrationFiles() {
   const entries = await readdir(MIGRATION_DIRECTORY, { withFileTypes: true });
   const filenames = entries
     .filter((entry) => entry.isFile() && MIGRATION_FILE_PATTERN.test(entry.name))
     .map((entry) => entry.name)
     .sort(compareMigrationVersions);
+
+  validateMigrationNumbering(filenames);
 
   const versions = new Set();
   return filenames.map((version) => {
