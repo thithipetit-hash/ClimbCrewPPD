@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const source = await readFile(new URL("../realisation-management-routes.js", import.meta.url), "utf8");
-const migration = await readFile(new URL("../migrations/007_runtime_schema_consolidation.sql", import.meta.url), "utf8");
+const migration = await readFile(new URL("../database/migrations/007_runtime_schema_consolidation.sql", import.meta.url), "utf8");
 
 test("les vidéos chargées depuis Profil mémorisent leur réalisation source", () => {
   assert.match(migration, /source_realisation_id text/);
