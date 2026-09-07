@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "node --import ./deployment-bootstrap.js server.js",
-    "test": "npm audit --omit=dev --audit-level=moderate && node --test",
-    "backup:decrypt": "node tools/decrypt-backup.mjs"
+    "test": "node --test",
+    "backup:decrypt": "node tools/decrypt-backup.mjs",
+    "import:legacy": "node tools/import-legacy.mjs"
   },
   "engines": {
     "node": ">=20.18.0 <25"

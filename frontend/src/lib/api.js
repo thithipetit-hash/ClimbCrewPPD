@@ -1,7 +1,6 @@
 export const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 export const USE_API = Boolean(API_BASE);
 
-const inFlightGetRequests = new Map();
 export const VIDEO_UPLOAD_CHUNK_BYTES = 768 * 1024;
 const VIDEO_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 
@@ -123,27 +122,6 @@ async function performApiFetch(path, options = {}) {
 }
 
 export async function apiFetch(path, options = {}) {
-  const method = String(options.method || "GET").toUpperCase();
-
-  // Au démarrage, App peut demander les mêmes données une première fois pendant
-  // la vidéo d'introduction puis une seconde fois lorsque /auth/me se termine.
-  // Tant qu'une requête GET identique est déjà en cours, on partage sa Promise.
-  if (method === "GET") {
-    const requestKey = `${API_BASE}${path}`;
-    const existingRequest = inFlightGetRequests.get(requestKey);
-    if (existingRequest) return existingRequest;
-
-    const request = performApiFetch(path, options)
-      .finally(() => {
-        if (inFlightGetRequests.get(requestKey) === request) {
-          inFlightGetRequests.delete(requestKey);
-        }
-      });
-
-    inFlightGetRequests.set(requestKey, request);
-    return request;
-  }
-
   return performApiFetch(path, options);
 }
 

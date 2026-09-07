@@ -24,28 +24,6 @@ export function rejectMaintenanceTokenInQuery(req, res, next) {
 }
 
 /**
- * L'ancien import depuis backend/import-data.json remplace l'ensemble des données
- * métier. Il reste utile pour un environnement local de migration, mais il est
- * désactivé par défaut en production où l'administration authentifiée et les
- * sauvegardes PostgreSQL offrent des chemins de restauration contrôlés.
- *
- * Un exploitant peut exceptionnellement le réactiver avec
- * ALLOW_LEGACY_FILE_IMPORT=true après avoir pris une sauvegarde.
- */
-export function blockLegacyFileImportInProduction(req, res, next) {
-  const isProduction = process.env.NODE_ENV === "production";
-  const explicitlyAllowed = String(process.env.ALLOW_LEGACY_FILE_IMPORT || "false").toLowerCase() === "true";
-
-  if (isProduction && !explicitlyAllowed) {
-    return res.status(404).json({
-      error: "Cette route d'import legacy est désactivée en production.",
-    });
-  }
-
-  next();
-}
-
-/**
  * Endpoint de santé public : il indique uniquement si l'API et PostgreSQL
  * répondent. Le détail technique reste dans les journaux serveur.
  */
