@@ -10,7 +10,7 @@ const migrationEngineSource = await readFile(new URL("../database/migrate.js", i
 const applicationBootstrapSource = await readFile(new URL("../bootstrap/application-bootstrap.js", import.meta.url), "utf8");
 const databaseSource = await readFile(new URL("../admin-users/database.js", import.meta.url), "utf8");
 const authMiddlewareSource = await readFile(new URL("../auth-middleware.js", import.meta.url), "utf8");
-const migrationSql = await readFile(new URL("../migrations/001_integrity_constraints.sql", import.meta.url), "utf8");
+const migrationSql = await readFile(new URL("../database/migrations/001_integrity_constraints.sql", import.meta.url), "utf8");
 const schemaSource = await readFile(new URL("../schema.sql", import.meta.url), "utf8");
 
 test("l'adresse IP fiable remplace une chaîne X-Forwarded-For potentiellement falsifiée", () => {
@@ -43,7 +43,7 @@ test("un seul moteur applique les migrations versionnées avant l'écoute résea
   assert.match(migrationEngineSource, /insert into schema_migrations \(version\)/);
   assert.match(migrationEngineSource, /pg_advisory_lock/);
   assert.match(migrationEngineSource, /\.\/migrations\//);
-  assert.match(migrationEngineSource, /\.\.\/migrations\//);
+  assert.doesNotMatch(migrationEngineSource, /\.\.\/migrations\//);
   assert.doesNotMatch(migrationEngineSource, /express\.application\.listen/);
   assert.doesNotMatch(enhancementsSource, /installMigrationHook/);
   assert.doesNotMatch(explicitRoutesSource, /runDatabaseMigrations/);
