@@ -9,9 +9,28 @@ export const BUSINESS_BOOTSTRAP_ENDPOINTS = Object.freeze([
   ["routes", "/routes"],
 ]);
 
+function appendUniqueItems(items, seenIds, page) {
+  page.forEach((item) => {
+    const rawId = item?.id;
+    if (rawId === null || rawId === undefined || rawId === "") {
+      items.push(item);
+      return;
+    }
+    const id = String(rawId);
+    if (seenIds.has(id)) return;
+    seenIds.add(id);
+    items.push(item);
+  });
+}
+
 export async function fetchPaginatedCollection(
   fetchPage,
-  { pageSize = REALISATIONS_PAGE_SIZE, maxOffset = MAX_REALISATIONS_OFFSET } = {},
+  {
+    pageSize = REALISATIONS_PAGE_SIZE,
+    maxOffset = MAX_REALISATIONS_OFFSET,
+    startOffset = 0,
+    initialItems = [],
+  } = {},
 ) {
   if (typeof fetchPage !== "function") {
     throw new TypeError("Chargeur de page invalide");
@@ -22,27 +41,29 @@ export async function fetchPaginatedCollection(
   if (!Number.isSafeInteger(maxOffset) || maxOffset < 0) {
     throw new RangeError("maxOffset invalide");
   }
+  if (
+    !Number.isSafeInteger(startOffset)
+    || startOffset < 0
+    || startOffset > maxOffset
+    || startOffset % pageSize !== 0
+  ) {
+    throw new RangeError("startOffset invalide");
+  }
+  if (!Array.isArray(initialItems)) {
+    throw new TypeError("initialItems doit être une collection");
+  }
 
   const items = [];
   const seenIds = new Set();
+  appendUniqueItems(items, seenIds, initialItems);
 
-  for (let offset = 0; offset <= maxOffset; offset += pageSize) {
+  for (let offset = startOffset; offset <= maxOffset; offset += pageSize) {
     const page = await fetchPage({ limit: pageSize, offset });
     if (!Array.isArray(page)) {
       throw new TypeError("La réponse paginée doit être une collection");
     }
 
-    page.forEach((item) => {
-      const rawId = item?.id;
-      if (rawId === null || rawId === undefined || rawId === "") {
-        items.push(item);
-        return;
-      }
-      const id = String(rawId);
-      if (seenIds.has(id)) return;
-      seenIds.add(id);
-      items.push(item);
-    });
+    appendUniqueItems(items, seenIds, page);
 
     if (page.length < pageSize) return items;
   }

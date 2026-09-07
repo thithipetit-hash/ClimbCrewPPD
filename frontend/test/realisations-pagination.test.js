@@ -26,6 +26,28 @@ test("les réalisations sont agrégées page par page sans changer leur ordre", 
   assert.equal(result.at(-1).id, "r-201");
 });
 
+test("l'hydratation différée reprend à la page 2 sans recharger la première page", async () => {
+  const initialItems = Array.from(
+    { length: REALISATIONS_PAGE_SIZE },
+    (_, index) => ({ id: `r-${index}` }),
+  );
+  const calls = [];
+
+  const result = await fetchPaginatedCollection(async ({ limit, offset }) => {
+    calls.push({ limit, offset });
+    return [{ id: "r-199" }, { id: "r-200" }, { id: "r-201" }];
+  }, {
+    pageSize: REALISATIONS_PAGE_SIZE,
+    startOffset: REALISATIONS_PAGE_SIZE,
+    initialItems,
+  });
+
+  assert.deepEqual(calls, [{ limit: 200, offset: 200 }]);
+  assert.equal(result.length, 202);
+  assert.equal(result.filter((item) => item.id === "r-199").length, 1);
+  assert.equal(result.at(-1).id, "r-201");
+});
+
 test("une frontière de page déplacée pendant le chargement ne crée pas de doublon", async () => {
   const result = await fetchPaginatedCollection(async ({ limit, offset }) => {
     if (offset === 0) {
@@ -63,5 +85,12 @@ test("la taille de page reste bornée par le contrat backend", async () => {
   await assert.rejects(
     () => fetchPaginatedCollection(async () => [], { pageSize: 201 }),
     /pageSize doit être compris entre 1 et 200/,
+  );
+});
+
+test("un offset de reprise doit rester aligné sur la taille de page", async () => {
+  await assert.rejects(
+    () => fetchPaginatedCollection(async () => [], { startOffset: 1 }),
+    /startOffset invalide/,
   );
 });
