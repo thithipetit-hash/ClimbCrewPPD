@@ -93,6 +93,26 @@ function parseByteRange(rangeHeader, totalLength) {
   return { start, end: Math.min(end, totalLength - 1) };
 }
 
+async function loadVideoBytes(pool, routeId, videoId, range = null) {
+  const result = range
+    ? await pool.query(
+      `
+        select substring(content from $3 for $4) as content
+        from route_videos
+        where id = $1 and route_id = $2
+        limit 1
+      `,
+      [videoId, routeId, range.start + 1, range.end - range.start + 1],
+    )
+    : await pool.query(
+      `select content from route_videos where id = $1 and route_id = $2 limit 1`,
+      [videoId, routeId],
+    );
+  if (!result.rowCount) return null;
+  const value = result.rows[0].content;
+  return Buffer.isBuffer(value) ? value : Buffer.from(value || "");
+}
+
 export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, pool }) {
   app.get("/ropes", requireAuth, async (_req, res) => {
     try {
@@ -127,7 +147,7 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
           select
             rv.file_name,
             rv.mime_type,
-            rv.content,
+            octet_length(rv.content)::bigint as content_length,
             rv.source_realisation_id,
             re.participant_id as source_participant_id,
             coalesce(p.profile_public, false) as source_profile_public
@@ -155,8 +175,10 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
         }
       }
 
-      const content = Buffer.isBuffer(video.content) ? video.content : Buffer.from(video.content || "");
-      const totalLength = content.length;
+      const totalLength = Number(video.content_length || 0);
+      if (!Number.isSafeInteger(totalLength) || totalLength < 0) {
+        throw new Error("Taille de vidéo invalide");
+      }
       const disposition = req.query.download === "1" ? "attachment" : "inline";
 
       res.setHeader("Content-Type", video.mime_type);
@@ -167,24 +189,21 @@ export function installRouteManagementRoutes(app, { requireAuth, requireAdmin, p
       );
       res.setHeader("Accept-Ranges", "bytes");
 
-      if (req.query.download === "1") {
+      if (req.query.download === "1" || !req.headers.range) {
+        const content = await loadVideoBytes(pool, req.params.id, req.params.videoId);
+        if (content === null) return res.status(404).json({ error: "Vidéo introuvable" });
         res.setHeader("Content-Length", String(totalLength));
         return res.status(200).send(content);
       }
 
-      const rangeHeader = req.headers.range;
-      if (!rangeHeader) {
-        res.setHeader("Content-Length", String(totalLength));
-        return res.status(200).send(content);
-      }
-
-      const range = parseByteRange(rangeHeader, totalLength);
+      const range = parseByteRange(req.headers.range, totalLength);
       if (!range) {
         res.setHeader("Content-Range", `bytes */${totalLength}`);
         return res.status(416).end();
       }
 
-      const chunk = content.subarray(range.start, range.end + 1);
+      const chunk = await loadVideoBytes(pool, req.params.id, req.params.videoId, range);
+      if (chunk === null) return res.status(404).json({ error: "Vidéo introuvable" });
       res.status(206);
       res.setHeader("Content-Range", `bytes ${range.start}-${range.end}/${totalLength}`);
       res.setHeader("Content-Length", String(chunk.length));
