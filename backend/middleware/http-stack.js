@@ -72,6 +72,24 @@ export function normalizeApiPath(url) {
   return `${normalizedPath}${query}`;
 }
 
+export function publicServerErrorBody(requestId = null) {
+  return {
+    error: "Erreur interne du serveur",
+    requestId: requestId || null,
+  };
+}
+
+function installOutboundErrorSanitizer(req, res) {
+  const originalSend = res.send.bind(res);
+  res.send = function hardenedSend(body) {
+    if (Number(res.statusCode) >= 500) {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      return originalSend(JSON.stringify(publicServerErrorBody(req.requestId)));
+    }
+    return originalSend(body);
+  };
+}
+
 function createRateLimiter({ keyPrefix, windowMs, max, getClientIp }) {
   const buckets = new Map();
   const cleanupIntervalMs = 60 * 1000;
@@ -112,6 +130,7 @@ export function installHttpStack(app, config, { isSafeMethod, getClientIp }) {
 
   app.use((req, res, next) => {
     req.requestId = crypto.randomUUID();
+    installOutboundErrorSanitizer(req, res);
     res.setHeader("X-Request-Id", req.requestId);
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
