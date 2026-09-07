@@ -17,9 +17,11 @@ test("la politique de mot de passe utilise un minimum de 8 caractères partout",
   assert.match(frontendPolicy, /8 caractères minimum/);
   assert.match(frontendPolicy, /value\.length >= 8/);
 
+  assert.match(runtimeSecurity, /Buffer\.byteLength\(value, "utf8"\) <= 72/);
   assert.match(runtimeSecurity, /value\.length >= 8/);
-  assert.match(security, /Buffer\.byteLength\(value, "utf8"\) <= 72/);
-  assert.match(security, /value\.length >= 8/);
+  assert.match(security, /from "\.\.\/security\/runtime-helpers\.js"/);
+  assert.match(security, /isStrongPassword/);
+  assert.doesNotMatch(security, /function isStrongPassword/);
   assert.match(requestAccess, /entre 8 caractères et 72 octets/);
   assert.match(requestAccess, /isStrongPassword\(password\)/);
 

@@ -64,8 +64,8 @@ function finishInterval(intervals, start, end, minimumSeconds) {
   if (duration >= minimumSeconds) intervals.push({ start, end, duration });
 }
 
-function normalizeSpeed(previous, current, torsoLength, dt) {
-  if (!previous || !current || !torsoLength || !dt) return 0;
+export function normalizeObservedSpeed(previous, current, torsoLength, dt) {
+  if (!previous || !current || !torsoLength || !dt) return null;
   return distance(previous, current) / torsoLength / dt;
 }
 
@@ -280,6 +280,29 @@ export async function analyzeClimbingVideo(video, options = {}) {
   let previousDynamic = false;
   const pauses = [];
 
+  const finishTrackedIntervals = (endTime) => {
+    if (endTime == null) return;
+    finishInterval(pauses, pauseStart, endTime, rules.pauseMinSeconds);
+    pauseStart = null;
+
+    if (leftBentStart != null) leftBentSeconds += Math.max(0, endTime - leftBentStart);
+    if (rightBentStart != null) rightBentSeconds += Math.max(0, endTime - rightBentStart);
+    leftBentStart = null;
+    rightBentStart = null;
+
+    if (leftLockStart != null) {
+      const value = Math.max(0, endTime - leftLockStart);
+      if (value >= rules.lockOffMinSeconds) leftLockSeconds += value;
+    }
+    if (rightLockStart != null) {
+      const value = Math.max(0, endTime - rightLockStart);
+      if (value >= rules.lockOffMinSeconds) rightLockSeconds += value;
+    }
+    leftLockStart = null;
+    rightLockStart = null;
+    previousDynamic = false;
+  };
+
   try {
     for (let index = 0; index < sampleTimes.length; index += 1) {
       if (options.signal?.aborted) throw new DOMException("Analyse annulée", "AbortError");
@@ -290,6 +313,9 @@ export async function analyzeClimbingVideo(video, options = {}) {
       options.onProgress?.((index + 1) / sampleTimes.length);
 
       if (!pose) {
+        // Une zone non détectée n'est pas une zone immobile : on ferme les
+        // intervalles au dernier instant réellement observé et on repart à zéro.
+        finishTrackedIntervals(previousTime);
         previousPose = null;
         previousTime = null;
         continue;
@@ -299,13 +325,14 @@ export async function analyzeClimbingVideo(video, options = {}) {
       if (previousPose && previousTime != null) {
         const dt = Math.max(0.001, time - previousTime);
         const torsoLength = Math.max(0.01, (pose.torsoLength + previousPose.torsoLength) / 2);
-        const hipSpeed = normalizeSpeed(previousPose.hipCenter, pose.hipCenter, torsoLength, dt);
-        const leftWristSpeed = normalizeSpeed(previousPose.leftWrist, pose.leftWrist, torsoLength, dt);
-        const rightWristSpeed = normalizeSpeed(previousPose.rightWrist, pose.rightWrist, torsoLength, dt);
-        const leftAnkleSpeed = normalizeSpeed(previousPose.leftAnkle, pose.leftAnkle, torsoLength, dt);
-        const rightAnkleSpeed = normalizeSpeed(previousPose.rightAnkle, pose.rightAnkle, torsoLength, dt);
-        const availableSpeeds = [hipSpeed, leftWristSpeed, rightWristSpeed, leftAnkleSpeed, rightAnkleSpeed].filter(Number.isFinite);
-        const bodySpeed = availableSpeeds.length ? availableSpeeds.reduce((sum, value) => sum + value, 0) / availableSpeeds.length : 0;
+        const hipSpeed = normalizeObservedSpeed(previousPose.hipCenter, pose.hipCenter, torsoLength, dt);
+        const leftWristSpeed = normalizeObservedSpeed(previousPose.leftWrist, pose.leftWrist, torsoLength, dt);
+        const rightWristSpeed = normalizeObservedSpeed(previousPose.rightWrist, pose.rightWrist, torsoLength, dt);
+        const leftAnkleSpeed = normalizeObservedSpeed(previousPose.leftAnkle, pose.leftAnkle, torsoLength, dt);
+        const rightAnkleSpeed = normalizeObservedSpeed(previousPose.rightAnkle, pose.rightAnkle, torsoLength, dt);
+        const availableSpeeds = [hipSpeed, leftWristSpeed, rightWristSpeed, leftAnkleSpeed, rightAnkleSpeed]
+          .filter(Number.isFinite);
+        const bodySpeed = availableSpeeds.reduce((sum, value) => sum + value, 0) / availableSpeeds.length;
 
         if (bodySpeed <= rules.pauseSpeedTorsoPerSecond) {
           if (pauseStart == null) pauseStart = previousTime;
@@ -314,11 +341,18 @@ export async function analyzeClimbingVideo(video, options = {}) {
           pauseStart = null;
         }
 
-        const leftFootDistance = distance(previousPose.leftAnkle, pose.leftAnkle) / torsoLength;
-        const rightFootDistance = distance(previousPose.rightAnkle, pose.rightAnkle) / torsoLength;
-        const feetContextIsStable = hipSpeed <= Math.max(0.2, rules.pauseSpeedTorsoPerSecond * 3);
+        const leftFootDistance = previousPose.leftAnkle && pose.leftAnkle
+          ? distance(previousPose.leftAnkle, pose.leftAnkle) / torsoLength
+          : null;
+        const rightFootDistance = previousPose.rightAnkle && pose.rightAnkle
+          ? distance(previousPose.rightAnkle, pose.rightAnkle) / torsoLength
+          : null;
+        const feetContextIsStable = Number.isFinite(hipSpeed)
+          && hipSpeed <= Math.max(0.2, rules.pauseSpeedTorsoPerSecond * 3);
         if (
           feetContextIsStable
+          && Number.isFinite(leftAnkleSpeed)
+          && Number.isFinite(leftFootDistance)
           && leftAnkleSpeed >= rules.footAdjustmentSpeedTorsoPerSecond
           && leftFootDistance <= rules.footAdjustmentMaxDistanceTorso
           && time - lastLeftFootAdjustment >= rules.footAdjustmentMinGapSeconds
@@ -328,6 +362,8 @@ export async function analyzeClimbingVideo(video, options = {}) {
         }
         if (
           feetContextIsStable
+          && Number.isFinite(rightAnkleSpeed)
+          && Number.isFinite(rightFootDistance)
           && rightAnkleSpeed >= rules.footAdjustmentSpeedTorsoPerSecond
           && rightFootDistance <= rules.footAdjustmentMaxDistanceTorso
           && time - lastRightFootAdjustment >= rules.footAdjustmentMinGapSeconds
@@ -336,13 +372,22 @@ export async function analyzeClimbingVideo(video, options = {}) {
           lastRightFootAdjustment = time;
         }
 
-        const dynamicNow = Math.max(hipSpeed, leftWristSpeed, rightWristSpeed) >= rules.dynamicSpeedTorsoPerSecond;
+        const dynamicSpeeds = [hipSpeed, leftWristSpeed, rightWristSpeed].filter(Number.isFinite);
+        const dynamicNow = dynamicSpeeds.some((speed) => speed >= rules.dynamicSpeedTorsoPerSecond);
         if (dynamicNow && !previousDynamic) dynamicMoves += 1;
         previousDynamic = dynamicNow;
       }
 
       const accumulateAngleDuration = (angle, threshold, currentStart, setter) => {
-        if (angle != null && angle < threshold) {
+        if (angle == null) {
+          // Si le coude/poignet disparaît seul, ne pas attribuer au grimpeur le
+          // temps entre la dernière mesure fiable et le retour du repère.
+          if (currentStart != null && previousTime != null) {
+            setter(Math.max(0, previousTime - currentStart));
+          }
+          return null;
+        }
+        if (angle < threshold) {
           return currentStart == null ? time : currentStart;
         }
         if (currentStart != null) setter(Math.max(0, time - currentStart));
@@ -360,17 +405,9 @@ export async function analyzeClimbingVideo(video, options = {}) {
       if (index % 12 === 0) await new Promise((resolve) => window.setTimeout(resolve, 0));
     }
 
-    finishInterval(pauses, pauseStart, duration, rules.pauseMinSeconds);
-    if (leftBentStart != null) leftBentSeconds += Math.max(0, duration - leftBentStart);
-    if (rightBentStart != null) rightBentSeconds += Math.max(0, duration - rightBentStart);
-    if (leftLockStart != null) {
-      const value = Math.max(0, duration - leftLockStart);
-      if (value >= rules.lockOffMinSeconds) leftLockSeconds += value;
-    }
-    if (rightLockStart != null) {
-      const value = Math.max(0, duration - rightLockStart);
-      if (value >= rules.lockOffMinSeconds) rightLockSeconds += value;
-    }
+    // Ne ferme jamais une mesure jusqu'à la durée totale si la fin de la vidéo
+    // n'était plus observable. Seul le dernier échantillon valide compte.
+    finishTrackedIntervals(previousTime);
   } finally {
     try {
       await seekVideo(video, Math.min(originalTime, duration - 0.001));
@@ -410,7 +447,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
 
   return {
     engine: "MediaPipe Pose Landmarker Lite",
-    engineVersion: "1.0.2",
+    engineVersion: "1.0.3",
     localProcessing: true,
     rules,
     metrics,

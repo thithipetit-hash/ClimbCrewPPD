@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { listMigrationFiles, runDatabaseMigrations } from "./migrate.js";
+import { getDatabaseMigrationStatus, listMigrationFiles, runDatabaseMigrations } from "./migrate.js";
 
 async function migrationFiles() {
   return (await listMigrationFiles()).map((migration) => migration.version);
@@ -86,4 +86,32 @@ test("sérialise les migrations avec un advisory lock PostgreSQL", async () => {
   assert.ok(commitIndex > beginIndex, "la transaction doit être validée");
   assert.ok(unlockIndex > commitIndex, "le verrou doit être libéré après les migrations");
   assert.deepEqual(pool.queries[lockIndex].params, pool.queries[unlockIndex].params);
+});
+
+test("le statut d'une base vierge reste en lecture seule", async () => {
+  const expectedMigrations = await migrationFiles();
+  const queries = [];
+  const pool = {
+    async connect() {
+      return {
+        async query(sql) {
+          const text = String(sql).trim();
+          queries.push(text);
+          const error = new Error("relation schema_migrations does not exist");
+          error.code = "42P01";
+          throw error;
+        },
+        release() {},
+      };
+    },
+  };
+
+  const status = await getDatabaseMigrationStatus(pool);
+  assert.deepEqual(status, {
+    total: expectedMigrations.length,
+    applied: [],
+    pending: expectedMigrations,
+  });
+  assert.equal(queries.length, 1);
+  assert.match(queries[0], /^select version, applied_at from schema_migrations/);
 });

@@ -74,7 +74,7 @@ test("la vue privée conserve les données club mais masque aussi l avatar perso
 });
 
 test("la migration reprend l'ancien email et synchronise les deux colonnes", async () => {
-  const source = await readFile(new URL("../migrations/007_runtime_schema_consolidation.sql", import.meta.url), "utf8");
+  const source = await readFile(new URL("../database/migrations/007_runtime_schema_consolidation.sql", import.meta.url), "utf8");
   assert.match(source, /drop index if exists uq_participants_login_email_normalized/);
   assert.match(source, /set login_email = nullif\(email, ''\)/);
   assert.match(source, /create or replace function climbcrew_sync_participant_email\(\)/);

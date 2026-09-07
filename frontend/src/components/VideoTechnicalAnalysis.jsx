@@ -3,6 +3,7 @@ import Button from "./Button.jsx";
 import { API_BASE, apiFetch } from "../lib/api.js";
 import { buildClimbingCoach } from "../lib/climbing-coach.js";
 import { analyzeClimbingVideo } from "../lib/mediapipe-video-analysis.js";
+import { buildTechnicalAnalysisComparison } from "../lib/video-analysis-comparison.js";
 import { fetchVideoAnalysisRules } from "../lib/video-analysis-rules.js";
 
 function playableVideoUrl(url) {
@@ -42,6 +43,33 @@ function Metric({ label, value }) {
   );
 }
 
+function RecommendationComparison({ items }) {
+  if (!items.length) return null;
+  const statusLabel = {
+    common: "Commune aux deux analyses",
+    "only-a": "Uniquement analyse A",
+    "only-b": "Uniquement analyse B",
+  };
+
+  return (
+    <div className="stack" style={{ marginTop: 10 }}>
+      <strong>Comparaison des recommandations</strong>
+      {items.map((item) => (
+        <div className="muted-box" key={item.code}>
+          <strong>{item.title}</strong>
+          <div className="small" style={{ marginTop: 3 }}>{statusLabel[item.status]}</div>
+          {item.a?.detail && (
+            <div className="small" style={{ marginTop: 4 }}><b>A :</b> {item.a.detail}</div>
+          )}
+          {item.b?.detail && item.b?.detail !== item.a?.detail && (
+            <div className="small" style={{ marginTop: 4 }}><b>B :</b> {item.b.detail}</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function VideoTechnicalAnalysis({
   videoUrls = [],
   realisationId = "",
@@ -67,6 +95,7 @@ export default function VideoTechnicalAnalysis({
   );
 
   const [selectedUrl, setSelectedUrl] = React.useState(selectionUrls[0] || "");
+  const [comparisonUrl, setComparisonUrl] = React.useState("");
   const [analysis, setAnalysis] = React.useState(() => storedVideos[selectionUrls[0]] || null);
   const [progress, setProgress] = React.useState(0);
   const [error, setError] = React.useState("");
@@ -88,9 +117,23 @@ export default function VideoTechnicalAnalysis({
     setSaveStatus("");
   }, [selectionUrls, selectedUrl, storedVideos]);
 
+  React.useEffect(() => {
+    const alternatives = savedUrls.filter((url) => url !== selectedUrl);
+    if (!alternatives.includes(comparisonUrl)) {
+      setComparisonUrl(alternatives[0] || "");
+    }
+  }, [comparisonUrl, savedUrls, selectedUrl]);
+
   React.useEffect(() => () => abortRef.current?.abort(), []);
 
   const videoAvailable = analyzableUrls.includes(selectedUrl);
+  const primarySavedAnalysis = storedVideos[selectedUrl] || null;
+  const comparisonAnalysis = comparisonUrl ? (storedVideos[comparisonUrl] || null) : null;
+  const comparison = React.useMemo(
+    () => buildTechnicalAnalysisComparison(primarySavedAnalysis, comparisonAnalysis),
+    [primarySavedAnalysis, comparisonAnalysis],
+  );
+  const comparisonChoices = savedUrls.filter((url) => url !== selectedUrl);
 
   async function runAnalysis() {
     if (!videoRef.current || !selectedUrl || !videoAvailable || !editable) return;
@@ -241,6 +284,57 @@ export default function VideoTechnicalAnalysis({
             <Metric label="Bras gauche fléchi" value={analysis.display?.bentLeft || formatTimestamp(metrics.bentArmSeconds?.left)} />
             <Metric label="Bras droit fléchi" value={analysis.display?.bentRight || formatTimestamp(metrics.bentArmSeconds?.right)} />
           </div>
+
+          {comparisonChoices.length > 0 && primarySavedAnalysis && (
+            <div className="subcard" style={{ marginTop: 12 }}>
+              <div className="card-header">
+                <div>
+                  <strong>Comparer les mesures</strong>
+                  <div className="small">Comparaison des données enregistrées et des recommandations, sans charger une seconde vidéo.</div>
+                </div>
+                <select
+                  aria-label="Analyse technique à comparer"
+                  value={comparisonUrl}
+                  onChange={(event) => setComparisonUrl(event.target.value)}
+                  style={{ width: "auto", minWidth: 160 }}
+                >
+                  {comparisonChoices.map((url) => (
+                    <option key={url} value={url}>
+                      Analyse enregistrée {savedUrls.indexOf(url) + 1}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {comparison && (
+                <>
+                  <div style={{ overflowX: "auto", marginTop: 8 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: "left" }}>Mesure</th>
+                          <th style={{ textAlign: "right" }}>A</th>
+                          <th style={{ textAlign: "right" }}>B</th>
+                          <th style={{ textAlign: "right" }}>Écart B−A</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {comparison.rows.map((row) => (
+                          <tr key={row.key}>
+                            <td>{row.label}</td>
+                            <td style={{ textAlign: "right" }}>{row.aDisplay}</td>
+                            <td style={{ textAlign: "right" }}>{row.bDisplay}</td>
+                            <td style={{ textAlign: "right" }}>{row.deltaDisplay}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <RecommendationComparison items={comparison.recommendations} />
+                </>
+              )}
+            </div>
+          )}
 
           {coachPriorities.length > 0 && (
             <div className="subcard" style={{ marginTop: 12 }}>

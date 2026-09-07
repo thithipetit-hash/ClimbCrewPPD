@@ -8,7 +8,7 @@ const realisationVideoSource = await readFile(new URL("../realisation-management
 const databaseSource = await readFile(new URL("../admin-users/database.js", import.meta.url), "utf8");
 const explicitRoutesSource = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
 const backupRoutesSource = await readFile(new URL("../backup-routes.js", import.meta.url), "utf8");
-const migrationSource = await readFile(new URL("../migrations/007_runtime_schema_consolidation.sql", import.meta.url), "utf8");
+const migrationSource = await readFile(new URL("../database/migrations/007_runtime_schema_consolidation.sql", import.meta.url), "utf8");
 
 test("le schéma admin et vidéo n'est plus créé dans les routes runtime", () => {
   for (const source of [routeVideoSource, realisationVideoSource, databaseSource]) {
