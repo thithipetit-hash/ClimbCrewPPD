@@ -5,7 +5,7 @@ export function nowPlus(ms) {
 }
 
 export function hashToken(rawToken) {
-  return crypto.createHash("sha256").update(rawToken).digest("hex");
+  return crypto.createHash("sha256").update(String(rawToken || "")).digest("hex");
 }
 
 export function randomToken(size = 24) {
@@ -14,6 +14,14 @@ export function randomToken(size = 24) {
 
 export function cleanEmail(value = "") {
   return String(value || "").trim().toLowerCase();
+}
+
+function safeDecodeCookie(value = "") {
+  try {
+    return decodeURIComponent(String(value || ""));
+  } catch {
+    return String(value || "");
+  }
 }
 
 export function parseCookies(req) {
@@ -26,7 +34,7 @@ export function parseCookies(req) {
       .map((part) => {
         const separator = part.indexOf("=");
         if (separator === -1) return [part, ""];
-        return [part.slice(0, separator), decodeURIComponent(part.slice(separator + 1))];
+        return [part.slice(0, separator), safeDecodeCookie(part.slice(separator + 1))];
       })
   );
 }
@@ -94,8 +102,14 @@ export function createCookieWriters(config) {
   return { setSessionCookie, setCsrfCookie, clearSessionCookie };
 }
 
+/**
+ * Politique canonique côté serveur. bcrypt ne prend en compte que les 72
+ * premiers octets : les mots de passe plus longs sont refusés explicitement
+ * pour éviter deux valeurs différentes équivalentes après troncature.
+ */
 export function isStrongPassword(value) {
   return typeof value === "string"
+    && Buffer.byteLength(value, "utf8") <= 72
     && value.length >= 8
     && /[a-z]/.test(value)
     && /[A-Z]/.test(value)
