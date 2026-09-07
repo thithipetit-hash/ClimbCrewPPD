@@ -1,12 +1,5 @@
-alter table realisations
-  add column if not exists video_urls jsonb not null default '[]'::jsonb;
-
-create table if not exists video_analysis_settings (
-  id integer primary key check (id = 1),
-  rules jsonb not null default '{}'::jsonb,
-  updated_at timestamptz not null default now()
-);
-
-insert into video_analysis_settings (id, rules)
-values (1, '{}'::jsonb)
-on conflict (id) do nothing;
+-- Version historique conservée pour compatibilité avec schema_migrations.
+-- Le DDL de l'analyse vidéo est déjà appliqué par 002_video_analysis.sql.
+-- Les bases existantes qui ont enregistré 005 ne changent pas ; une base neuve
+-- trace toujours cette version sans rejouer le même DDL une seconde fois.
+select 1;
