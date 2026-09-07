@@ -49,6 +49,9 @@ export default function RealisationVideoAnalysis({
   const [localSelectedUrls, setLocalSelectedUrls] = React.useState(() => (
     Array.isArray(realisation?.videoUrls) ? realisation.videoUrls : []
   ));
+  const [technicalAnalysis, setTechnicalAnalysis] = React.useState(realisation?.technicalAnalysis || null);
+  const [analysisLoading, setAnalysisLoading] = React.useState(false);
+  const [analysisLoadError, setAnalysisLoadError] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
   const [deletingUrl, setDeletingUrl] = React.useState("");
   const [uploadStatus, setUploadStatus] = React.useState("");
@@ -58,6 +61,30 @@ export default function RealisationVideoAnalysis({
     const urls = Array.isArray(realisation?.videoUrls) ? realisation.videoUrls : [];
     setLocalSelectedUrls(urls);
   }, [realisation?.id, realisation?.videoUrls]);
+
+  React.useEffect(() => {
+    let active = true;
+    setTechnicalAnalysis(realisation?.technicalAnalysis || null);
+    setAnalysisLoadError("");
+    if (!realisation?.id) {
+      setAnalysisLoading(false);
+      return () => { active = false; };
+    }
+
+    setAnalysisLoading(true);
+    apiFetch(`/realisations/${encodeURIComponent(realisation.id)}/technical-analysis`)
+      .then((result) => {
+        if (active) setTechnicalAnalysis(result?.technicalAnalysis || null);
+      })
+      .catch((error) => {
+        if (active) setAnalysisLoadError(error.message || "Chargement des mesures impossible.");
+      })
+      .finally(() => {
+        if (active) setAnalysisLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [realisation?.id]);
 
   React.useEffect(() => {
     setUploadedRouteUrls([]);
@@ -249,13 +276,16 @@ export default function RealisationVideoAnalysis({
         </div>
       </div>
 
+      {analysisLoading && <div className="small" role="status" style={{ marginTop: 8 }}>Chargement des mesures enregistrées…</div>}
+      {analysisLoadError && <div className="error" role="alert" style={{ marginTop: 8 }}>{analysisLoadError}</div>}
+
       <VideoTechnicalAnalysis
         videoUrls={selectedVideoUrls}
         realisationId={realisation?.id || ""}
-        technicalAnalysis={realisation?.technicalAnalysis || null}
+        technicalAnalysis={technicalAnalysis}
         editable={editable}
-        onSaved={async () => {
-          if (typeof onRefresh === "function") await onRefresh();
+        onSaved={(nextTechnicalAnalysis) => {
+          setTechnicalAnalysis(nextTechnicalAnalysis || null);
         }}
       />
     </>
