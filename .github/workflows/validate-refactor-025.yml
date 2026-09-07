@@ -1,0 +1,50 @@
+name: Validate refactor 025
+
+on:
+  push:
+    branches:
+      - refactor-025-frontend-maintainability
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: refactor-025-frontend-maintainability
+          fetch-depth: 0
+      - name: Corriger l'import React restant
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('frontend/src/App.jsx')
+          text = path.read_text()
+          text = text.replace('import React, { useEffect } from "react";', 'import React, { useEffect, useMemo } from "react";')
+          path.write_text(text)
+          PY
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Installer frontend
+        working-directory: frontend
+        run: npm ci
+      - name: Tester frontend
+        working-directory: frontend
+        run: npm test
+      - name: Construire frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Nettoyer et committer
+        run: |
+          rm -f .github/workflows/validate-refactor-025.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "025: valider l'intégration frontend"
+          git push origin HEAD:refactor-025-frontend-maintainability
