@@ -71,6 +71,10 @@ jobs:
         working-directory: backend
         run: npm ci --no-audit --no-fund
 
+      - name: Audit backend dependencies
+        working-directory: backend
+        run: npm audit --omit=dev --audit-level=moderate
+
       - name: Run backend tests
         working-directory: backend
         run: npm test
@@ -86,6 +90,10 @@ jobs:
             sleep 5
           done
           exit 1
+
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=moderate
 
       - name: Run frontend tests
         working-directory: frontend
