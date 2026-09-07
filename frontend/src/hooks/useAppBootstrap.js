@@ -3,9 +3,20 @@ import { useCallback, useEffect } from "react";
 import { apiFetch } from "../lib/api.js";
 import {
   BUSINESS_BOOTSTRAP_ENDPOINTS,
+  REALISATIONS_PAGE_SIZE,
+  fetchPaginatedCollection,
   mergeBootstrapCollections,
   summarizeBootstrapResults,
 } from "../lib/bootstrap-data.js";
+
+function loadBootstrapEndpoint([key, path]) {
+  if (key !== "realisations") return apiFetch(path);
+
+  return fetchPaginatedCollection(
+    ({ limit, offset }) => apiFetch(`${path}?limit=${limit}&offset=${offset}`),
+    { pageSize: REALISATIONS_PAGE_SIZE },
+  );
+}
 
 export function useAppBootstrap({
   useApi,
@@ -24,7 +35,7 @@ export function useAppBootstrap({
     setIsSyncing(true);
     try {
       const settledResults = await Promise.allSettled(
-        BUSINESS_BOOTSTRAP_ENDPOINTS.map(([, path]) => apiFetch(path)),
+        BUSINESS_BOOTSTRAP_ENDPOINTS.map(loadBootstrapEndpoint),
       );
 
       if (!isMounted()) return null;
