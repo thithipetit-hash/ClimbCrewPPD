@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE="${4:-${SCRIPT_DIR}/../nginx/pre-climbcrew.reverse-proxy.conf.template}"
 PROD_DOMAIN="${PROD_DOMAIN:-climbcrew.dip-tcs.com}"
 
-for command in sudo nginx sed awk install readlink; do
+for command in sudo nginx sed install readlink curl; do
   command -v "$command" >/dev/null 2>&1 || {
     echo "ERROR: commande requise absente: $command" >&2
     exit 1
@@ -27,30 +27,6 @@ test -f "$TEMPLATE" || {
 PROD_REAL="$(readlink -f "$PROD_SITE")"
 test -n "$PROD_REAL"
 sudo test -f "$PROD_REAL"
-
-SSL_CERTIFICATE="$(
-  sudo awk '$1 == "ssl_certificate" { value=$2; sub(/;$/, "", value); print value; exit }' "$PROD_REAL"
-)"
-SSL_CERTIFICATE_KEY="$(
-  sudo awk '$1 == "ssl_certificate_key" { value=$2; sub(/;$/, "", value); print value; exit }' "$PROD_REAL"
-)"
-
-test -n "$SSL_CERTIFICATE" || {
-  echo "ERROR: ssl_certificate introuvable dans $PROD_REAL" >&2
-  exit 1
-}
-test -n "$SSL_CERTIFICATE_KEY" || {
-  echo "ERROR: ssl_certificate_key introuvable dans $PROD_REAL" >&2
-  exit 1
-}
-sudo test -r "$SSL_CERTIFICATE" || {
-  echo "ERROR: certificat TLS illisible: $SSL_CERTIFICATE" >&2
-  exit 1
-}
-sudo test -r "$SSL_CERTIFICATE_KEY" || {
-  echo "ERROR: clé TLS illisible: $SSL_CERTIFICATE_KEY" >&2
-  exit 1
-}
 
 PROD_BACKUP="$(mktemp)"
 PPD_BACKUP="$(mktemp)"
@@ -90,17 +66,12 @@ restore_nginx() {
 }
 trap restore_nginx ERR
 
-# L'ancienne PPD ajoutait le domaine de préproduction au vhost de production.
-# On retire uniquement cette occurrence avant d'installer un serveur indépendant.
+# L'ancienne PPD partageait le server_name de production. On retire uniquement
+# le domaine PPD de ce vhost avant d'installer un serveur HTTP indépendant.
 PPD_ESCAPED="${PPD_DOMAIN//./\\.}"
 sudo sed -i -E "s/[[:space:]]+${PPD_ESCAPED}([[:space:]]*;)/\\1/g" "$PROD_REAL"
 
-sed \
-  -e "s|__PPD_DOMAIN__|${PPD_DOMAIN}|g" \
-  -e "s|__SSL_CERTIFICATE__|${SSL_CERTIFICATE}|g" \
-  -e "s|__SSL_CERTIFICATE_KEY__|${SSL_CERTIFICATE_KEY}|g" \
-  "$TEMPLATE" > "$RENDERED"
-
+sed -e "s|__PPD_DOMAIN__|${PPD_DOMAIN}|g" "$TEMPLATE" > "$RENDERED"
 sudo install -m 0644 "$RENDERED" "$PPD_SITE"
 
 sudo grep -Eq "server_name[[:space:]]+${PPD_ESCAPED}[[:space:]]*;" "$PPD_SITE"
@@ -114,6 +85,12 @@ sudo grep -Eq "server_name[^;]*${PROD_ESCAPED}[^;]*;" "$PROD_REAL"
 sudo nginx -t
 reload_nginx
 
+# Vérifie le routage Host local avant toute bascule applicative. Le TLS public
+# est terminé en amont ; cette requête teste donc directement le Nginx hôte.
+curl --fail --silent --show-error --max-time 10 \
+  -H "Host: ${PPD_DOMAIN}" \
+  "http://127.0.0.1/deployment-version.json?nginx-probe=1" >/dev/null
+
 trap - ERR
 cleanup_temp
-echo "Vhost PPD dédié installé pour ${PPD_DOMAIN}."
+echo "Vhost HTTP PPD dédié installé pour ${PPD_DOMAIN}."
