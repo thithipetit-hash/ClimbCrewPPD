@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [source, serverSource] = await Promise.all([
+const [source, serverSource, explicitRoutesSource] = await Promise.all([
   readFile(new URL("../admin-account-delete-route.js", import.meta.url), "utf8"),
   readFile(new URL("../server.js", import.meta.url), "utf8"),
+  readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8"),
 ]);
 
 test("la suppression d'un compte reste strictement administrateur et transactionnelle", () => {
@@ -20,9 +21,9 @@ test("la suppression d'un compte reste strictement administrateur et transaction
   assert.match(source, /client\.release\(\)/);
 });
 
-test("server.js installe le module et ne contient plus l'ancien handler de suppression", () => {
+test("server.js installe le module et les autres actions de cycle de vie restent explicites", () => {
   assert.match(serverSource, /installAdminAccountDeleteRoute\(app, \{ requireAuth, requireAdmin, pool, logAccess \}\)/);
   assert.equal(serverSource.includes('app.delete("/admin/auth/users/:id", requireAuth, requireAdmin, async'), false);
-  assert.match(serverSource, /app\.post\("\/admin\/auth\/users\/:id\/revoke", requireAuth, requireAdmin, legacyReplacedRoute\)/);
-  assert.match(serverSource, /app\.post\("\/admin\/auth\/users\/:id\/reactivate", requireAuth, requireAdmin, legacyReplacedRoute\)/);
+  assert.match(explicitRoutesSource, /app\.post\("\/admin\/auth\/users\/:id\/revoke", requireAuth, requireAdmin, revokeAccountSafely\)/);
+  assert.match(explicitRoutesSource, /app\.post\("\/admin\/auth\/users\/:id\/reactivate", requireAuth, requireAdmin, reactivateAccountSafely\)/);
 });

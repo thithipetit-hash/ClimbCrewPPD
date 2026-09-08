@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const INTRO_VIDEO_SRC = "/media/climbcrew-startup.mp4";
 const EXIT_DURATION_MS = 260;
-const SAFETY_TIMEOUT_MS = 8000;
+const SAFETY_TIMEOUT_MS = 2000;
+const VIDEO_ERROR_GRACE_MS = 600;
 
 export default function StartupVideoGate({ children }) {
   const [showIntro, setShowIntro] = useState(true);
@@ -10,6 +11,7 @@ export default function StartupVideoGate({ children }) {
   const appRef = useRef(null);
   const finishingRef = useRef(false);
   const exitTimerRef = useRef(null);
+  const videoErrorTimerRef = useRef(null);
 
   const finishIntro = useCallback(() => {
     if (finishingRef.current) return;
@@ -20,6 +22,15 @@ export default function StartupVideoGate({ children }) {
       setShowIntro(false);
     }, EXIT_DURATION_MS);
   }, []);
+
+  const handleVideoError = useCallback(() => {
+    // Une entrée PWA périmée peut échouer avant revalidation. On conserve un
+    // bref instant de branding, sans bloquer l'application plusieurs secondes.
+    if (videoErrorTimerRef.current) {
+      window.clearTimeout(videoErrorTimerRef.current);
+    }
+    videoErrorTimerRef.current = window.setTimeout(finishIntro, VIDEO_ERROR_GRACE_MS);
+  }, [finishIntro]);
 
   useEffect(() => {
     if (appRef.current) {
@@ -45,6 +56,9 @@ export default function StartupVideoGate({ children }) {
       if (exitTimerRef.current) {
         window.clearTimeout(exitTimerRef.current);
       }
+      if (videoErrorTimerRef.current) {
+        window.clearTimeout(videoErrorTimerRef.current);
+      }
     };
   }, [finishIntro, showIntro]);
 
@@ -68,10 +82,10 @@ export default function StartupVideoGate({ children }) {
             autoPlay
             muted
             playsInline
-            preload="auto"
+            preload="metadata"
             onClick={finishIntro}
             onEnded={finishIntro}
-            onError={finishIntro}
+            onError={handleVideoError}
             aria-label="Passer la vidéo d'introduction et ouvrir l'application"
           >
             <source src={INTRO_VIDEO_SRC} type="video/mp4" />

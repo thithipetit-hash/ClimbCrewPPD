@@ -1,6 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo } from "react";
 
 import Button from "./components/Button.jsx";
+import AuthPage from "./components/AuthPage.jsx";
+import AppSidebar from "./components/AppSidebar.jsx";
+import MobileBottomNav from "./components/MobileBottomNav.jsx";
+import BroadcastMessageModal from "./components/BroadcastMessageModal.jsx";
+import RealisationModal from "./components/RealisationModal.jsx";
 import FaqSection from "./sections/FaqSection.jsx";
 import Inscriptions from "./pages/Inscriptions.jsx";
 import Voies from "./pages/Voies.jsx";
@@ -14,9 +19,8 @@ import Statistiques from "./pages/Statistiques.jsx";
 import WallOfFame from "./pages/WallOfFame.jsx";
 
 import { THEME_OPTIONS, THEME_PREFERENCE_KEY, resolveThemePreference } from "./lib/theme.js";
-import { ROPE_NUMBERS, ROUTE_COLORS, STYLE_LABELS, ROUTE_TAGS, THECRAG_STYLE_BY_CLIMBCREW, TABS } from "./lib/ui-config.js";
+import { ROPE_NUMBERS, ROUTE_COLORS, STYLE_LABELS, ROUTE_TAGS, TABS } from "./lib/ui-config.js";
 import {
-  GRADES,
   MAX_PARTICIPANTS,
   fullName,
   formatRouteName,
@@ -42,158 +46,82 @@ import {
   calculateRouteAggregates,
   calculateWallOfFameCategories,
 } from "./lib/domain.js";
-import { USE_API, apiFetch, authApiFetch, downloadFile } from "./lib/api.js";
+import { USE_API, apiFetch, downloadFile } from "./lib/api.js";
 import { normalizeAppData } from "./lib/normalize.js";
 import { APP_VERSION } from "./lib/version.js";
 import { buildCsv, csvFileSlug } from "./lib/csv.js";
+import { EMPTY_APP_DATA, useAppBusinessState } from "./hooks/useAppBusinessState.js";
+import { useAppUiState } from "./hooks/useAppUiState.js";
+import { useAuthState } from "./hooks/useAuthState.js";
+import { useAppBootstrap } from "./hooks/useAppBootstrap.js";
+import { useParticipantEditorState } from "./hooks/useParticipantEditorState.js";
+import { useRouteEditorState } from "./hooks/useRouteEditorState.js";
+import { useRealisationEditorState } from "./hooks/useRealisationEditorState.js";
+import { PASSWORD_RULE_TEXT, isStrongPassword } from "./lib/password-policy.js";
+import { buildRouteDisplayGroups } from "./lib/route-display-groups.js";
+import { theCragStyleForRealisation } from "./lib/thecrag.js";
+import {
+  buildRealisationDraft,
+  buildRealisationPayload,
+  getParticipantSessionDays,
+  isManagedSession,
+  resolveSessionIdForRealisation,
+} from "./lib/realisation-workflow.js";
 
-// Données de repli volontairement vides : les données legacy sont importées côté backend/PostgreSQL.
-// Cela évite d'exposer les participants dans le bundle JavaScript public.
-const IMPORTED_DATA = {
-  exportedAt: null,
-  version: "secure-empty-fallback",
-  participants: [],
-  sessions: [],
-  ropes: [],
-  routes: [],
-  realisations: [],
-  selectedDate: "",
-  selectedParticipantProgress: ""
-};
-const STORAGE_KEY = "climbcrew_local_data_v2";
 const ADMIN_CODE = import.meta.env.VITE_LEGACY_ADMIN_CODE || "";
 
-// La session est conservée uniquement dans un cookie HttpOnly côté backend.
-const PASSWORD_RULE_TEXT = "8 caractères minimum, dont 1 majuscule, 1 minuscule, 1 chiffre et 1 caractère spécial.";
-
-function isStrongPassword(value) {
-  return typeof value === "string"
-    && value.length >= 8
-    && /[a-z]/.test(value)
-    && /[A-Z]/.test(value)
-    && /\d/.test(value)
-    && /[^A-Za-z0-9]/.test(value);
-}
-
-
 function App() {
-  const [tab, setTab] = useState("inscriptions");
-  const [viewMode, setViewMode] = useState("jour");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [statsSortField, setStatsSortField] = useState("name");
-  const [statsSortDirection, setStatsSortDirection] = useState("asc");
-  const [wallOfFameSexFilter, setWallOfFameSexFilter] = useState("all");
-  const [recentlyAddedParticipantIds, setRecentlyAddedParticipantIds] = useState([]);
-  const [state, setState] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      const base = saved ? JSON.parse(saved) : IMPORTED_DATA;
-      return normalizeAppData({
-        ...base,
-        selectedDate: todayIso(),
-        selectedParticipantProgress: "",
-      }, IMPORTED_DATA);
-    } catch {
-      return normalizeAppData({
-        ...IMPORTED_DATA,
-        selectedDate: todayIso(),
-        selectedParticipantProgress: "",
-      }, IMPORTED_DATA);
-    }
-  });
-  const [adminInput, setAdminInput] = useState("");
-  const [adminUnlocked, setAdminUnlocked] = useState(false);
-  const [adminError, setAdminError] = useState("");
-  const [routeError, setRouteError] = useState("");
-  const [importMessage, setImportMessage] = useState("");
-  const [, setSyncMessage] = useState(USE_API ? "API activée" : "Mode local");
-  const [confirmationMessage, setConfirmationMessage] = useState("");
-  const [isSyncing, setIsSyncing] = useState(false);
+  const {
+    tab, setTab,
+    viewMode, setViewMode,
+    sidebarOpen, setSidebarOpen,
+    statsSortField, setStatsSortField,
+    statsSortDirection, setStatsSortDirection,
+    wallOfFameSexFilter, setWallOfFameSexFilter,
+    recentlyAddedParticipantIds, setRecentlyAddedParticipantIds,
+    adminInput, setAdminInput,
+    adminUnlocked, setAdminUnlocked,
+    adminError, setAdminError,
+    routeError, setRouteError,
+    importMessage, setImportMessage,
+    setSyncMessage,
+    confirmationMessage, setConfirmationMessage,
+    isSyncing, setIsSyncing,
+  } = useAppUiState({ useApi: USE_API });
+  const [state, setState] = useAppBusinessState({ useApi: USE_API });
 
-  const [authToken, setAuthToken] = useState(() => (USE_API ? "cookie" : ""));
-  const [authUser, setAuthUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(USE_API);
-  const [authView, setAuthView] = useState("login");
-  const [authError, setAuthError] = useState("");
-  const [authMessage, setAuthMessage] = useState("");
-  const [loginForm, setLoginForm] = useState({
-    email: "",
-    password: "",
-  });
-  const [requestAccessForm, setRequestAccessForm] = useState({
-    prenom: "",
-    nom: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-    acceptTerms: false,
-  });
-  const [forgotPasswordForm, setForgotPasswordForm] = useState({
-    email: "",
-  });
-  const [resetPasswordForm, setResetPasswordForm] = useState({
-    email: "",
-    token: "",
-    password: "",
-    confirmPassword: "",
-  });
-  const [adminAuthUsers, setAdminAuthUsers] = useState([]);
-  const [adminAccessLogs, setAdminAccessLogs] = useState([]);
-  const [generatedResetToken, setGeneratedResetToken] = useState("");
-  const [pendingBroadcastMessages, setPendingBroadcastMessages] = useState([]);
-  const [broadcastMessageError, setBroadcastMessageError] = useState("");
-  const [themePreference, setThemePreference] = useState(() => localStorage.getItem(THEME_PREFERENCE_KEY) || "auto");
+  const {
+    authUser, setAuthUser,
+    authLoading, setAuthLoading,
+    authView, setAuthView,
+    authError, setAuthError,
+    authMessage, setAuthMessage,
+    loginForm, setLoginForm,
+    requestAccessForm, setRequestAccessForm,
+    forgotPasswordForm, setForgotPasswordForm,
+    resetPasswordForm, setResetPasswordForm,
+    adminAuthUsers, setAdminAuthUsers,
+    adminAccessLogs, setAdminAccessLogs,
+    generatedResetToken, setGeneratedResetToken,
+    pendingBroadcastMessages, setPendingBroadcastMessages,
+    broadcastMessageError, setBroadcastMessageError,
+    themePreference, setThemePreference,
+  } = useAuthState({ useApi: USE_API, themePreferenceKey: THEME_PREFERENCE_KEY });
 
-  const [newParticipant, setNewParticipant] = useState({
-    nom: "",
-    prenom: "",
-    email: "",
-    passport: "sans",
-    sexe: "",
-    cotisation: false,
-    ffme: false,
-    canEncadrer: false,
-    canReferer: false,
-    canAdmin: false,
-  });
-  const [newRoute, setNewRoute] = useState({
-    numeroCorde: "",
-    couleurPrises: "",
-    cotationReference: "",
-    nomVoie: "",
-    nomOuvreur: "",
-    moulinetteOnly: false,
-    tags: [],
-  });
-  const [editingRouteId, setEditingRouteId] = useState("");
-  const [routeEditDraft, setRouteEditDraft] = useState(null);
-  const [savingRouteId, setSavingRouteId] = useState("");
-  // Le tableau peut être regroupé soit par numéro de corde, soit par niveau de cotation.
-  const [routeSortMode, setRouteSortMode] = useState("corde");
-  const [newRealisation, setNewRealisation] = useState({
-    participantId: "",
-    selectedDay: "",
-    sessionId: "",
-    voieId: IMPORTED_DATA.routes?.[0]?.id || "",
-    styleRealisation: "a_vue",
-    commentaire: "",
-    cotationProposee: "",
-    rating: 0,
-    chute: false,
-    assureurId: "",
-  });
-
-  // Route sélectionnée pour le popup "Enregistrer une réalisation"
-  // depuis l'onglet Voies.
-  const [realisationModalRouteId, setRealisationModalRouteId] = useState(null);
-
-  // Filtres de consultation de la progression.
-  const [selectedRouteProgress, setSelectedRouteProgress] = useState("");
-  const [expandedRealisationIds, setExpandedRealisationIds] = useState([]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state]);
+  const { newParticipant, setNewParticipant } = useParticipantEditorState();
+  const {
+    newRoute, setNewRoute,
+    editingRouteId, setEditingRouteId,
+    routeEditDraft, setRouteEditDraft,
+    savingRouteId, setSavingRouteId,
+    routeSortMode, setRouteSortMode,
+  } = useRouteEditorState();
+  const {
+    newRealisation, setNewRealisation,
+    realisationModalRouteId, setRealisationModalRouteId,
+    selectedRouteProgress, setSelectedRouteProgress,
+    expandedRealisationIds, setExpandedRealisationIds,
+  } = useRealisationEditorState({ defaultRouteId: EMPTY_APP_DATA.routes?.[0]?.id || "" });
 
   useEffect(() => {
     if (!confirmationMessage) return undefined;
@@ -227,105 +155,19 @@ function App() {
     return () => mediaQuery.removeListener(onSystemThemeChange);
   }, [themePreference]);
 
-  /**
-   * Recharge toutes les données depuis le backend.
-   * Important : les anciennes versions ne rechargeaient que participants/séances/réalisations.
-   * Les cordes et voies sont maintenant rechargées aussi pour conserver les couleurs
-   * de passeports, couleurs de cordes et couleurs de voies importées depuis le legacy.
-   */
-  async function reloadApiState({ isMounted = () => true } = {}) {
-    setIsSyncing(true);
-    try {
-      const [participants, sessions, realisations, ropes, routes] = await Promise.all([
-        apiFetch("/participants"),
-        apiFetch("/sessions"),
-        apiFetch("/realisations").catch(() => []),
-        apiFetch("/ropes").catch(() => []),
-        apiFetch("/routes").catch(() => []),
-      ]);
-
-      if (!isMounted()) return null;
-
-      setState((prev) => ({
-        ...prev,
-        participants: Array.isArray(participants) ? participants : prev.participants,
-        sessions: Array.isArray(sessions) && sessions.length ? sessions : prev.sessions,
-        realisations: Array.isArray(realisations) ? realisations : prev.realisations,
-        ropes: Array.isArray(ropes) && ropes.length ? ropes : prev.ropes,
-        routes: Array.isArray(routes) && routes.length ? routes : prev.routes,
-      }));
-
-      setSyncMessage("Données actualisées");
-      return { participants, sessions, realisations, ropes, routes };
-    } catch (e) {
-      if (isMounted()) {
-        setSyncMessage(`API indisponible · fallback local`);
-        console.error(e);
-      }
-      throw e;
-    } finally {
-      if (isMounted()) setIsSyncing(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!USE_API) return;
-    let mounted = true;
-    reloadApiState({ isMounted: () => mounted }).catch(() => {});
-    return () => { mounted = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!USE_API) {
-      setAuthLoading(false);
-      return;
-    }
-
-    let isMounted = true;
-    (async () => {
-      try {
-        setAuthLoading(true);
-        const data = await authApiFetch("/auth/me", authToken);
-        if (!isMounted) return;
-        setAuthUser(data.user);
-        if (data.user?.theme_preference) {
-          setThemePreference(data.user.theme_preference);
-        }
-        if (data.user?.role === "admin") {
-          setAdminUnlocked(true);
-        }
-        await reloadApiState({ isMounted: () => isMounted }).catch(() => {});
-      } catch (error) {
-        if (!isMounted) return;
-        setAuthUser(null);
-        setAuthToken("");
-      } finally {
-        if (isMounted) setAuthLoading(false);
-      }
-    })();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [authToken]);
-
-  useEffect(() => {
-    if (!USE_API || !authUser?.id) {
-      setPendingBroadcastMessages([]);
-      return;
-    }
-
-    let isMounted = true;
-    authApiFetch("/auth/broadcast-messages/pending", authToken)
-      .then((data) => {
-        if (isMounted) setPendingBroadcastMessages(Array.isArray(data.messages) ? data.messages : []);
-      })
-      .catch((error) => {
-        if (isMounted) setBroadcastMessageError(String(error.message || error));
-      });
-
-    return () => { isMounted = false; };
-  }, [authUser?.id, authToken]);
+  const { reloadApiState } = useAppBootstrap({
+    useApi: USE_API,
+    authUserId: authUser?.id,
+    setAuthUser,
+    setAuthLoading,
+    setThemePreference,
+    setAdminUnlocked,
+    setPendingBroadcastMessages,
+    setBroadcastMessageError,
+    setState,
+    setIsSyncing,
+    setSyncMessage,
+  });
 
   const canAccessAdminTabs = !USE_API || authUser?.role === "admin";
   const canManageAccountsAndLogs = USE_API && authUser?.role === "admin";
@@ -345,7 +187,7 @@ function App() {
     if (canManageAccountsAndLogs && ["administration", "gestion_comptes", "logs"].includes(tab)) {
       loadAdminAccessData();
     }
-  }, [tab, canManageAccountsAndLogs, authToken]);
+  }, [tab, canManageAccountsAndLogs, authUser?.id]);
 
   const participantsById = useMemo(
     () => Object.fromEntries(state.participants.map((p) => [p.id, p])),
@@ -356,36 +198,14 @@ function App() {
     [state.routes]
   );
 
-  // Prépare les groupes du tableau des voies. L'ordre des cotations suit GRADES
-  // afin que 6a+ soit placé entre 6a et 6b.
-  const routeDisplayGroups = useMemo(() => {
-    if (routeSortMode === "cotation") {
-      const gradeRank = new Map(GRADES.map((grade, index) => [grade, index]));
-      const grades = [...new Set(state.routes.map((route) => route.cotationAjustee || route.cotationReference || "nc"))]
-        .sort((gradeA, gradeB) => {
-          const rankA = gradeRank.has(gradeA) ? gradeRank.get(gradeA) : Number.MAX_SAFE_INTEGER;
-          const rankB = gradeRank.has(gradeB) ? gradeRank.get(gradeB) : Number.MAX_SAFE_INTEGER;
-          return rankA - rankB || String(gradeA).localeCompare(String(gradeB), "fr");
-        });
-
-      return grades.map((grade) => ({
-        key: `cotation-${grade}`,
-        label: `Cotation ${grade}`,
-        routes: state.routes.filter((route) => (route.cotationAjustee || route.cotationReference || "nc") === grade),
-      }));
-    }
-
-    return [...new Set(state.routes.map((route) => normalizeRopeNumber(route.numeroCorde)))]
-      .sort((numeroA, numeroB) => numeroA - numeroB)
-      .map((numeroCorde) => {
-        const rope = state.ropes.find((item) => normalizeRopeNumber(item.numeroCorde) === numeroCorde);
-        return {
-          key: `corde-${numeroCorde}`,
-          label: `Corde ${numeroCorde}${rope?.couleurCorde ? ` · ${rope.couleurCorde}` : ""}`,
-          routes: state.routes.filter((route) => normalizeRopeNumber(route.numeroCorde) === numeroCorde),
-        };
-      });
-  }, [routeSortMode, state.routes, state.ropes]);
+  const routeDisplayGroups = useMemo(
+    () => buildRouteDisplayGroups({
+      routes: state.routes,
+      ropes: state.ropes,
+      sortMode: routeSortMode,
+    }),
+    [routeSortMode, state.routes, state.ropes],
+  );
 
   const sessionsById = useMemo(
     () => Object.fromEntries(state.sessions.map((s) => [s.id, s])),
@@ -402,12 +222,6 @@ function App() {
     });
   }, [state.sessions]);
 
-  function isManagedSession(session) {
-    if (["passeport", "challenge", "renouvellement"].includes(session.status)) return true;
-    return (session.status === "encadree" && Boolean(session.encadrantId))
-      || (session.status === "libre" && Boolean(session.referentId));
-  }
-
   const modalAllAvailableDays = useMemo(() => {
     return [...new Set(
       sortedSessionsByDate
@@ -416,27 +230,16 @@ function App() {
     )];
   }, [sortedSessionsByDate]);
 
-  function getParticipantSessionDays(participantId) {
-    if (!participantId) return [];
-
-    return [...new Set(
-      state.sessions
-        .filter(isManagedSession)
-        .filter((session) => session.participantIds?.includes(participantId))
-        .map((session) => session.date)
-    )].sort((a, b) => b.localeCompare(a));
-  }
-
   const modalAllEligibleParticipants = useMemo(() => {
     return [...state.participants]
       .filter((participant) => Boolean(participant.cotisation))
-      .filter((participant) => getParticipantSessionDays(participant.id).length > 0)
+      .filter((participant) => getParticipantSessionDays(state.sessions, participant.id).length > 0)
       .sort((a, b) => fullName(a).localeCompare(fullName(b), "fr"));
   }, [state.participants, state.sessions]);
 
   const modalAvailableDays = useMemo(() => {
     if (!newRealisation.participantId) return modalAllAvailableDays;
-    return getParticipantSessionDays(newRealisation.participantId);
+    return getParticipantSessionDays(state.sessions, newRealisation.participantId);
   }, [newRealisation.participantId, modalAllAvailableDays, state.sessions]);
 
   const modalEligibleParticipants = useMemo(() => {
@@ -969,12 +772,10 @@ function App() {
     try {
       const updated = await apiFetch("/participants/me/profile", {
         method: "PATCH",
-        body: JSON.stringify({
-          avatarId: optimistic.avatarId || "gecko",
-          crestId: optimistic.crestId || "cristal",
-          profilePublic: optimistic.profilePublic !== false,
-          customAvatarImage: optimistic.customAvatarImage || "",
-        }),
+        // Le backend traite désormais PATCH comme une vraie mise à jour partielle.
+        // Ne renvoyer que le patch évite de réécrire involontairement le sexe,
+        // l'avatar ou la confidentialité avec une valeur locale obsolète.
+        body: JSON.stringify(patch),
       });
       setState((prev) => ({
         ...prev,
@@ -1177,18 +978,6 @@ function App() {
       });
   }
 
-  function resolveSessionIdForRealisation(participantId, selectedDay) {
-    if (!participantId || !selectedDay) return "";
-
-    const matchingSessions = state.sessions
-      .filter((session) => session.date === selectedDay)
-      .filter(isManagedSession)
-      .filter((session) => session.participantIds?.includes(participantId))
-      .sort((a, b) => a.slot.localeCompare(b.slot));
-
-    return matchingSessions[0]?.id || "";
-  }
-
   async function syncRealisationPatch(realisationId, patch) {
     try {
       await updateRealisationInApi(realisationId, patch);
@@ -1229,22 +1018,19 @@ function App() {
     requestedParticipantId = myParticipantId || "";
     const requestedParticipant = participantsById[requestedParticipantId];
     const latestRegisteredDay = requestedParticipant?.cotisation
-      ? getParticipantSessionDays(requestedParticipantId)[0] || ""
+      ? getParticipantSessionDays(state.sessions, requestedParticipantId)[0] || ""
       : "";
     const defaultParticipantId = latestRegisteredDay ? requestedParticipantId : "";
 
-    setNewRealisation((prev) => ({
-      ...prev,
+    setNewRealisation((previous) => buildRealisationDraft({
+      previous,
+      route,
+      routeId,
       participantId: defaultParticipantId,
       selectedDay: latestRegisteredDay,
       sessionId: defaultParticipantId && latestRegisteredDay
-        ? resolveSessionIdForRealisation(defaultParticipantId, latestRegisteredDay) || ""
+        ? resolveSessionIdForRealisation(state.sessions, defaultParticipantId, latestRegisteredDay)
         : "",
-      voieId: routeId || "",
-      styleRealisation: route?.moulinetteOnly ? "moulinette" : (prev.styleRealisation || "a_vue"),
-      cotationProposee: route?.cotationAjustee || route?.cotationReference || "",
-      commentaire: "",
-      rating: 0,
     }));
 
     setRealisationModalRouteId(routeId || "");
@@ -1257,18 +1043,18 @@ function App() {
 
 async function persistRealisationToApi(realisation) {
   if (!USE_API) return realisation;
-  if (!authToken) {
+  if (!authUser) {
     throw new Error("Connexion requise pour enregistrer une réalisation.");
   }
-  return await authApiFetch("/realisations", authToken, {
+  return await apiFetch("/realisations", {
     method: "POST",
     body: JSON.stringify(realisation),
   });
 }
 
 async function updateRealisationInApi(realisationId, patch) {
-  if (!USE_API || !authToken) return;
-  await authApiFetch(`/realisations/${realisationId}`, authToken, {
+  if (!USE_API || !authUser) return;
+  await apiFetch(`/realisations/${realisationId}`, {
     method: "PUT",
     body: JSON.stringify(patch),
   });
@@ -1297,7 +1083,7 @@ async function deleteRealisation(realisation) {
 
   try {
     if (USE_API) {
-      await authApiFetch(`/realisations/${encodeURIComponent(realisation.id)}`, authToken, {
+      await apiFetch(`/realisations/${encodeURIComponent(realisation.id)}`, {
         method: "DELETE",
       });
     }
@@ -1313,8 +1099,8 @@ async function deleteRealisation(realisation) {
       alert("Vous pouvez enregistrer uniquement vos propres réalisations.");
       return;
     }
-    if (!newRealisation.participantId || !newRealisation.selectedDay || !newRealisation.voieId || !newRealisation.rating) {
-      alert("Sélectionne un jour, un participant, une voie et une note de 1 à 5 étoiles.");
+    if (!newRealisation.participantId || !newRealisation.selectedDay || !newRealisation.voieId) {
+      alert("Sélectionne un jour, un participant et une voie.");
       return;
     }
 
@@ -1324,25 +1110,17 @@ async function deleteRealisation(realisation) {
       return;
     }
 
-    const sessionId = resolveSessionIdForRealisation(newRealisation.participantId, newRealisation.selectedDay);
+    const sessionId = resolveSessionIdForRealisation(state.sessions, newRealisation.participantId, newRealisation.selectedDay);
     if (!sessionId) {
       alert("Le participant doit être inscrit à au moins une séance ce jour-là pour enregistrer une réalisation.");
       return;
     }
 
-    const realisation = {
-      id: `realisation-${Date.now()}`,
-      participantId: newRealisation.participantId,
+    const realisation = buildRealisationPayload({
+      draft: newRealisation,
       sessionId,
-      voieId: newRealisation.voieId,
-      dateRealisation: `${newRealisation.selectedDay}T12:00:00`,
-      styleRealisation: newRealisation.styleRealisation,
-      commentaire: newRealisation.commentaire,
-      cotationProposee: newRealisation.cotationProposee,
-      rating: newRealisation.rating,
-      chute: newRealisation.chute,
-      assureurId: newRealisation.chute ? newRealisation.assureurId : "",
-    };
+      route: routesById[newRealisation.voieId],
+    });
 
     try {
       const savedRealisation = await persistRealisationToApi(realisation);
@@ -1366,12 +1144,12 @@ async function deleteRealisation(realisation) {
   }
 
   async function loadAdminAccessData() {
-    if (!authToken || authUser?.role !== "admin") return;
+    if (authUser?.role !== "admin") return;
 
     try {
       const [usersResponse, logsResponse] = await Promise.all([
-        authApiFetch("/admin/auth/users", authToken),
-        authApiFetch("/admin/auth/logs", authToken),
+        apiFetch("/admin/auth/users"),
+        apiFetch("/admin/auth/logs"),
       ]);
 
       setAdminAuthUsers(usersResponse.users || []);
@@ -1386,10 +1164,10 @@ async function handleThemePreferenceChange(nextTheme) {
   const previousTheme = themePreference;
   setThemePreference(nextTheme);
 
-  if (!USE_API || !authToken || !authUser) return;
+  if (!USE_API || !authUser) return;
 
   try {
-    const data = await authApiFetch("/auth/theme", authToken, {
+    const data = await apiFetch("/auth/theme", {
       method: "PUT",
       body: JSON.stringify({ theme_preference: nextTheme }),
     });
@@ -1414,7 +1192,6 @@ async function handleThemePreferenceChange(nextTheme) {
         body: JSON.stringify(loginForm),
       });
 
-      setAuthToken("cookie");
       setAuthUser(data.user);
       if (data.user?.theme_preference) {
         setThemePreference(data.user.theme_preference);
@@ -1433,11 +1210,10 @@ async function handleThemePreferenceChange(nextTheme) {
 
   async function handleLogout() {
     try {
-      await authApiFetch("/auth/logout", authToken, { method: "POST" });
+      await apiFetch("/auth/logout", { method: "POST" });
     } catch (error) {
       console.error(error);
     } finally {
-      setAuthToken("");
       setAuthUser(null);
       setAdminUnlocked(false);
       setGeneratedResetToken("");
@@ -1452,7 +1228,7 @@ async function handleThemePreferenceChange(nextTheme) {
     if (!USE_API || authUser?.role !== "admin") {
       throw new Error("Connexion administrateur requise.");
     }
-    return authApiFetch("/admin/broadcast-messages", authToken, {
+    return apiFetch("/admin/broadcast-messages", {
       method: "POST",
       body: JSON.stringify({ title, body }),
     });
@@ -1461,7 +1237,7 @@ async function handleThemePreferenceChange(nextTheme) {
   async function acknowledgeBroadcastMessage(messageId) {
     try {
       setBroadcastMessageError("");
-      await authApiFetch(`/auth/broadcast-messages/${messageId}/read`, authToken, { method: "POST" });
+      await apiFetch(`/auth/broadcast-messages/${messageId}/read`, { method: "POST" });
       setPendingBroadcastMessages((messages) => messages.filter(
         (message) => String(message.id) !== String(messageId)
       ));
@@ -1471,14 +1247,14 @@ async function handleThemePreferenceChange(nextTheme) {
   }
 
   async function changePassword(currentPassword, newPassword) {
-    return authApiFetch("/auth/change-password", authToken, {
+    return apiFetch("/auth/change-password", {
       method: "POST",
       body: JSON.stringify({ currentPassword, newPassword }),
     });
   }
 
   async function requestEmailChange(newEmail, currentPassword) {
-    return authApiFetch("/auth/change-email/request", authToken, {
+    return apiFetch("/auth/change-email/request", {
       method: "POST",
       body: JSON.stringify({ newEmail, currentPassword }),
     });
@@ -1583,8 +1359,9 @@ async function handleThemePreferenceChange(nextTheme) {
 
   async function approveAccessRequest(userId) {
     try {
-      await authApiFetch(`/admin/auth/users/${userId}/approve`, authToken, { method: "POST" });
+      await apiFetch(`/admin/auth/users/${userId}/approve`, { method: "POST" });
       await loadAdminAccessData();
+      setConfirmationMessage("Compte approuvé.");
     } catch (error) {
       setAuthError(String(error.message || error));
     }
@@ -1592,7 +1369,7 @@ async function handleThemePreferenceChange(nextTheme) {
 
   async function revokeUserAccess(userId) {
     try {
-      await authApiFetch(`/admin/auth/users/${userId}/revoke`, authToken, {
+      await apiFetch(`/admin/auth/users/${userId}/revoke`, {
         method: "POST",
         body: JSON.stringify({ reason: "Révocation / répudiation par administrateur" }),
       });
@@ -1609,7 +1386,7 @@ async function handleThemePreferenceChange(nextTheme) {
     )) return;
 
     try {
-      await authApiFetch(`/admin/auth/users/${user.id}`, authToken, { method: "DELETE" });
+      await apiFetch(`/admin/auth/users/${user.id}`, { method: "DELETE" });
       await loadAdminAccessData();
       setConfirmationMessage("Compte supprimé.");
     } catch (error) {
@@ -1619,7 +1396,7 @@ async function handleThemePreferenceChange(nextTheme) {
 
   async function reactivateUserAccess(userId) {
     try {
-      await authApiFetch(`/admin/auth/users/${userId}/reactivate`, authToken, { method: "POST" });
+      await apiFetch(`/admin/auth/users/${userId}/reactivate`, { method: "POST" });
       await loadAdminAccessData();
     } catch (error) {
       setAuthError(String(error.message || error));
@@ -1628,7 +1405,7 @@ async function handleThemePreferenceChange(nextTheme) {
 
   async function generatePasswordResetToken(userId) {
     try {
-      const response = await authApiFetch(`/admin/auth/users/${userId}/reset-token`, authToken, { method: "POST" });
+      const response = await apiFetch(`/admin/auth/users/${userId}/reset-token`, { method: "POST" });
       setGeneratedResetToken(`Code de réinitialisation temporaire : ${response.resetToken} (valable jusqu’à ${response.expiresAt})`);
       await loadAdminAccessData();
     } catch (error) {
@@ -1655,7 +1432,7 @@ async function handleThemePreferenceChange(nextTheme) {
   async function exportAllData() {
     // La version applicative complète la version du format d’export sans la remplacer.
     // Les anciens imports restent ainsi compatibles, tandis qu’un fichier permet
-    // d’identifier immédiatement la version de ClimbClubCristal qui l’a produit.
+    // d’identifier immédiatement la version de CristalClimbClub qui l’a produit.
     const buildVersionedExport = (data) => ({
       ...data,
       exportedAt: data?.exportedAt || new Date().toISOString(),
@@ -1663,9 +1440,9 @@ async function handleThemePreferenceChange(nextTheme) {
     });
     const filename = `climbcrew_export_${APP_VERSION}.json`;
 
-    if (USE_API && authToken) {
+    if (USE_API && authUser?.role === "admin") {
       try {
-        const payload = await authApiFetch("/admin/export-data", authToken);
+        const payload = await apiFetch("/admin/export-data");
         const versionedPayload = buildVersionedExport(payload.data || payload);
         downloadFile(filename, JSON.stringify(versionedPayload, null, 2));
         setImportMessage(`Export API version ${APP_VERSION} réussi.`);
@@ -1681,34 +1458,35 @@ async function handleThemePreferenceChange(nextTheme) {
     setImportMessage(`Export local version ${APP_VERSION} réussi.`);
   }
 
-  function exportSelectedParticipantRealisationsCsv() {
-    const participant = participantsById[state.selectedParticipantProgress];
-    if (!participant) return;
+  function exportMyRealisationsCsv() {
+    if (!myParticipant) return;
 
     const headers = ["country", "crag", "sector", "route", "grade", "date", "style", "comment"];
-    const rows = selectedParticipantRealisations.map((realisation) => {
-      const route = routesById[realisation.voieId];
-      const ropeNumber = route ? normalizeRopeNumber(route.numeroCorde) : 0;
-      const routeName = route?.nomVoie?.trim() || `Voie corde ${ropeNumber}`;
-      const details = [
-        route?.nomOuvreur ? `Ouvreur : ${route.nomOuvreur}` : "",
-        route?.couleurPrises ? `Couleur : ${route.couleurPrises}` : "",
-        realisation.cotationProposee ? `Cotation proposée : ${realisation.cotationProposee}` : "",
-        route?.tags?.length ? `Caractéristiques : ${route.tags.map((tag) => ROUTE_TAGS.find((item) => item.value === tag)?.label || tag).join(", ")}` : "",
-        realisation.commentaire || "",
-      ].filter(Boolean).join(" · ");
-      return [
-        "France",
-        "ASTC",
-        `Corde ${ropeNumber}`,
-        routeName,
-        route?.cotationAjustee || route?.cotationReference || "",
-        realisation.dateRealisation?.slice(0, 10) || "",
-        THECRAG_STYLE_BY_CLIMBCREW[realisation.styleRealisation] || "Attempt",
-        details,
-      ];
-    });
-    const filename = `thecrag-${csvFileSlug(fullName(participant))}.csv`;
+    const rows = [...myRealisations]
+      .sort((a, b) => a.dateRealisation.localeCompare(b.dateRealisation))
+      .map((realisation) => {
+        const route = routesById[realisation.voieId];
+        const ropeNumber = route ? normalizeRopeNumber(route.numeroCorde) : 0;
+        const routeName = route?.nomVoie?.trim() || `Voie corde ${ropeNumber}`;
+        const details = [
+          route?.nomOuvreur ? `Ouvreur : ${route.nomOuvreur}` : "",
+          route?.couleurPrises ? `Couleur : ${route.couleurPrises}` : "",
+          realisation.cotationProposee ? `Cotation proposée : ${realisation.cotationProposee}` : "",
+          route?.tags?.length ? `Caractéristiques : ${route.tags.map((tag) => ROUTE_TAGS.find((item) => item.value === tag)?.label || tag).join(", ")}` : "",
+          realisation.commentaire || "",
+        ].filter(Boolean).join(" · ");
+        return [
+          "France",
+          "ASTC",
+          `Corde ${ropeNumber}`,
+          routeName,
+          route?.cotationAjustee || route?.cotationReference || "",
+          realisation.dateRealisation?.slice(0, 10) || "",
+          theCragStyleForRealisation(realisation, route),
+          details,
+        ];
+      });
+    const filename = `thecrag-${csvFileSlug(fullName(myParticipant))}.csv`;
     downloadFile(filename, buildCsv(headers, rows), "text/csv;charset=utf-8;");
     setConfirmationMessage("Export theCrag téléchargé.");
   }
@@ -1725,8 +1503,8 @@ async function handleThemePreferenceChange(nextTheme) {
         ? ` (version source ${importedApplicationVersion})`
         : " (ancien export sans version applicative)";
 
-      if (USE_API && authToken) {
-        const result = await authApiFetch("/admin/import-data", authToken, {
+      if (USE_API && authUser?.role === "admin") {
+        const result = await apiFetch("/admin/import-data", {
           method: "POST",
           body: JSON.stringify({ data: parsed }),
         });
@@ -1864,140 +1642,32 @@ async function handleThemePreferenceChange(nextTheme) {
 
 
   if (USE_API && authLoading) {
-    return (
-      <div className="auth-page">
-        <div className="auth-card">
-          <div className="brand auth-brand">
-            <img src="/logo-climbcrew.png" alt="Logo ClimbClubCristal" className="app-logo" />
-            <div>
-              <h1>ClimbClubCristal</h1>
-              <p className="small">Chargement de la session…</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <AuthPage loading appVersion={APP_VERSION} />;
   }
 
   if (USE_API && !authUser) {
     return (
-      <div className="auth-page">
-        <div className="auth-card">
-          <div className="brand auth-brand">
-            <img src="/logo-climbcrew.png" alt="Logo ClimbClubCristal" className="app-logo" />
-            <div>
-              <h1>ClimbClubCristal</h1>
-              <p className="small">Connexion requise pour accéder à l’application.</p>
-            </div>
-          </div>
-
-          {authMessage && <div className="success" style={{ marginTop: 12 }}>{authMessage}</div>}
-          {authError && <div className="error" style={{ marginTop: 12 }}>{authError}</div>}
-
-          {authView === "login" && (
-            <div className="grid two" style={{ marginTop: 14 }}>
-              <div>
-                <label>Emails</label>
-                <input value={loginForm.email} onChange={(e) => setLoginForm((p) => ({ ...p, email: e.target.value }))} />
-              </div>
-              <div>
-                <label>Mot de passe</label>
-                <input type="password" value={loginForm.password} onChange={(e) => setLoginForm((p) => ({ ...p, password: e.target.value }))} />
-              </div>
-              <div className="auth-submit-row">
-                <Button onClick={handleLogin}>Se connecter</Button>
-              </div>
-            </div>
-          )}
-
-          {authView === "request" && (
-            <div className="grid two" style={{ marginTop: 14 }}>
-              <div>
-                <label>Prénom</label>
-                <input value={requestAccessForm.prenom} onChange={(e) => setRequestAccessForm((p) => ({ ...p, prenom: e.target.value }))} />
-              </div>
-              <div>
-                <label>Nom</label>
-                <input value={requestAccessForm.nom} onChange={(e) => setRequestAccessForm((p) => ({ ...p, nom: e.target.value }))} />
-              </div>
-              <div>
-                <label>Email</label>
-                <input value={requestAccessForm.email} onChange={(e) => setRequestAccessForm((p) => ({ ...p, email: e.target.value }))} />
-              </div>
-              <div>
-                <label>Mot de passe fort</label>
-                <input type="password" value={requestAccessForm.password} onChange={(e) => setRequestAccessForm((p) => ({ ...p, password: e.target.value }))} />
-              </div>
-              <div>
-                <label>Confirmation</label>
-                <input type="password" value={requestAccessForm.confirmPassword} onChange={(e) => setRequestAccessForm((p) => ({ ...p, confirmPassword: e.target.value }))} />
-              </div>
-              <div>
-                <label>Politique mot de passe</label>
-                <input value={PASSWORD_RULE_TEXT} readOnly />
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label><input type="checkbox" checked={requestAccessForm.acceptTerms} onChange={(e) => setRequestAccessForm((p) => ({ ...p, acceptTerms: e.target.checked }))} /> J’accepte les conditions d’utilisation et la journalisation des accès.</label>
-              </div>
-              <div className="auth-submit-row">
-                <Button onClick={handleRequestAccess}>Envoyer la demande</Button>
-              </div>
-            </div>
-          )}
-
-          {authView === "forgot" && (
-            <div className="grid two" style={{ marginTop: 14 }}>
-              <div>
-                <label>Email</label>
-                <input value={forgotPasswordForm.email} onChange={(e) => setForgotPasswordForm({ email: e.target.value })} />
-              </div>
-              <div className="small" style={{ display: "flex", alignItems: "end" }}>
-                La demande sera journalisée. Un administrateur pourra générer un code de réinitialisation.
-              </div>
-              <div className="auth-submit-row">
-                <Button onClick={handleForgotPassword}>Signaler la perte du mot de passsse</Button>
-              </div>
-            </div>
-          )}
-
-          {authView === "reset" && (
-            <div className="grid two" style={{ marginTop: 14 }}>
-              <div>
-                <label>Email</label>
-                <input value={resetPasswordForm.email} onChange={(e) => setResetPasswordForm((p) => ({ ...p, email: e.target.value }))} />
-              </div>
-              <div>
-                <label>Code de réinitialisation</label>
-                <input value={resetPasswordForm.token} onChange={(e) => setResetPasswordForm((p) => ({ ...p, token: e.target.value }))} />
-              </div>
-              <div>
-                <label>Nouveau mot de passe</label>
-                <input type="password" value={resetPasswordForm.password} onChange={(e) => setResetPasswordForm((p) => ({ ...p, password: e.target.value }))} />
-              </div>
-              <div>
-                <label>Confirmation</label>
-                <input type="password" value={resetPasswordForm.confirmPassword} onChange={(e) => setResetPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))} />
-              </div>
-              <div>
-                <label>Politique mot de passe</label>
-                <input value={PASSWORD_RULE_TEXT} readOnly />
-              </div>
-              <div className="auth-submit-row">
-                <Button onClick={handleResetPassword}>Mettre à jour le mot de passe</Button>
-              </div>
-            </div>
-          )}
-
-          <div className="group auth-switcher" style={{ marginTop: 14 }}>
-            <Button variant={authView === "request" ? "primary" : "secondary"} onClick={() => { setAuthView("request"); setAuthError(""); setAuthMessage(""); }}>Demander un accès</Button>
-            <Button variant={authView === "forgot" ? "primary" : "secondary"} onClick={() => { setAuthView("forgot"); setAuthError(""); setAuthMessage(""); }}>Mot de passe perdu</Button>
-          </div>
-
-          <div className="small" style={{ marginTop: 10, textAlign: "center", color: "#475569" }}>
-            Version : {APP_VERSION}
-          </div>
-        </div>
-      </div>
+      <AuthPage
+        authView={authView}
+        authError={authError}
+        authMessage={authMessage}
+        loginForm={loginForm}
+        setLoginForm={setLoginForm}
+        requestAccessForm={requestAccessForm}
+        setRequestAccessForm={setRequestAccessForm}
+        forgotPasswordForm={forgotPasswordForm}
+        setForgotPasswordForm={setForgotPasswordForm}
+        resetPasswordForm={resetPasswordForm}
+        setResetPasswordForm={setResetPasswordForm}
+        handleLogin={handleLogin}
+        handleRequestAccess={handleRequestAccess}
+        handleForgotPassword={handleForgotPassword}
+        handleResetPassword={handleResetPassword}
+        setAuthView={setAuthView}
+        setAuthError={setAuthError}
+        setAuthMessage={setAuthMessage}
+        appVersion={APP_VERSION}
+      />
     );
   }
 
@@ -2012,273 +1682,41 @@ async function handleThemePreferenceChange(nextTheme) {
 
       {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
 
-      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`} aria-label="Navigation ClimbClubCristal">
-        <div className="sidebar-header">
-          <div className="sidebar-brand">
-            <img src="/logo-climbcrew.png" alt="Logo ClimbClubCristal" className="sidebar-logo" />
-            <span>ClimbClubCristal</span>
-          </div>
-          <button
-            className="sidebar-close sidebar-logout"
-            onClick={() => {
-              setSidebarOpen(false);
-              handleLogout();
-            }}
-            aria-label="Se déconnecter"
-            title="Déconnexion"
-          >
-            <svg className="sidebar-logout-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-        {visibleTabs.map((item) => (
-          <button
-            key={item.key}
-            className={`side-tab ${tab === item.key ? "active" : ""}`}
-            onClick={() => {
-              setTab(item.key);
-              setSidebarOpen(false);
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
-        <div className="sidebar-theme">
-          <label htmlFor="sidebar-theme-selector">Ambiance</label>
-          <select
-            id="sidebar-theme-selector"
-            value={themePreference}
-            onChange={(event) => handleThemePreferenceChange(event.target.value)}
-          >
-            {THEME_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </div>
-        {authUser && (
-          <div className="sidebar-account">
-            <div className="small">{authUser.email}</div>
-          </div>
-        )}
-        {authUser && (
-          <div className="sidebar-settings">
-            <button
-              className={`side-tab ${tab === "parametres" ? "active" : ""}`}
-              onClick={() => {
-                setTab("parametres");
-                setSidebarOpen(false);
-              }}
-            >
-              ⚙ Paramètres
-            </button>
-          </div>
-        )}
-      </aside>
+      <AppSidebar
+        open={sidebarOpen}
+        visibleTabs={visibleTabs}
+        activeTab={tab}
+        onSelectTab={setTab}
+        authUser={authUser}
+        onLogout={handleLogout}
+        onClose={() => setSidebarOpen(false)}
+      />
+      <BroadcastMessageModal
+        messages={pendingBroadcastMessages}
+        error={broadcastMessageError}
+        onAcknowledge={acknowledgeBroadcastMessage}
+      />
 
-      {pendingBroadcastMessages.length > 0 && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="broadcast-message-title">
-          <div className="modal-panel" style={{ maxWidth: 560 }}>
-            <div className="card-header">
-              <div>
-                <div className="small">Message du club</div>
-                <h2 id="broadcast-message-title" className="modal-title">
-                  {pendingBroadcastMessages[0].title}
-                </h2>
-              </div>
-            </div>
-            <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.55, margin: "18px 0" }}>
-              {pendingBroadcastMessages[0].body}
-            </div>
-            {pendingBroadcastMessages.length > 1 && (
-              <div className="small" style={{ marginBottom: 12 }}>
-                {pendingBroadcastMessages.length - 1} autre{pendingBroadcastMessages.length > 2 ? "s" : ""} message{pendingBroadcastMessages.length > 2 ? "s" : ""} à lire ensuite.
-              </div>
-            )}
-            {broadcastMessageError && <div className="error" style={{ marginBottom: 12 }}>{broadcastMessageError}</div>}
-            <div className="group" style={{ justifyContent: "flex-end" }}>
-              <Button onClick={() => acknowledgeBroadcastMessage(pendingBroadcastMessages[0].id)}>J’ai lu</Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <RealisationModal
+        open={realisationModalRouteId !== null}
+        route={realisationModalRoute}
+        newRealisation={newRealisation}
+        setNewRealisation={setNewRealisation}
+        availableDays={modalAvailableDays}
+        eligibleParticipants={modalEligibleParticipants}
+        participants={alphabeticalParticipants}
+        routes={state.routes}
+        routesById={routesById}
+        onRouteIdChange={setRealisationModalRouteId}
+        onClose={closeRealisationModal}
+        onSubmit={addRealisation}
+      />
 
-      {realisationModalRouteId !== null && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Enregistrer une voie réalisée">
-          <div className="modal-panel">
-            <div className="card-header">
-              <div>
-                <h2 className="modal-title">Enregistrer une voie réalisée</h2>
-                <div className="small">
-                  {realisationModalRoute ? formatRouteForRealisation(realisationModalRoute) : "Choisir une voie"}
-                </div>
-              </div>
-              <Button variant="dangerGhost" className="modal-close" onClick={closeRealisationModal} aria-label="Fermer">×</Button>
-            </div>
-
-            <div className="grid three">
-              <div>
-                <label>Jour</label>
-                <select
-                  value={newRealisation.selectedDay}
-                  onChange={(e) => {
-                    const selectedDay = e.target.value;
-                    setNewRealisation((prev) => ({
-                      ...prev,
-                      selectedDay,
-                      sessionId: "",
-                    }));
-                  }}
-                >
-                  <option value="">Choisir un jour</option>
-                  {modalAvailableDays.length === 0 ? (
-                    <option value="" disabled>Aucun jour disponible</option>
-                  ) : (
-                    modalAvailableDays.map((day) => <option key={day} value={day}>{formatDateShortFr(day)}</option>)
-                  )}
-                </select>
-                <div className="small" style={{ marginTop: 6, color: "inherit" }}>
-                  Aucun jour n’est prérempli. Si un participant est sélectionné, seuls ses jours d’inscription sont proposés.
-                </div>
-              </div>
-
-              <div>
-                <label>Participant</label>
-                <select
-                  value={newRealisation.participantId}
-                  onChange={(e) => {
-                    const participantId = e.target.value;
-                    setNewRealisation((prev) => ({
-                      ...prev,
-                      participantId,
-                      sessionId: "",
-                    }));
-                  }}
-                >
-                  <option value="">Choisir un participant</option>
-                  {modalEligibleParticipants.length === 0 ? (
-                    <option value="" disabled>Aucun participant éligible</option>
-                  ) : (
-                    modalEligibleParticipants.map((p) => <option key={p.id} value={p.id}>{fullName(p)}</option>)
-                  )}
-                </select>
-                <div className="small" style={{ marginTop: 6, color: "inherit" }}>
-                  Seuls les participants cotisants inscrits aux séances du référent ou de l’encadrant à la date choisie sont proposés.
-                </div>
-              </div>
-
-              <div>
-                <label>Voie</label>
-                <select
-                  value={newRealisation.voieId}
-                  onChange={(event) => {
-                    const voieId = event.target.value;
-                    const route = routesById[voieId];
-                    setRealisationModalRouteId(voieId);
-                    setNewRealisation((prev) => ({
-                      ...prev,
-                      voieId,
-                      styleRealisation: route?.moulinetteOnly ? "moulinette" : prev.styleRealisation,
-                      cotationProposee: route?.cotationAjustee || route?.cotationReference || "",
-                    }));
-                  }}
-                >
-                  <option value="">Choisir une voie</option>
-                  {state.routes.map((route) => (
-                    <option key={route.id} value={route.id}>{formatRouteForRealisation(route)}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label>Style</label>
-                <select value={newRealisation.styleRealisation} onChange={(e) => setNewRealisation((p) => ({ ...p, styleRealisation: e.target.value }))}>
-                  {Object.entries(STYLE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label>Cotation proposée</label>
-                <select value={newRealisation.cotationProposee} onChange={(e) => setNewRealisation((p) => ({ ...p, cotationProposee: e.target.value }))}>
-                  <option value="">Aucune</option>
-                  {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label>Cotation consensus</label>
-                <input value={realisationModalRoute ? routeAggregatesById[realisationModalRoute.id]?.consensusGrade || "Non calculée" : "Choisir une voie"} readOnly />
-              </div>
-
-              <div className="realisation-rating">
-                <label>Évaluation de la voie</label>
-                <div className="rating-stars" role="radiogroup" aria-label="Évaluation de la voie de 1 à 5 étoiles">
-                  {[1, 2, 3, 4, 5].map((rating) => (
-                    <button
-                      type="button"
-                      className={rating <= newRealisation.rating ? "rating-star selected" : "rating-star"}
-                      key={rating}
-                      onClick={() => setNewRealisation((prev) => ({ ...prev, rating }))}
-                      role="radio"
-                      aria-checked={newRealisation.rating === rating}
-                      aria-label={`${rating} étoile${rating > 1 ? "s" : ""}`}
-                    >{rating <= newRealisation.rating ? "★" : "☆"}</button>
-                  ))}
-                </div>
-              </div>
-
-              <label className="realisation-flight-toggle">
-                <input
-                  type="checkbox"
-                  checked={newRealisation.chute}
-                  onChange={(event) => setNewRealisation((prev) => ({
-                    ...prev,
-                    chute: event.target.checked,
-                    assureurId: event.target.checked ? prev.assureurId : "",
-                  }))}
-                />
-                <span>Le grimpeur a volé</span>
-              </label>
-
-              {newRealisation.chute && (
-                <div>
-                  <label>Binôme assureur</label>
-                  <select value={newRealisation.assureurId} onChange={(event) => setNewRealisation((prev) => ({ ...prev, assureurId: event.target.value }))}>
-                    <option value="">Choisir le binôme</option>
-                    {alphabeticalParticipants
-                      .filter((participant) => String(participant.id) !== String(newRealisation.participantId))
-                      .map((participant) => <option key={participant.id} value={participant.id}>{fullName(participant)}</option>)}
-                  </select>
-                </div>
-              )}
-
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <label>Commentaire</label>
-              <input value={newRealisation.commentaire} onChange={(e) => setNewRealisation((p) => ({ ...p, commentaire: e.target.value }))} />
-            </div>
-
-            <div className="modal-actions">
-              <Button variant="secondary" onClick={closeRealisationModal}>Annuler</Button>
-              <Button onClick={addRealisation} disabled={!newRealisation.selectedDay || !newRealisation.participantId || !newRealisation.voieId || !newRealisation.rating || (newRealisation.chute && !newRealisation.assureurId) || modalEligibleParticipants.length === 0}>Enregistrer</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <nav className="mobile-bottom-nav" aria-label="Navigation mobile ClimbClubCristal">
-        {visibleTabs.map((item) => (
-          <button
-            key={item.key}
-            className={`bottom-tab ${tab === item.key ? "active" : ""}`}
-            onClick={() => setTab(item.key)}
-            title={item.label}
-          >
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </nav>
+      <MobileBottomNav
+        visibleTabs={visibleTabs}
+        activeTab={tab}
+        onSelectTab={setTab}
+      />
 
       <div className="shell">
   <div className="hero">
@@ -2287,13 +1725,13 @@ async function handleThemePreferenceChange(nextTheme) {
         ☰
       </button>
       <div className="brand">
-        <img src="/logo-climbcrew.png" alt="Logo ClimbClubCristal" className="app-logo" />
+        <img src="/logo-climbcrew.png" alt="Logo CristalClimbClub" className="app-logo" />
         <div>
           <div className="brand-title-row">
-            <h1>ClimbClubCristal</h1>
+            <h1>CristalClimbClub</h1>
             <span className="topbar-version" aria-label={`Version ${APP_VERSION}`}>v{APP_VERSION}</span>
           </div>
-          <p>{tab === "parametres" ? "Paramètres" : (visibleTabs.find((item) => item.key === tab)?.label || "ClimbClubCristal")}</p>
+          <p>{tab === "parametres" ? "Paramètres" : (visibleTabs.find((item) => item.key === tab)?.label || "CristalClimbClub")}</p>
         </div>
       </div>
     </div>
@@ -2362,7 +1800,6 @@ async function handleThemePreferenceChange(nextTheme) {
             setRealisationExpanded={setRealisationExpanded}
             allProgressRealisationsExpanded={allProgressRealisationsExpanded}
             toggleAllProgressRealisations={toggleAllProgressRealisations}
-            exportSelectedParticipantRealisationsCsv={exportSelectedParticipantRealisationsCsv}
             allRealisations={state.realisations}
             myParticipantId={myParticipantId}
           />
@@ -2386,6 +1823,7 @@ async function handleThemePreferenceChange(nextTheme) {
             getPassportDotStyle={getPassportDotStyle}
             normalizePassport={normalizePassport}
             updateMyProfile={updateMyProfile}
+            exportMyRealisationsCsv={exportMyRealisationsCsv}
           />
         )}
 
@@ -2395,8 +1833,9 @@ async function handleThemePreferenceChange(nextTheme) {
             authUser={authUser}
             changePassword={changePassword}
             requestEmailChange={requestEmailChange}
-            myParticipant={myParticipant}
-            updateMyProfile={updateMyProfile}
+            themePreference={themePreference}
+            onThemePreferenceChange={handleThemePreferenceChange}
+            themeOptions={THEME_OPTIONS}
           />
         )}
 
@@ -2476,7 +1915,7 @@ async function handleThemePreferenceChange(nextTheme) {
         )}
 
         {tab === "faq" && (
-          <FaqSection APP_VERSION={APP_VERSION} canAccessAdminTabs={canAccessAdminTabs} USE_API={USE_API} authToken={authToken} authUser={authUser} />
+          <FaqSection APP_VERSION={APP_VERSION} canAccessAdminTabs={canAccessAdminTabs} USE_API={USE_API} authUser={authUser} />
         )}
 
 

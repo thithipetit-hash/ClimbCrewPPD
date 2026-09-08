@@ -1,29 +1,33 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { access, readFile } from "node:fs/promises";
 
-import {
-  prioritizeConnectedParticipantValues,
-  shouldDefaultConnectedParticipant,
-} from "../src/account-participant-priority-rules.js";
+const legacyModuleUrl = new URL("../src/account-participant-priority.js", import.meta.url);
+const legacyRulesUrl = new URL("../src/account-participant-priority-rules.js", import.meta.url);
+const mainUrl = new URL("../src/main.jsx", import.meta.url);
+const profileUrl = new URL("../src/pages/Profil.jsx", import.meta.url);
+const progressionUrl = new URL("../src/pages/Progression.jsx", import.meta.url);
 
-test("le grimpeur connecté passe en tête après l'option vide", () => {
-  assert.deepEqual(
-    prioritizeConnectedParticipantValues(["", "12", "8", "4"], "8"),
-    ["", "8", "12", "4"],
-  );
+const [mainSource, profileSource, progressionSource] = await Promise.all([
+  readFile(mainUrl, "utf8"),
+  readFile(profileUrl, "utf8"),
+  readFile(progressionUrl, "utf8"),
+]);
+
+test("la priorité du grimpeur connecté ne dépend plus d'un MutationObserver", async () => {
+  await assert.rejects(access(legacyModuleUrl));
+  await assert.rejects(access(legacyRulesUrl));
+  assert.equal(mainSource.includes("account-participant-priority.js"), false);
 });
 
-test("le grimpeur connecté passe en première position sans option vide", () => {
-  assert.deepEqual(
-    prioritizeConnectedParticipantValues(["12", "8", "4"], "8"),
-    ["8", "12", "4"],
-  );
+test("Profil sélectionne et place directement le grimpeur connecté en tête", () => {
+  assert.match(profileSource, /useState\(\(\) => String\(myParticipantId \|\| ""\)\)/);
+  assert.match(profileSource, /const aIsMe = String\(a\.id\) === String\(myParticipantId \|\| ""\)/);
+  assert.match(profileSource, /if \(aIsMe !== bIsMe\) return aIsMe \? -1 : 1/);
 });
 
-test("seuls les champs de choix du grimpeur sont préremplis", () => {
-  assert.equal(shouldDefaultConnectedParticipant("Participant"), true);
-  assert.equal(shouldDefaultConnectedParticipant("Grimpeur"), true);
-  assert.equal(shouldDefaultConnectedParticipant("Inscription"), false);
-  assert.equal(shouldDefaultConnectedParticipant("Référent"), false);
-  assert.equal(shouldDefaultConnectedParticipant("Encadrant"), false);
+test("Progression applique directement le grimpeur connecté par défaut", () => {
+  assert.match(progressionSource, /defaultParticipantApplied/);
+  assert.match(progressionSource, /selectedParticipantProgress: String\(myParticipantId\)/);
+  assert.doesNotMatch(progressionSource, /dispatchEvent|querySelectorAll|MutationObserver/);
 });

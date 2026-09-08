@@ -3,6 +3,8 @@
 # =============================================================================
 # Render utilise le runtime Node défini dans render.yaml. Ce Dockerfile reste
 # dédié au déploiement Docker Compose sur Linux et conserve donc son comportement.
+# Son contexte Docker est maintenant la racine du dépôt afin d'embarquer les
+# règles métier communes placées dans /shared.
 
 # Node 24 correspond à la version utilisée pour construire et exécuter l'API.
 FROM node:24-alpine
@@ -12,18 +14,24 @@ FROM node:24-alpine
 ENV NODE_ENV=production
 
 # pg_dump, pg_restore et psql servent aux sauvegardes PostgreSQL complètes et à
-# leur restauration depuis l'administration.
-RUN apk add --no-cache postgresql-client
+# leur restauration depuis l'administration. La version est explicitement fixée
+# à 16 pour correspondre à l'image postgres:16-alpine du service "db" : un
+# pg_dump/pg_restore plus récent (17+) émet des réglages de session (ex.
+# "transaction_timeout") que le serveur 16 ne reconnaît pas, ce qui fait
+# échouer toute restauration, y compris le filet de sécurité pre-restore.
+RUN apk add --no-cache postgresql16-client
 
 # Tous les chemins suivants sont relatifs au répertoire applicatif du conteneur.
 WORKDIR /app
 
 # Reproduction exacte des dépendances validées en CI grâce au lockfile.
-COPY package.json package-lock.json ./
+COPY backend/package.json backend/package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund --registry=https://registry.npmjs.org/
 
-# Copie du code du backend après l'installation des dépendances.
-COPY . .
+# Copie du code backend et des règles métier communes. Le ré-export
+# /app/session-default-status.js résout ../shared vers /shared.
+COPY backend/ ./
+COPY shared/ /shared/
 
 # Exécution avec l'utilisateur non-root fourni par l'image Node.
 # Impact visuel : aucun ; cette mesure limite les conséquences d'une faille API.

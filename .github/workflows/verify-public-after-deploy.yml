@@ -1,0 +1,82 @@
+name: Verify Public After Deploy
+
+on:
+  workflow_run:
+    workflows: ["Validate and Deploy"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Select deployment target
+        id: target
+        env:
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$HEAD_BRANCH" in
+            main)
+              echo "base_url=https://pre-climbcrew.dip-tcs.com" >> "$GITHUB_OUTPUT"
+              ;;
+            production)
+              echo "base_url=https://climbcrew.dip-tcs.com" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Checkout deployed commit
+        if: ${{ steps.target.outputs.skip != 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 1
+
+      - name: Verify public deployment marker
+        if: ${{ steps.target.outputs.skip != 'true' }}
+        env:
+          PUBLIC_BASE_URL: ${{ steps.target.outputs.base_url }}
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_VERSION="$(tr -d '\r\n' < VERSION)"
+          MARKER_URL="${PUBLIC_BASE_URL}/deployment-version.json?verify=${EXPECTED_SHA}"
+
+          for attempt in $(seq 1 24); do
+            echo "Attempt ${attempt}/24: ${MARKER_URL}"
+            RESPONSE="$(curl --fail --silent --show-error --location \
+              --connect-timeout 5 --max-time 10 \
+              --header 'Cache-Control: no-cache' \
+              "$MARKER_URL" || true)"
+
+            if [ -n "$RESPONSE" ]; then
+              ACTUAL_VERSION="$(printf '%s' "$RESPONSE" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);process.stdout.write(String(j.version||"").trim())})' 2>/dev/null || true)"
+              ACTUAL_COMMIT="$(printf '%s' "$RESPONSE" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{const j=JSON.parse(d);process.stdout.write(String(j.commit||"").trim())})' 2>/dev/null || true)"
+
+              echo "Expected version: $EXPECTED_VERSION"
+              echo "Actual version:   ${ACTUAL_VERSION:-missing}"
+              echo "Expected commit:  $EXPECTED_SHA"
+              echo "Actual commit:    ${ACTUAL_COMMIT:-missing}"
+
+              if [ "$ACTUAL_VERSION" = "$EXPECTED_VERSION" ] && [ "$ACTUAL_COMMIT" = "$EXPECTED_SHA" ]; then
+                exit 0
+              fi
+            fi
+
+            if [ "$attempt" -lt 24 ]; then
+              sleep 5
+            fi
+          done
+
+          echo "Public deployment does not match the successful deployment workflow."
+          exit 1

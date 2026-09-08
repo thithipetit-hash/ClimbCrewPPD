@@ -2,20 +2,20 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [importSource, integrationSource, exportSource, legacyServerSource] = await Promise.all([
+const [importSource, routesSource, exportSource, serverSource, legacyCliSource] = await Promise.all([
   readFile(new URL("../admin-users/secure-import-service.js", import.meta.url), "utf8"),
-  readFile(new URL("../admin-users/express-integration.js", import.meta.url), "utf8"),
+  readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8"),
   readFile(new URL("../admin-users/export-service.js", import.meta.url), "utf8"),
   readFile(new URL("../server.js", import.meta.url), "utf8"),
+  readFile(new URL("../tools/import-legacy.mjs", import.meta.url), "utf8"),
 ]);
 
 test("l'import administrateur utilise le contrôleur sécurisé", () => {
-  assert.match(integrationSource, /path === "\/admin\/import-data"/);
-  assert.match(integrationSource, /importBusinessDataSafely/);
+  assert.match(routesSource, /app\.post\("\/admin\/import-data", requireAuth, requireAdmin, importBusinessDataSafely\)/);
 });
 
 test("le rapprochement après import repose uniquement sur l'e-mail", () => {
-  assert.match(importSource, /lower\(trim\(coalesce\(p\.login_email, p\.email, ''\)\)\) = lower\(trim\(u\.email\)\)/);
+  assert.match(importSource, /climbcrew_normalize_email\(coalesce\(p\.login_email, p\.email, ''\)\) = climbcrew_normalize_email\(u\.email\)/);
   assert.doesNotMatch(importSource, /lower\(trim\(p\.nom\)\)/);
   assert.doesNotMatch(importSource, /lower\(trim\(p\.prenom\)\)/);
 });
@@ -49,13 +49,11 @@ test("l'export complet est dans le format métier réimportable", () => {
 });
 
 test("une réalisation historique sans note reste réimportable", () => {
-  assert.match(
-    exportSource,
-    /rating: row\.rating === null \|\| row\.rating === undefined \? "" : Number\(row\.rating\)/,
-  );
+  assert.match(exportSource, /rating: row\.rating === null \|\| row\.rating === undefined \? "" : Number\(row\.rating\)/);
 });
 
-test("la route fichier legacy reste bloquée en production", () => {
-  assert.match(integrationSource, /blockLegacyFileImportInProduction/);
-  assert.match(legacyServerSource, /app\.post\("\/import-data"/);
+test("l'import fichier legacy est uniquement disponible hors API via la commande protégée", () => {
+  assert.doesNotMatch(serverSource, /app\.post\("\/import-data"/);
+  assert.match(legacyCliSource, /--confirm=oui/);
+  assert.match(legacyCliSource, /config\.isProduction && !hasFlag\("allow-production"\)/);
 });

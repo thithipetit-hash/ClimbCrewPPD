@@ -7,7 +7,13 @@ import { notifyAccountRequestReviewers } from "./account-notification-preference
 import { findParticipantByEmailOnly } from "./email-association-service.js";
 import { sendApprovalNotificationEmail } from "./account-service.js";
 
-async function ensureParticipantForAutomaticActivation(client, user) {
+/**
+ * Recherche/crée la fiche grimpeur correspondante et l'associe au compte.
+ * Appelée uniquement après confirmation de l'adresse e-mail : associer un
+ * compte non vérifié permettait à une inscription jamais confirmée de
+ * verrouiller indéfiniment une fiche, invisible pour un administrateur.
+ */
+async function ensureParticipantAfterEmailVerification(client, user) {
   if (user.participant_id) {
     const current = await client.query(
       `select id, can_admin from participants where id = $1 for update`,
@@ -118,8 +124,8 @@ export async function verifyEmailPendingAdminApproval(req, res) {
     }
 
     let participant = null;
-    if (!REQUIRE_ADMIN_ACCOUNT_APPROVAL && tokenRow.status === "pending") {
-      participant = await ensureParticipantForAutomaticActivation(client, tokenRow);
+    if (tokenRow.status === "pending") {
+      participant = await ensureParticipantAfterEmailVerification(client, tokenRow);
     }
 
     const autoActivate = Boolean(

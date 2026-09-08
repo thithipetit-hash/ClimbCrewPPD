@@ -3,9 +3,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { trustedClientIpMiddleware } from "../admin-users/client-ip-hardening.js";
 
-const enhancementsSource = await readFile(new URL("../admin-user-enhancements.js", import.meta.url), "utf8");
-const migrationServiceSource = await readFile(new URL("../admin-users/migration-service.js", import.meta.url), "utf8");
-const migrationSql = await readFile(new URL("../migrations/001_integrity_constraints.sql", import.meta.url), "utf8");
+const enhancementsSource = await readFile(new URL("../deployment-bootstrap.js", import.meta.url), "utf8");
+const httpStackSource = await readFile(new URL("../middleware/http-stack.js", import.meta.url), "utf8");
+const explicitRoutesSource = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
+const migrationEngineSource = await readFile(new URL("../database/migrate.js", import.meta.url), "utf8");
+const applicationBootstrapSource = await readFile(new URL("../bootstrap/application-bootstrap.js", import.meta.url), "utf8");
+const databaseSource = await readFile(new URL("../admin-users/database.js", import.meta.url), "utf8");
+const authMiddlewareSource = await readFile(new URL("../auth-middleware.js", import.meta.url), "utf8");
+const migrationSql = await readFile(new URL("../database/migrations/001_integrity_constraints.sql", import.meta.url), "utf8");
 const schemaSource = await readFile(new URL("../schema.sql", import.meta.url), "utf8");
 
 test("l'adresse IP fiable remplace une chaîne X-Forwarded-For potentiellement falsifiée", () => {
@@ -18,27 +23,47 @@ test("l'adresse IP fiable remplace une chaîne X-Forwarded-For potentiellement f
     },
   };
   let nextCalled = false;
-
   trustedClientIpMiddleware(req, {}, () => { nextCalled = true; });
-
   assert.equal(req.headers["x-forwarded-for"], "198.51.100.24");
   assert.equal(req.headers["x-real-ip"], "198.51.100.24");
   assert.equal(nextCalled, true);
 });
 
-test("le durcissement IP est installé avant l'intégration Express historique", () => {
-  const hardeningIndex = enhancementsSource.indexOf("installClientIpHardening();");
-  const expressIndex = enhancementsSource.indexOf("installExpressIntegration();");
+test("le durcissement IP est installé explicitement avant l'intégration des logs", () => {
+  const hardeningIndex = httpStackSource.indexOf("app.use(trustedClientIpMiddleware);");
+  const logIndex = httpStackSource.indexOf("app.use(rateLimitLogMiddleware);");
   assert.ok(hardeningIndex >= 0);
-  assert.ok(expressIndex >= 0);
-  assert.ok(hardeningIndex < expressIndex);
+  assert.ok(logIndex >= 0);
+  assert.ok(hardeningIndex < logIndex);
+  assert.doesNotMatch(enhancementsSource, /installClientIpHardening|installRateLimitLogIntegration|installExpressIntegration/);
 });
 
-test("les migrations versionnées sont appliquées avant l'écoute réseau", () => {
-  assert.match(migrationServiceSource, /create table if not exists schema_migrations/);
-  assert.match(migrationServiceSource, /insert into schema_migrations \(version\)/);
-  assert.match(migrationServiceSource, /runDatabaseMigrations\(\)/);
-  assert.match(enhancementsSource, /installMigrationHook\(\)/);
+test("un seul moteur applique les migrations versionnées avant l'écoute réseau", () => {
+  assert.match(migrationEngineSource, /create table if not exists schema_migrations/);
+  assert.match(migrationEngineSource, /insert into schema_migrations \(version\)/);
+  assert.match(migrationEngineSource, /pg_advisory_lock/);
+  assert.match(migrationEngineSource, /\.\/migrations\//);
+  assert.doesNotMatch(migrationEngineSource, /\.\.\/migrations\//);
+  assert.doesNotMatch(migrationEngineSource, /express\.application\.listen/);
+  assert.doesNotMatch(enhancementsSource, /installMigrationHook/);
+  assert.doesNotMatch(explicitRoutesSource, /runDatabaseMigrations/);
+
+  const migrationIndex = applicationBootstrapSource.indexOf("await runDatabaseMigrations(pool);");
+  const adminSchemaIndex = applicationBootstrapSource.indexOf("await initializeAdminUserEnhancements();");
+  assert.ok(migrationIndex >= 0);
+  assert.ok(adminSchemaIndex >= 0);
+  assert.ok(migrationIndex < adminSchemaIndex);
+});
+
+test("le pool PostgreSQL est partagé explicitement sans monkey-patch de pg.Pool", () => {
+  assert.doesNotMatch(databaseSource, /import pg from ["']pg["']/);
+  assert.doesNotMatch(databaseSource, /pg\.Pool\s*=/);
+  assert.doesNotMatch(databaseSource, /installPoolCapture/);
+  assert.doesNotMatch(enhancementsSource, /installPoolCapture/);
+  assert.match(databaseSource, /export function setPool\(pool\)/);
+  assert.match(databaseSource, /let sharedPool = null/);
+  assert.match(authMiddlewareSource, /import \{ setPool \} from "\.\/admin-users\/database\.js"/);
+  assert.match(authMiddlewareSource, /setPool\(pool\);/);
 });
 
 test("la migration ajoute les relations structurantes sans bloquer un historique orphelin", () => {

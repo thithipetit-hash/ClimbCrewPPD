@@ -9,8 +9,6 @@ export default function Parametres({
   themePreference,
   onThemePreferenceChange,
   themeOptions = [],
-  myParticipant,
-  updateMyProfile,
 }) {
   const [currentPasswordForPassword, setCurrentPasswordForPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -91,25 +89,6 @@ export default function Parametres({
           </select>
         </div>
       </div>
-
-      {myParticipant ? (
-        <div className="card profile-privacy-card">
-          <div>
-            <strong>Visibilité du profil</strong>
-            <div className="small">Un profil public affiche votre avatar et vos caractéristiques dans Progression.</div>
-          </div>
-          <label className="profile-privacy-toggle">
-            <input
-              type="checkbox"
-              checked={myParticipant.profilePublic !== false}
-              onChange={(event) => updateMyProfile({ profilePublic: event.target.checked })}
-            />
-            <span>{myParticipant.profilePublic !== false ? "Public" : "Privé"}</span>
-          </label>
-        </div>
-      ) : (
-        <div className="muted-box">La visibilité du profil sera disponible lorsque le compte sera relié à une fiche grimpeur.</div>
-      )}
 
       <details className="subcard" open>
         <summary style={{ cursor: "pointer", fontWeight: 700 }}>Changer le mot de passe</summary>

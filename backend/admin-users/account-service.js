@@ -485,6 +485,7 @@ export async function listUsers(_req, res) {
       from users
       where status <> 'pending'
          or email_verified_at is not null
+         or participant_id is not null
       order by case status when 'pending' then 0 when 'active' then 1 when 'revoked' then 2 else 3 end,
                created_at desc, email asc
     `);

@@ -1,8 +1,3 @@
-import express from "express";
-
-const EXPRESS_COOKIE_PATCH = Symbol.for("climbcrew.cookie-hardening-patch");
-const APP_COOKIE_MIDDLEWARE = Symbol.for("climbcrew.cookie-hardening-middleware");
-
 /**
  * Vérifie que chaque valeur de cookie peut être décodée par les anciens parseurs
  * de server.js. Une valeur percent-encodée invalide ne doit jamais provoquer une
@@ -29,19 +24,4 @@ export function sanitizeMalformedCookieHeader(req, _res, next) {
   }
 
   return next();
-}
-
-/** Installe le filtre avant le premier middleware déclaré par server.js. */
-export function installCookieHardening() {
-  if (express.application[EXPRESS_COOKIE_PATCH]) return;
-  express.application[EXPRESS_COOKIE_PATCH] = true;
-
-  const originalUse = express.application.use;
-  express.application.use = function patchedUseWithCookieHardening(...handlers) {
-    if (!this[APP_COOKIE_MIDDLEWARE]) {
-      originalUse.call(this, sanitizeMalformedCookieHeader);
-      this[APP_COOKIE_MIDDLEWARE] = true;
-    }
-    return originalUse.apply(this, handlers);
-  };
 }

@@ -1,6 +1,40 @@
-import React from "react";
+import React, { useRef } from "react";
 import Button from "../components/Button.jsx";
 import { formatDateFr, nextBusinessDay } from "../lib/domain.js";
+
+const SESSION_SLOT_ORDER = ["midi", "soir", "matin"];
+
+function normalizeSessionSlot(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getSessionSlot(session) {
+  return normalizeSessionSlot(
+    session?.slot
+      ?? session?.creneau
+      ?? session?.créneau
+      ?? session?.sessionSlot
+      ?? session?.type
+      ?? ""
+  );
+}
+
+function sortSessionsForDisplay(sessions = []) {
+  return sessions
+    .map((session, index) => ({ session, index }))
+    .sort((left, right) => {
+      const leftRank = SESSION_SLOT_ORDER.indexOf(getSessionSlot(left.session));
+      const rightRank = SESSION_SLOT_ORDER.indexOf(getSessionSlot(right.session));
+      const safeLeftRank = leftRank < 0 ? Number.MAX_SAFE_INTEGER : leftRank;
+      const safeRightRank = rightRank < 0 ? Number.MAX_SAFE_INTEGER : rightRank;
+      return safeLeftRank - safeRightRank || left.index - right.index;
+    })
+    .map(({ session }) => session);
+}
 
 export default function Inscriptions({
   viewMode,
@@ -12,15 +46,50 @@ export default function Inscriptions({
   weekSessions,
   renderSessionCard,
 }) {
+  const touchStartRef = useRef(null);
+
+  function navigate(delta) {
+    const d = viewMode === "jour"
+      ? nextBusinessDay(selectedDate, delta)
+      : Array.from({ length: 5 }).reduce((date) => nextBusinessDay(date, delta), selectedDate);
+    setSelectedDate(d);
+    ensureSessionsForDate(d);
+  }
+
+  function handleTouchStart(event) {
+    const target = event.target;
+    if (!(target instanceof Element)
+      || target.closest("button,input,select,textarea,a,.modal-overlay,.sidebar")) {
+      touchStartRef.current = null;
+      return;
+    }
+
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }
+
+  function handleTouchEnd(event) {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+
+    const touch = event.changedTouches?.[0];
+    if (!touch) return;
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < 60 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return;
+
+    navigate(deltaX < 0 ? 1 : -1);
+  }
+
   return (
-    <>
+    <div className="inscriptions-page" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div className="toolbar">
         <div className="toolbar-row">
           <div className="group date-nav">
-            <Button variant="navSymbol" title={viewMode === "jour" ? "Jour précédent" : "Semaine précédente"} aria-label={viewMode === "jour" ? "Afficher le jour précédent" : "Afficher la semaine précédente"} onClick={() => {
-              const d = viewMode === "jour" ? nextBusinessDay(selectedDate, -1) : nextBusinessDay(nextBusinessDay(nextBusinessDay(nextBusinessDay(nextBusinessDay(selectedDate,-1),-1),-1),-1),-1);
-              setSelectedDate(d); ensureSessionsForDate(d);
-            }}>
+            <Button variant="navSymbol" title={viewMode === "jour" ? "Jour précédent" : "Semaine précédente"} aria-label={viewMode === "jour" ? "Afficher le jour précédent" : "Afficher la semaine précédente"} onClick={() => navigate(-1)}>
               &lt;
             </Button>
 
@@ -32,10 +101,7 @@ export default function Inscriptions({
               aria-label="Date sélectionnée"
             />
 
-            <Button variant="navSymbol" title={viewMode === "jour" ? "Jour suivant" : "Semaine suivante"} aria-label={viewMode === "jour" ? "Afficher le jour suivant" : "Afficher la semaine suivante"} onClick={() => {
-              const d = viewMode === "jour" ? nextBusinessDay(selectedDate, 1) : nextBusinessDay(nextBusinessDay(nextBusinessDay(nextBusinessDay(nextBusinessDay(selectedDate,1),1),1),1),1);
-              setSelectedDate(d); ensureSessionsForDate(d);
-            }}>
+            <Button variant="navSymbol" title={viewMode === "jour" ? "Jour suivant" : "Semaine suivante"} aria-label={viewMode === "jour" ? "Afficher le jour suivant" : "Afficher la semaine suivante"} onClick={() => navigate(1)}>
               &gt;
             </Button>
           </div>
@@ -48,7 +114,7 @@ export default function Inscriptions({
       </div>
 
       {viewMode === "jour" ? (
-        <div className="stack">{daySessions.map((session) => renderSessionCard(session))}</div>
+        <div className="stack">{sortSessionsForDisplay(daySessions).map((session) => renderSessionCard(session))}</div>
       ) : (
         <div className="week-grid" aria-label="Semaine interactive">
           {weekSessions.map((day) => (
@@ -57,12 +123,12 @@ export default function Inscriptions({
                 <h3>{formatDateFr(day.date)}</h3>
               </div>
               <div className="week-day-sessions">
-                {day.sessions.map((session) => renderSessionCard(session, true))}
+                {sortSessionsForDisplay(day.sessions).map((session) => renderSessionCard(session, true))}
               </div>
             </section>
           ))}
         </div>
       )}
-    </>
+    </div>
   );
 }

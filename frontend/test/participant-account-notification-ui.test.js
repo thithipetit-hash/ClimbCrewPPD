@@ -1,21 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 
-const entry = await readFile(new URL("../src/admin-user-management.js", import.meta.url), "utf8");
-const ui = await readFile(new URL("../src/participant-account-notification-ui.js", import.meta.url), "utf8");
+const administration = await readFile(new URL("../src/pages/Administration.jsx", import.meta.url), "utf8");
 const profile = await readFile(new URL("../src/pages/Profil.jsx", import.meta.url), "utf8");
 
-test("le réglage e-mail est chargé dans la gestion des participants", () => {
-  assert.match(entry, /participant-account-notification-ui\.js/);
-  assert.match(ui, /E-mail demandes/);
-  assert.match(ui, /adminLabel\.after\(wrapper\)/);
+test("les qualifications et le réglage e-mail vivent dans Administration React", async () => {
+  await assert.rejects(access(new URL("../src/participant-account-notification-ui.js", import.meta.url)));
+  await assert.rejects(access(new URL("../src/participant-qualification-ui.js", import.meta.url)));
+  assert.match(administration, /Initiateur SAE/);
+  assert.match(administration, /Initiateur SNE/);
+  assert.match(administration, /E-mail demandes/);
+  assert.match(administration, /account-notifications/);
 });
 
-test("la case reste inactive sans administrateur et compte actif associés", () => {
-  assert.match(ui, /participant\.canAdmin/);
-  assert.match(ui, /preference\?\.status === "active"/);
-  assert.match(ui, /preference\?\.isAdmin/);
+test("la case e-mail reste inactive sans administrateur et compte actif associés", () => {
+  assert.match(administration, /participant\.canAdmin/);
+  assert.match(administration, /preference\.status === "active"/);
+  assert.match(administration, /preference\.isAdmin/);
+  assert.match(administration, /disabled=\{!notificationEligible \|\| notificationSaving\}/);
 });
 
 test("le réglage n'est plus affiché dans Mon profil", () => {

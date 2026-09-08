@@ -77,6 +77,49 @@ test("une rafale est stoppée avant les middlewares historiques", () => {
   assert.equal(lastResponse.headers["retry-after"] !== undefined, true);
 });
 
+test("les blocs du transfert vidéo fractionné ne consomment pas le quota pré-body", () => {
+  const ip = "203.0.113.50";
+  for (let index = 0; index < 40; index += 1) {
+    const req = request({
+      path: `/realisations/r1/video-uploads/upload-12345678/chunks/${index}`,
+      ip,
+      socket: { remoteAddress: ip },
+      headers: {
+        "content-type": "application/octet-stream",
+        "content-length": String(768 * 1024),
+      },
+    });
+    const res = fakeResponse();
+    let nextCalled = false;
+    preBodyRequestGuard(req, res, () => { nextCalled = true; });
+    assert.equal(nextCalled, true);
+    assert.equal(res.statusCode, 200);
+  }
+
+  const ordinaryReq = request({ ip, socket: { remoteAddress: ip } });
+  const ordinaryRes = fakeResponse();
+  let ordinaryNextCalled = false;
+  preBodyRequestGuard(ordinaryReq, ordinaryRes, () => { ordinaryNextCalled = true; });
+  assert.equal(ordinaryNextCalled, true);
+  assert.equal(ordinaryRes.statusCode, 200);
+});
+
+test("une requête JSON sur une URL de bloc vidéo reste soumise au quota pré-body", () => {
+  const ip = "203.0.113.51";
+  let lastResponse = null;
+  for (let index = 0; index < 31; index += 1) {
+    const req = request({
+      path: `/realisations/r1/video-uploads/upload-12345678/chunks/${index}`,
+      ip,
+      socket: { remoteAddress: ip },
+    });
+    const res = fakeResponse();
+    preBodyRequestGuard(req, res, () => undefined);
+    lastResponse = res;
+  }
+  assert.equal(lastResponse.statusCode, 429);
+});
+
 test("la clé bornée est conservée par le durcissement IP historique", () => {
   const req = request({ ip: "198.51.100.8" });
   req[CANONICAL_RATE_LIMIT_IP] = "0.0.0.0";
@@ -85,7 +128,14 @@ test("la clé bornée est conservée par le durcissement IP historique", () => {
   assert.equal(req.headers["x-real-ip"], "0.0.0.0");
 });
 
-test("le préchargement installe le garde-fou avant la normalisation IP", async () => {
-  const preload = await readFile(new URL("../admin-user-enhancements.js", import.meta.url), "utf8");
-  assert.match(preload, /installPreBodyRateLimit\(\);\s*installClientIpHardening\(\);/);
+test("la pile HTTP normalise l'URL puis applique le garde-fou avant la normalisation IP", async () => {
+  const httpStack = await readFile(new URL("../middleware/http-stack.js", import.meta.url), "utf8");
+  const normalizeIndex = httpStack.indexOf("req.url = normalizeApiPath(req.url)");
+  const guardIndex = httpStack.indexOf("app.use(preBodyRequestGuard);");
+  const ipIndex = httpStack.indexOf("app.use(trustedClientIpMiddleware);");
+  const jsonIndex = httpStack.indexOf("app.use(express.json");
+  assert.ok(normalizeIndex >= 0);
+  assert.ok(guardIndex > normalizeIndex);
+  assert.ok(ipIndex > guardIndex);
+  assert.ok(jsonIndex > ipIndex);
 });

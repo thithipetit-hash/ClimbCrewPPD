@@ -1,5 +1,3 @@
-import React from "react";
-
 /**
  * Bouton unique pour toute l'application : les styles réels vivent dans
  * styles/index.css (button, button.secondary, button.danger, button.ghost,

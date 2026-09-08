@@ -23,12 +23,20 @@ test("la normalisation des passeports ignore casse, espaces et accents", () => {
   assert.equal(normalizeSessionPassport(" Bleu "), "bleu");
 });
 
-test("React applique directement la classe de couleur correspondant au statut de la séance", async () => {
+test("React expose directement le statut et le passeport nécessaires à l'affichage", async () => {
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
-  const display = await readFile(new URL("../src/session-status-display.js", import.meta.url), "utf8");
 
   assert.match(app, /session-status-\$\{String\(session\.status \|\| "fermee"\)\.trim\(\)\.toLowerCase\(\)\}/);
-  assert.doesNotMatch(display, /applySessionStatusClass/);
+  assert.match(app, /data-passport=\{normalizePassport\(p\.passport\)\}/);
+});
+
+test("les passeports incompatibles d'une séance libre sont hachurés sans script DOM", async () => {
+  const css = await readFile(new URL("../src/styles/session-status-colors.css", import.meta.url), "utf8");
+  const main = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
+
+  assert.match(css, /session-status-libre \.passport-row:not\(\[data-passport="jaune"\]\):not\(\[data-passport="orange"\]\):not\(\[data-passport="vert"\]\):not\(\[data-passport="bleu"\]\)/);
+  assert.match(css, /repeating-linear-gradient/);
+  assert.equal(main.includes("session-status-display.js"), false);
 });
 
 test("les couleurs de fond respectent la convention des inscriptions et restent prioritaires sur le thème", async () => {

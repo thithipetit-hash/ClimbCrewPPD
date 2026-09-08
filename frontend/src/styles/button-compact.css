@@ -1,0 +1,24 @@
+/* Réduit l'espace vertical autour du texte des boutons dans toute l'application. */
+button {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.menu-button,
+.nav-symbol {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+/* Conserve les boutons de suppression circulaires sans modifier leur géométrie. */
+.remove-button {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* L'édition d'une voie ne propose plus de saisie d'URL vidéo : seul le chargement local reste visible. */
+label[for^="route-videos-"],
+textarea[id^="route-videos-"],
+label[for^="route-videos-"] + textarea + .small {
+  display: none;
+}

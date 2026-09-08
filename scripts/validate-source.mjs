@@ -7,6 +7,9 @@ function fail(message) {
 
 const app = fs.readFileSync("frontend/src/App.jsx", "utf8");
 const domain = fs.readFileSync("frontend/src/lib/domain.js", "utf8");
+const routeDisplayGroups = fs.readFileSync("frontend/src/lib/route-display-groups.js", "utf8");
+const viteConfig = fs.readFileSync("frontend/vite.config.js", "utf8");
+const frontendDockerfile = fs.readFileSync("frontend/Dockerfile.prod", "utf8");
 const dayStart = app.indexOf("const daySessions = useMemo");
 const weekStart = app.indexOf("const weekDates = useMemo", dayStart);
 const dayBlock = dayStart >= 0 && weekStart > dayStart ? app.slice(dayStart, weekStart) : "";
@@ -16,18 +19,43 @@ if (!dayBlock.includes("defaultSessionStatus(selectedDate, slot)")) fail("statut
 
 const main = fs.readFileSync("frontend/src/main.jsx", "utf8");
 if (!main.includes("<ErrorBoundary>")) fail("ErrorBoundary absent du point d’entrée React");
+if (main.includes("climbcrew-enhancements.js") || fs.existsSync("frontend/src/climbcrew-enhancements.js") || fs.existsSync("frontend/src/climbcrew-enhancements-legacy.js")) {
+  fail("ancienne couche frontend legacy encore présente");
+}
+if (fs.existsSync("frontend/scripts/app-source-adjustments.mjs")) {
+  fail("transformation historique de App encore présente");
+}
+if (viteConfig.includes("app-source-adjustments")
+    || viteConfig.includes("applyAppSourceAdjustments")
+    || viteConfig.includes("transform(code")) {
+  fail("Vite transforme encore App.jsx avant compilation");
+}
+if (!viteConfig.includes("plugins: [react()]")) {
+  fail("configuration Vite React canonique introuvable");
+}
+if (!app.includes('import { buildRouteDisplayGroups } from "./lib/route-display-groups.js";')
+    || !app.includes("buildRouteDisplayGroups({")) {
+  fail("App non branché directement sur le module de groupement des voies");
+}
+if (app.includes("const gradeRank = new Map(GRADES.map")) {
+  fail("copie locale du groupement des voies encore présente dans App");
+}
+if (!routeDisplayGroups.includes("export function buildRouteDisplayGroups")
+    || !routeDisplayGroups.includes("routes.map((route) => normalizeRopeNumber(route.numeroCorde))")) {
+  fail("module de groupement des voies incomplet ou cordes vides non masquées");
+}
 
 const backendPackage = JSON.parse(fs.readFileSync("backend/package.json", "utf8"));
 const allowedBackendStartCommands = new Set([
   "node server.js",
-  "node --import ./admin-user-enhancements.js server.js",
+  "node --import ./deployment-bootstrap.js server.js",
 ]);
 if (!allowedBackendStartCommands.has(backendPackage.scripts?.start)) {
   fail("commande de démarrage backend non reconnue");
 }
-if (backendPackage.scripts?.start.includes("admin-user-enhancements.js")
-    && !fs.existsSync("backend/admin-user-enhancements.js")) {
-  fail("préchargement admin-user-enhancements.js introuvable");
+if (backendPackage.scripts?.start.includes("deployment-bootstrap.js")
+    && !fs.existsSync("backend/deployment-bootstrap.js")) {
+  fail("préchargement deployment-bootstrap.js introuvable");
 }
 if (fs.existsSync("backend/server-runtime.js")) fail("server-runtime.js ne doit plus être utilisé");
 
@@ -35,50 +63,98 @@ if (app.includes("multi-signup") || app.includes('name="participantIds"')) fail(
 if (app.includes("Sans nom") || app.includes("Voie sans nom")) fail("un libellé Sans nom est encore affiché");
 if (!domain.includes("function formatRouteName(route)")) fail("formatage ouvreur puis nom de voie absent");
 if (!app.includes("async function deleteRealisation(realisation)")) fail("suppression de réalisation absente de la progression");
-if (!app.includes("state.routes.map((route) => normalizeRopeNumber(route.numeroCorde))")) fail("les cordes vides ne sont pas masquées");
-
-const enhancements = fs.readFileSync("frontend/src/climbcrew-enhancements.js", "utf8");
-if (enhancements.includes("l’ocre apparaît sur fond marron")) fail("mention ocre sur fond marron encore présente dans la FAQ");
+if (app.includes("l’ocre apparaît sur fond marron") || main.includes("l’ocre apparaît sur fond marron")) {
+  fail("mention ocre sur fond marron encore présente dans le frontend");
+}
 
 const backend = fs.readFileSync("backend/server.js", "utf8");
-const expressIntegration = fs.readFileSync("backend/admin-users/express-integration.js", "utf8");
+const runtimeConfig = fs.readFileSync("backend/config/runtime-config.js", "utf8");
+const httpStack = fs.readFileSync("backend/middleware/http-stack.js", "utf8");
+const runtimeHelpers = fs.readFileSync("backend/security/runtime-helpers.js", "utf8");
+const applicationBootstrap = fs.readFileSync("backend/bootstrap/application-bootstrap.js", "utf8");
+const explicitRoutes = fs.readFileSync("backend/admin-users/explicit-routes.js", "utf8");
 const sessionAuthorization = fs.readFileSync("backend/admin-users/session-authorization-service.js", "utf8");
 const realisationManagement = fs.readFileSync("backend/realisation-management-routes.js", "utf8");
+const baselineMigration = fs.readFileSync("backend/database/migrations/001_baseline.sql", "utf8");
 
-// PUT /sessions/:id est désormais un simple point d'ancrage dans server.js.
-// Les règles métier doivent être contrôlées dans le contrôleur réellement injecté.
-if (!backend.includes('app.put("/sessions/:id", requireAuth, legacyReplacedRoute);')) {
-  fail("point d’ancrage de mise à jour des séances absent du backend");
+if (backend.includes("async function ensureSchema()")) {
+  fail("DDL legacy ensureSchema encore présent dans server.js");
 }
-if (!expressIntegration.includes('path === "/sessions/:id"')
-    || !expressIntegration.includes("updateSessionWithAuthorization")) {
-  fail("contrôleur sécurisé des séances non branché");
+if (!applicationBootstrap.includes('import { runDatabaseMigrations } from "../database/migrate.js";')
+    || !applicationBootstrap.includes("await runDatabaseMigrations(pool);")) {
+  fail("bootstrap backend non branché sur le runner de migrations");
 }
-if (!sessionAuthorization.includes("function defaultSessionStatus(date, slot)")) {
-  fail("règle de statut par défaut absente du contrôleur de séances");
+if (!backend.includes('import { createRuntimeConfig, createDatabasePool } from "./config/runtime-config.js";')
+    || !backend.includes('import { installHttpStack } from "./middleware/http-stack.js";')
+    || !backend.includes('from "./bootstrap/application-bootstrap.js";')) {
+  fail("server.js n'est pas réduit à son rôle de composition");
+}
+if (backend.includes("app.set(\"trust proxy\"") || backend.includes("res.setHeader(\"Content-Security-Policy\"")) {
+  fail("configuration HTTP transversale encore présente dans server.js");
+}
+if (!runtimeConfig.includes("export function createRuntimeConfig")
+    || !runtimeConfig.includes("export function createDatabasePool")) {
+  fail("configuration runtime ou pool PostgreSQL non externalisés");
+}
+if (!httpStack.includes("export function installHttpStack")
+    || !httpStack.includes("Content-Security-Policy")
+    || !httpStack.includes("writeRateLimit")) {
+  fail("pile middleware HTTP externalisée incomplète");
+}
+if (!runtimeHelpers.includes("export function hashToken")
+    || !runtimeHelpers.includes("export function createCookieWriters")) {
+  fail("helpers de sécurité runtime non externalisés");
+}
+if (!baselineMigration.includes("create table if not exists participants")
+    || !baselineMigration.includes("create table if not exists users")
+    || !baselineMigration.includes("create table if not exists routes")
+    || !baselineMigration.includes("create table if not exists realisations")) {
+  fail("migration baseline PostgreSQL incomplète");
+}
+
+if (!backend.includes("installExplicitAdminUserRoutes(app")) {
+  fail("module de routes utilisateurs explicites non installé");
+}
+if (!explicitRoutes.includes('app.put("/sessions/:id", requireAuth, updateSessionWithAuthorization);')) {
+  fail("contrôleur sécurisé des séances non branché explicitement");
+}
+if (backend.includes("legacyReplacedRoute") || fs.existsSync("backend/admin-users/express-integration.js")) {
+  fail("ancien câblage Express legacy encore présent");
+}
+if (backend.includes("function defaultSessionStatus(")) {
+  fail("ancienne copie morte de la règle de statut encore présente dans server.js");
+}
+
+if (fs.existsSync("backend/session-default-status.js")) {
+  fail("adaptateur backend session-default-status.js encore présent");
+}
+if (!sessionAuthorization.includes('import { getDefaultSessionStatus } from "../../shared/session-default-status.js";')) {
+  fail("contrôleur de séances non branché directement sur la règle partagée");
 }
 if (!sessionAuthorization.includes("const resolvedStatus = requested.status")) {
   fail("statut de séance non résolu dans le contrôleur actif");
 }
-if (!sessionAuthorization.includes("const newlyAdded =")
-    || !sessionAuthorization.includes("assertLibreEligibility")) {
-  fail("contrôle des nouvelles inscriptions en séance libre absent");
+if (!sessionAuthorization.includes("getDefaultSessionStatus(requested.date, requested.slot)")) {
+  fail("règle canonique de statut non utilisée lors de la résolution du statut");
 }
-if (!sessionAuthorization.includes('requestedStatus === "fermee"')) {
-  fail("blocage des nouvelles inscriptions en séance fermée absent");
+if (domain.includes("export function defaultSessionStatus")) {
+  fail("duplication frontend de la règle de statut par défaut encore présente");
+}
+if (!domain.includes('export { getDefaultSessionStatus as defaultSessionStatus } from "../../../shared/session-default-status.js";')) {
+  fail("frontend non branché directement sur la règle partagée de statut");
+}
+if (domain.includes("../../../backend/session-default-status.js")) {
+  fail("couplage frontend vers backend/session-default-status.js encore présent");
+}
+if (!frontendDockerfile.includes("COPY shared/ /app/shared/")) {
+  fail("modules métier partagés absents du contexte de build frontend Docker");
+}
+if (frontendDockerfile.includes("COPY backend/session-default-status.js /app/backend/session-default-status.js")) {
+  fail("adaptateur backend encore embarqué inutilement dans l’image frontend");
 }
 
-// Les écritures de réalisations sont maintenant installées depuis un module dédié.
 if (!backend.includes("installRealisationManagementRoutes(app, { requireAuth, pool });")) {
   fail("module d’écriture des réalisations non installé");
-}
-if (!realisationManagement.includes('app.post("/realisations", requireAuth, async')
-    || !realisationManagement.includes('app.put("/realisations/:id", requireAuth, async')
-    || !realisationManagement.includes('app.delete("/realisations/:id", requireAuth, async')) {
-  fail("API d’écriture des réalisations incomplète");
-}
-if (!realisationManagement.includes("delete from realisations where id = $1 and participant_id = $2")) {
-  fail("suppression de réalisation non limitée au propriétaire");
 }
 
 if (!process.exitCode) console.log("Validation source ClimbCrew réussie.");

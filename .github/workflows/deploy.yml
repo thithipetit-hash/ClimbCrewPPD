@@ -4,9 +4,11 @@ on:
   pull_request:
     branches:
       - main
+      - production
   push:
     branches:
       - main
+      - production
   workflow_dispatch:
     inputs:
       branch:
@@ -195,6 +197,12 @@ jobs:
 
   # Le déploiement n'est autorisé qu'après validation du code, intégration sur
   # PostgreSQL et démarrage réel de la pile Linux du même commit.
+  #
+  # Deux cibles partagent ce même runner self-hosted, sur le même serveur :
+  # - main       -> /opt/climbcrew (pre-production, pre-climbcrew.dip-tcs.com)
+  # - production -> secrets.PROD_DEPLOY_ROOT (climbcrew.dip-tcs.com, le
+  #                 répertoire déjà utilisé historiquement pour ce domaine ;
+  #                 son chemin n'est jamais écrit dans le dépôt)
   deploy:
     name: Déployer sur le serveur de production
     needs:
@@ -206,10 +214,27 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Vérifier le runner et l'environnement de production
+      - name: Déterminer le répertoire de déploiement
         shell: bash
         env:
-          DEPLOY_ROOT: /opt/climbcrew
+          DEPLOY_BRANCH: ${{ needs.validate.outputs.deploy_branch }}
+          PROD_DEPLOY_ROOT: ${{ secrets.PROD_DEPLOY_ROOT }}
+        run: |
+          set -euo pipefail
+          if [ "$DEPLOY_BRANCH" = "production" ]; then
+            if [ -z "${PROD_DEPLOY_ROOT:-}" ]; then
+              echo "ERROR: le secret PROD_DEPLOY_ROOT n'est pas configuré pour déployer la branche production."
+              exit 1
+            fi
+            echo "DEPLOY_ROOT=${PROD_DEPLOY_ROOT}" >> "$GITHUB_ENV"
+            echo "Cible : production (climbcrew.dip-tcs.com)"
+          else
+            echo "DEPLOY_ROOT=/opt/climbcrew" >> "$GITHUB_ENV"
+            echo "Cible : pre-production (pre-climbcrew.dip-tcs.com)"
+          fi
+
+      - name: Vérifier le runner et l'environnement de production
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -246,7 +271,6 @@ jobs:
         id: sync_repo
         shell: bash
         env:
-          DEPLOY_ROOT: /opt/climbcrew
           VALIDATED_SHA: ${{ needs.validate.outputs.validated_sha }}
           DEPLOY_BRANCH: ${{ needs.validate.outputs.deploy_branch }}
         run: |
@@ -256,6 +280,16 @@ jobs:
           if ! git check-ref-format --branch "$DEPLOY_BRANCH" >/dev/null 2>&1; then
             echo "ERROR: nom de branche invalide : $DEPLOY_BRANCH"
             exit 1
+          fi
+
+          # Le répertoire "production" a été repris tel quel depuis un autre
+          # pipeline : son remote "origin" peut encore pointer vers un autre
+          # dépôt. On le réaligne systématiquement sur celui-ci avant de fetcher.
+          EXPECTED_ORIGIN="https://github.com/${GITHUB_REPOSITORY}.git"
+          CURRENT_ORIGIN="$(git remote get-url origin 2>/dev/null || echo "")"
+          if [ "$CURRENT_ORIGIN" != "$EXPECTED_ORIGIN" ]; then
+            echo "Remote origin inattendu ($CURRENT_ORIGIN), réalignement sur $EXPECTED_ORIGIN"
+            git remote set-url origin "$EXPECTED_ORIGIN" 2>/dev/null || git remote add origin "$EXPECTED_ORIGIN"
           fi
 
           PREVIOUS_SHA="$(git rev-parse HEAD)"
@@ -330,7 +364,7 @@ jobs:
             exit 0
           fi
 
-          ENV_FILE="/opt/climbcrew/.env.production"
+          ENV_FILE="${DEPLOY_ROOT}/.env.production"
 
           set_env_var() {
             local key="$1"
@@ -353,13 +387,86 @@ jobs:
           set_env_var "EMAIL_FROM_ADDRESS" "${SMTP_USER}"
           echo "SMTP credentials synced into .env.production"
 
+      - name: Verrouiller les réglages de sécurité des comptes dans .env.production
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV_FILE="${DEPLOY_ROOT}/.env.production"
+
+          set_env_var() {
+            local key="$1"
+            local value="$2"
+            if grep -q "^${key}=" "$ENV_FILE"; then
+              sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+            else
+              echo "${key}=${value}" >> "$ENV_FILE"
+            fi
+          }
+
+          # Toute création de compte doit être validée par un administrateur :
+          # ce réglage est forcé à chaque déploiement pour ne jamais dépendre
+          # d'un .env.production oublié dans un état permissif.
+          set_env_var "REQUIRE_ADMIN_ACCOUNT_APPROVAL" "true"
+
+          # Le bootstrap du premier administrateur est un geste ponctuel et
+          # volontaire (voir backend/deployment-compatibility.js) : il est
+          # remis à false à chaque déploiement automatique.
+          set_env_var "ALLOW_FIRST_ADMIN_BOOTSTRAP" "false"
+
+          echo "Réglages de sécurité des comptes verrouillés dans .env.production"
+
+      - name: Synchroniser la clé de chiffrement des sauvegardes dans .env.production
+        shell: bash
+        env:
+          BACKUP_EMAIL_ENCRYPTION_KEY: ${{ secrets.BACKUP_EMAIL_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BACKUP_EMAIL_ENCRYPTION_KEY:-}" ]; then
+            echo "BACKUP_EMAIL_ENCRYPTION_KEY secret not set, leaving .env.production untouched."
+            exit 0
+          fi
+
+          ENV_FILE="${DEPLOY_ROOT}/.env.production"
+
+          set_env_var() {
+            local key="$1"
+            local value="$2"
+            if grep -q "^${key}=" "$ENV_FILE"; then
+              sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+            else
+              echo "${key}=${value}" >> "$ENV_FILE"
+            fi
+          }
+
+          set_env_var "BACKUP_EMAIL_ENCRYPTION_KEY" "${BACKUP_EMAIL_ENCRYPTION_KEY}"
+          echo "Clé de chiffrement des sauvegardes synchronisée dans .env.production"
+
+      - name: Désactiver un éventuel service historique non-Docker (cible production)
+        if: needs.validate.outputs.deploy_branch == 'production'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Ce dépôt remplace intégralement l'ancien mode de déploiement de la
+          # cible "production" (auparavant un service systemd Node en direct
+          # sur la machine, port 3000). On le désactive systématiquement avant
+          # de laisser Docker Compose reprendre les mêmes ports, que ce
+          # service soit encore actif ou déjà remplacé.
+          SERVICE="climbcrew-backend.service"
+          if systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
+            echo "Service systemd historique actif ($SERVICE), arrêt avant le passage en Docker."
+            sudo systemctl stop "$SERVICE" || echo "AVERTISSEMENT: impossible d'arrêter $SERVICE automatiquement (intervention manuelle nécessaire)."
+            sudo systemctl disable "$SERVICE" 2>/dev/null || true
+          else
+            echo "Aucun service systemd historique actif ($SERVICE) : rien à faire."
+          fi
+
       - name: Construire et démarrer la version validée
         shell: bash
         env:
           VALIDATED_SHA: ${{ needs.validate.outputs.validated_sha }}
         run: |
           set -euo pipefail
-          cd /opt/climbcrew
+          cd "$DEPLOY_ROOT"
 
           echo "=== Building and starting validated commit $VALIDATED_SHA ==="
           docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
@@ -401,7 +508,7 @@ jobs:
 
           if [ "$FRONTEND_OK" != "true" ]; then
             echo "ERROR: frontend health check failed"
-            docker compose --env-file /opt/climbcrew/.env.production -f /opt/climbcrew/docker-compose.prod.yml ps || true
+            docker compose --env-file "$DEPLOY_ROOT/.env.production" -f "$DEPLOY_ROOT/docker-compose.prod.yml" ps || true
             exit 1
           fi
 

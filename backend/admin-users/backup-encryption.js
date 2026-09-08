@@ -1,6 +1,5 @@
 import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
-import { createReadStream, createWriteStream } from "node:fs";
-import { promises as fs } from "node:fs";
+import { createReadStream, createWriteStream, promises as fs } from "node:fs";
 import { pipeline } from "node:stream/promises";
 
 const MAGIC = Buffer.from("CCBK1", "ascii");

@@ -3,6 +3,7 @@ import { getPool } from "./database.js";
 // Marqueur compact conservé pour compatibilité avec le flux de mise à jour du
 // frontend. Il remplace l'ancien contenu Base64 dans les réponses JSON.
 export const REMOTE_CUSTOM_AVATAR_MARKER = "remote";
+const MAX_REALISATIONS_PAGE_SIZE = 200;
 
 function avatarMetadata(row, visible = true) {
   const hasCustomAvatar = Boolean(
@@ -11,6 +12,38 @@ function avatarMetadata(row, visible = true) {
   return {
     hasCustomAvatar,
     customAvatarImage: hasCustomAvatar ? REMOTE_CUSTOM_AVATAR_MARKER : "",
+  };
+}
+
+function parseBoundedInteger(value, { name, min, max }) {
+  const text = String(value ?? "").trim();
+  if (!/^\d+$/.test(text)) {
+    throw new RangeError(`${name} doit être un entier compris entre ${min} et ${max}.`);
+  }
+  const parsed = Number.parseInt(text, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new RangeError(`${name} doit être un entier compris entre ${min} et ${max}.`);
+  }
+  return parsed;
+}
+
+export function parseRealisationsWindow(query = {}) {
+  const hasLimit = String(query.limit ?? "").trim() !== "";
+  const hasOffset = String(query.offset ?? "").trim() !== "";
+
+  if (!hasLimit && !hasOffset) {
+    return { paginated: false, limit: null, offset: 0 };
+  }
+  if (!hasLimit) {
+    throw new RangeError("offset nécessite aussi un paramètre limit.");
+  }
+
+  return {
+    paginated: true,
+    limit: parseBoundedInteger(query.limit, { name: "limit", min: 1, max: MAX_REALISATIONS_PAGE_SIZE }),
+    offset: hasOffset
+      ? parseBoundedInteger(query.offset, { name: "offset", min: 0, max: 1_000_000 })
+      : 0,
   };
 }
 
@@ -145,13 +178,28 @@ export async function listParticipantsWithPrivacy(req, res) {
  *
  * Les réalisations constituent la progression personnelle : celles d'un profil
  * privé ne sont donc visibles que par leur propriétaire et les administrateurs.
- * Les casts vers text maintiennent la compatibilité pendant la migration des
- * identifiants participants de text vers bigint.
+ * L'analyse technique n'est volontairement pas incluse dans cette liste : elle
+ * est chargée à la demande par GET /realisations/:id/technical-analysis.
+ *
+ * Sans paramètres, la réponse reste l'array historique complet. Avec `limit`
+ * (1..200) et éventuellement `offset`, la même réponse array est paginée et
+ * X-Has-More indique si une page suivante existe.
  */
 export async function listRealisationsWithPrivacy(req, res) {
+  let window;
+  try {
+    window = parseRealisationsWindow(req.query);
+  } catch (error) {
+    if (error instanceof RangeError) {
+      return res.status(400).json({ error: error.message });
+    }
+    throw error;
+  }
+
   try {
     const ownParticipantId = String(req.auth?.user?.participantId || "");
     const isAdmin = req.auth?.user?.role === "admin";
+    const queryLimit = window.paginated ? window.limit + 1 : null;
 
     const result = await getPool().query(
       `
@@ -167,20 +215,31 @@ export async function listRealisationsWithPrivacy(req, res) {
           r.nb_essais as "nbEssais",
           r.rating,
           r.chute,
-          r.assureur_id as "assureurId"
+          r.assureur_id as "assureurId",
+          r.video_urls as "videoUrls"
         from realisations r
         left join participants p on p.id::text = r.participant_id::text
         where $1::boolean = true
            or r.participant_id::text = $2
            or coalesce(p.profile_public, false) = true
         order by r.date_realisation desc, r.created_at desc
+        limit $3::integer
+        offset $4::integer
       `,
-      [isAdmin, ownParticipantId],
+      [isAdmin, ownParticipantId, queryLimit, window.offset],
     );
 
-    res.json(result.rows);
+    if (!window.paginated) {
+      return res.json(result.rows);
+    }
+
+    const hasMore = result.rows.length > window.limit;
+    res.setHeader("X-Page-Limit", String(window.limit));
+    res.setHeader("X-Page-Offset", String(window.offset));
+    res.setHeader("X-Has-More", hasMore ? "true" : "false");
+    return res.json(result.rows.slice(0, window.limit));
   } catch (error) {
     console.error("GET /realisations privacy", error);
-    res.status(500).json({ error: "Chargement des réalisations impossible" });
+    return res.status(500).json({ error: "Chargement des réalisations impossible" });
   }
 }

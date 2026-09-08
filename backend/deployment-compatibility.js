@@ -1,9 +1,9 @@
 /**
- * Compatibilité des environnements de déploiement.
+ * Compatibilité des environnements de déploiement Linux et local.
  *
  * Ce fichier est chargé avant le serveur principal. Il prépare les variables
- * d'environnement communes à Render et au serveur Linux sans imposer de
- * valeurs lorsque l'administrateur les a déjà définies.
+ * d'environnement communes sans imposer de valeurs lorsque l'administrateur
+ * les a déjà définies.
  */
 
 const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -43,16 +43,16 @@ function parseCookieHeader(header = "") {
   );
 }
 
-function isRenderDeployment() {
-  return String(process.env.RENDER || "").toLowerCase() === "true";
-}
-
 function isProductionEnvironment() {
   return String(process.env.NODE_ENV || "").toLowerCase() === "production";
 }
 
 function isFirstAdminBootstrapAllowed() {
   return String(process.env.ALLOW_FIRST_ADMIN_BOOTSTRAP || "").toLowerCase() === "true";
+}
+
+function isCrossOriginCsrfBridgeEnabled() {
+  return String(process.env.CROSS_ORIGIN_CSRF_BRIDGE || "").toLowerCase() === "true";
 }
 
 /**
@@ -70,7 +70,6 @@ export function configureDeploymentEnvironment() {
   const allowedOrigins = collectOrigins(
     process.env.CORS_ORIGIN,
     process.env.FRONTEND_ORIGIN,
-    process.env.RENDER_FRONTEND_URL,
     process.env.PUBLIC_URL,
     localDevelopmentOrigin,
   );
@@ -82,30 +81,23 @@ export function configureDeploymentEnvironment() {
   if (production && !isFirstAdminBootstrapAllowed()) {
     delete process.env.FIRST_ADMIN_PASSWORD;
   }
-
-  if (isRenderDeployment()) {
-    process.env.TRUST_PROXY ||= "1";
-    process.env.SECURE_COOKIES ||= "true";
-    process.env.COOKIE_SAMESITE ||= "none";
-  }
 }
 
 function getAllowedOrigins() {
   return new Set(collectOrigins(
     process.env.CORS_ORIGIN,
     process.env.FRONTEND_ORIGIN,
-    process.env.RENDER_FRONTEND_URL,
     process.env.PUBLIC_URL,
   ));
 }
 
 /**
- * Crée un middleware de compatibilité CSRF pour les déploiements multi-domaines.
- * Le cookie n'est recopié dans l'en-tête interne que pour une origine autorisée.
+ * Crée un middleware de compatibilité CSRF pour un éventuel déploiement
+ * multi-domaines explicitement activé. Le cookie n'est recopié dans l'en-tête
+ * interne que pour une origine autorisée.
  */
 export function createCrossOriginCsrfBridge() {
-  const enabled = isRenderDeployment()
-    || String(process.env.CROSS_ORIGIN_CSRF_BRIDGE || "").toLowerCase() === "true";
+  const enabled = isCrossOriginCsrfBridgeEnabled();
   const allowedOrigins = getAllowedOrigins();
   const csrfCookieName = process.env.CSRF_COOKIE_NAME || "climbcrew_csrf";
 
@@ -130,10 +122,9 @@ export function createCrossOriginCsrfBridge() {
 
 export function describeDeploymentCompatibility() {
   return {
-    platform: isRenderDeployment() ? "render" : "linux-or-local",
+    platform: "linux-or-local",
     allowedOrigins: [...getAllowedOrigins()],
-    crossOriginCsrfBridgeEnabled: isRenderDeployment()
-      || String(process.env.CROSS_ORIGIN_CSRF_BRIDGE || "").toLowerCase() === "true",
+    crossOriginCsrfBridgeEnabled: isCrossOriginCsrfBridgeEnabled(),
     firstAdminBootstrapEnabled: !isProductionEnvironment() || isFirstAdminBootstrapAllowed(),
   };
 }

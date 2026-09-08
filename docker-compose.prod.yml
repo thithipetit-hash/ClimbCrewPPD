@@ -40,12 +40,13 @@ services:
       - ./backups:/backups
 
   # ---------------------------------------------------------------------------
-  # API Node/Express.
+  # API Node/Express. Le contexte est la racine du dépôt afin que l'image puisse
+  # embarquer à la fois backend/ et les règles métier communes de shared/.
   # ---------------------------------------------------------------------------
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.prod
+      context: .
+      dockerfile: backend/Dockerfile.prod
     image: climbcrew-backend:prod
     container_name: climbcrew-backend
     restart: unless-stopped
@@ -61,7 +62,7 @@ services:
       BACKUP_DIR: /backups
       BACKUP_TIMEZONE: ${BACKUP_TIMEZONE:-Europe/Paris}
       BACKUP_HOUR: ${BACKUP_HOUR:-3}
-      BACKUP_RECIPIENT: ${BACKUP_RECIPIENT:-cristal.climbcrew@gmail.com}
+      BACKUP_RECIPIENT: ${BACKUP_RECIPIENT:-}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-35}
       BACKUP_UPLOAD_MAX_BYTES: ${BACKUP_UPLOAD_MAX_BYTES:-52428800}
     ports:
@@ -81,14 +82,16 @@ services:
       start_period: 20s
 
   # ---------------------------------------------------------------------------
-  # Frontend React compilé puis servi par Nginx.
+  # Frontend React compilé puis servi par Nginx. Son contexte est la racine du
+  # dépôt afin de fournir le fichier VERSION canonique au Dockerfile.
   # ---------------------------------------------------------------------------
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile.prod
+      context: .
+      dockerfile: frontend/Dockerfile.prod
       args:
         VITE_API_URL: ${VITE_API_URL:-/api}
+        GITHUB_SHA: ${GITHUB_SHA:-unknown}
     image: climbcrew-frontend:prod
     container_name: climbcrew-frontend
     restart: unless-stopped

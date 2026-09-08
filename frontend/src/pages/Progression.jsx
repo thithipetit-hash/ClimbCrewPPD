@@ -1,8 +1,14 @@
 import React from "react";
 import Button from "../components/Button.jsx";
 import ParticipantBadges from "../components/ParticipantBadges.jsx";
+import VideoTechnicalAnalysis from "../components/VideoTechnicalAnalysis.jsx";
 import { GRADES, fullName, formatRouteForRealisation, formatPoints, formatDateShortFr } from "../lib/domain.js";
-import { STYLE_LABELS } from "../lib/ui-config.js";
+import {
+  REALISATION_CRITERION_LABELS,
+  REALISATION_MODE_LABELS,
+  getRealisationCriterion,
+  getRealisationMode,
+} from "../lib/realisation-mode.js";
 import CprEvolutionChart from "../sections/CprEvolutionChart.jsx";
 import ClimberProfilePanel from "../components/ClimberProfilePanel.jsx";
 import ProfileGecko from "../components/ProfileGecko.jsx";
@@ -36,10 +42,19 @@ export default function Progression({
   setRealisationExpanded,
   allProgressRealisationsExpanded,
   toggleAllProgressRealisations,
-  exportSelectedParticipantRealisationsCsv,
   allRealisations,
   myParticipantId,
 }) {
+  const defaultParticipantApplied = React.useRef(false);
+
+  React.useEffect(() => {
+    if (defaultParticipantApplied.current || !myParticipantId) return;
+    defaultParticipantApplied.current = true;
+    if (!selectedParticipantProgress && !selectedRouteProgress) {
+      setState((prev) => ({ ...prev, selectedParticipantProgress: String(myParticipantId) }));
+    }
+  }, [myParticipantId, selectedParticipantProgress, selectedRouteProgress, setState]);
+
   return (
     <div className="card">
       <div className="grid two progression-filters">
@@ -74,21 +89,15 @@ export default function Progression({
           >
             <option value="">Choisir une voie</option>
             {routes.map((route) => (
-              <option key={route.id} value={route.id}>
-                {formatRouteForRealisation(route)}
-              </option>
+              <option key={route.id} value={route.id}>{formatRouteForRealisation(route)}</option>
             ))}
           </select>
         </div>
       </div>
 
       <div className="card" style={{ marginTop: 12 }}>
-        <div className="card-header">
-          <h3>Saisir une réalisation</h3>
-          <Button onClick={() => openRealisationModal("", myParticipantId)}
-            disabled={!myParticipantId}>
-            Nouvelle réalisation
-          </Button>
+        <div className="card-header progression-entry-actions">
+          <Button onClick={() => openRealisationModal("", myParticipantId)} disabled={!myParticipantId}>Nouvelle réalisation</Button>
         </div>
       </div>
 
@@ -103,18 +112,8 @@ export default function Progression({
 
       {selectedParticipantProgress && selectedParticipant?.profilePublic !== false && (
         <section className="public-profile-section">
-          <ProfileGecko
-            grade={participantProgressStats.cpr.currentGrade || ""}
-            sexe={selectedParticipant.sexe}
-            participant={selectedParticipant}
-            editable={false}
-            compact
-          />
-          <ClimberProfilePanel
-            realisations={selectedParticipantRealisations}
-            routesById={routesById}
-            cprGrade={participantProgressStats.cpr.currentGrade || ""}
-          />
+          <ProfileGecko grade={participantProgressStats.cpr.currentGrade || ""} sexe={selectedParticipant.sexe} participant={selectedParticipant} editable={false} compact />
+          <ClimberProfilePanel realisations={selectedParticipantRealisations} routesById={routesById} cprGrade={participantProgressStats.cpr.currentGrade || ""} />
         </section>
       )}
 
@@ -123,170 +122,105 @@ export default function Progression({
       )}
 
       {selectedParticipantProgress && selectedParticipant?.profilePublic !== false && (
-        <ParticipantBadges
-          participant={selectedParticipant}
-          realisations={selectedParticipantRealisations}
-          allRealisations={allRealisations}
-          routesById={routesById}
-          sessions={getParticipantSessions(selectedParticipantProgress)}
-        />
+        <ParticipantBadges participant={selectedParticipant} realisations={selectedParticipantRealisations} allRealisations={allRealisations} routesById={routesById} sessions={getParticipantSessions(selectedParticipantProgress)} />
       )}
 
       {selectedParticipantProgress && selectedParticipant?.profilePublic !== false && (
-        <div className="card" style={{ marginTop: 12 }}>
-          <CprEvolutionChart realisations={selectedParticipantRealisations} routesById={routesById} />
-        </div>
+        <div className="card" style={{ marginTop: 12 }}><CprEvolutionChart realisations={selectedParticipantRealisations} routesById={routesById} /></div>
       )}
 
       {(selectedParticipantProgress || selectedRouteProgress) && <div className="card" style={{ marginTop: 12 }}>
         <div className="card-header">
-          <h3>
-            {selectedParticipantProgress
-              ? "Réalisations du grimpeur"
-              : selectedRouteProgress
-                ? "Grimpeurs ayant réalisé la voie"
-                : "Réalisations"}
-          </h3>
+          <h3>{selectedParticipantProgress ? "Réalisations du grimpeur" : selectedRouteProgress ? "Grimpeurs ayant réalisé la voie" : "Réalisations"}</h3>
           <div className="group">
-            {selectedParticipantProgress && String(selectedParticipantProgress) === String(myParticipantId) && (
-              <Button
-                variant="secondary"
-                onClick={exportSelectedParticipantRealisationsCsv}
-                disabled={selectedParticipantRealisations.length === 0}
-              >
-                Exporter pour theCrag
-              </Button>
-            )}
             {progressViewRealisations.length > 1 && (
-              <Button
-                variant="secondary"
-                onClick={toggleAllProgressRealisations}
-                aria-expanded={allProgressRealisationsExpanded}
-              >
+              <Button variant="secondary" onClick={toggleAllProgressRealisations} aria-expanded={allProgressRealisationsExpanded}>
                 {allProgressRealisationsExpanded ? "Tout replier" : "Tout déployer"}
               </Button>
             )}
-            {(selectedParticipantProgress || selectedRouteProgress) && (
-              <span className="badge">{progressViewRealisations.length}</span>
-            )}
+            {(selectedParticipantProgress || selectedRouteProgress) && <span className="badge">{progressViewRealisations.length}</span>}
           </div>
         </div>
 
         <div className="stack">
-          {progressViewRealisations.length === 0 ? (
-            <div className="muted-box">Aucune réalisation enregistrée pour cette sélection.</div>
-          ) : (
-            progressViewRealisations.map((realisation) => {
-              const participant = participantsById[realisation.participantId];
-              const route = routesById[realisation.voieId];
-              const availableSessionsForRealisation = getParticipantSessions(realisation.participantId);
-              const displayedRating = ratingStars(realisation.rating);
-              const canEditRealisation = String(realisation.participantId) === String(myParticipantId);
-              const isIncludedInCpr = Boolean(
-                cprByParticipantId[realisation.participantId]?.timeline.some(
-                  (performance) => String(performance.id) === String(realisation.id)
-                )
-              );
-
-              return (
-                <details className="subcard editable-realisation-card"
-                  key={realisation.id}
-                  open={expandedRealisationIds.includes(realisation.id)}
-                  onToggle={(event) => setRealisationExpanded(realisation.id, event.currentTarget.open)}
-                >
-                  <summary className="card-header realisation-summary">
-                    <div>
-                      <strong>{!selectedParticipantProgress && `${fullName(participant)} — `}{route ? formatRouteForRealisation(route) : "Voie inconnue"}</strong>
-                      <div className="small">
-                        {formatDateShortFr(realisation.dateRealisation?.slice(0, 10))}
-                        {" · "}
-                        {STYLE_LABELS[realisation.styleRealisation] || realisation.styleRealisation}
-                        {realisation.chute && <> · Vol{realisation.assureurId && participantsById[realisation.assureurId] ? ` · assuré par ${fullName(participantsById[realisation.assureurId])}` : ""}</>}
-                        {displayedRating && <> · <span aria-label={`Évaluation ${Number(realisation.rating)} sur 5`}>{displayedRating}</span></>}
-                      </div>
-                    </div>
-                    <div className="group">
-                      {isIncludedInCpr && <span className="pill">Prise en compte dans le CPR</span>}
-                      {canEditRealisation && <Button variant="danger" className="realisation-delete-button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); deleteRealisation(realisation); }}>Supprimer</Button>}
-                    </div>
-                  </summary>
-
-                  <div className="grid three">
-                    <div>
-                      <label>Séance</label>
-                      <select
-                        value={realisation.sessionId}
-                        disabled={!canEditRealisation}
-                      onChange={(event) => updateRealisation(realisation.id, { sessionId: event.target.value })}
-                      >
-                        {availableSessionsForRealisation.length === 0 ? (
-                          <option value="">Aucune séance inscrite</option>
-                        ) : (
-                          availableSessionsForRealisation.map((sessionOption) => (
-                            <option key={sessionOption.id} value={sessionOption.id}>{formatDateShortFr(sessionOption.date)} · {sessionOption.slot}</option>
-                          ))
-                        )}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label>Voie</label>
-                      <select
-                        value={realisation.voieId}
-                        disabled={!canEditRealisation}
-                        onChange={(event) => updateRealisation(realisation.id, { voieId: event.target.value })}
-                      >
-                        {routes.map((routeOption) => (
-                          <option key={routeOption.id} value={routeOption.id}>
-                            {formatRouteForRealisation(routeOption)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label>Style</label>
-                      <select
-                        value={realisation.styleRealisation}
-                        disabled={!canEditRealisation}
-                        onChange={(event) => updateRealisation(realisation.id, { styleRealisation: event.target.value })}
-                      >
-                        {Object.entries(STYLE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label>Cotation proposée</label>
-                      <select
-                        value={realisation.cotationProposee || ""}
-                        disabled={!canEditRealisation}
-                        onChange={(event) => updateRealisation(realisation.id, { cotationProposee: event.target.value })}
-                      >
-                        <option value="">Aucune</option>
-                        {GRADES.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
-                      </select>
-                    </div>
-
-                    {displayedRating && (
-                      <div>
-                        <label>Évaluation</label>
-                        <div className="pill" aria-label={`Évaluation ${Number(realisation.rating)} sur 5`}>{displayedRating}</div>
-                      </div>
-                    )}
+          {progressViewRealisations.length === 0 ? <div className="muted-box">Aucune réalisation enregistrée pour cette sélection.</div> : progressViewRealisations.map((realisation) => {
+            const participant = participantsById[realisation.participantId];
+            const route = routesById[realisation.voieId];
+            const availableSessionsForRealisation = getParticipantSessions(realisation.participantId);
+            const displayedRating = ratingStars(realisation.rating);
+            const canEditRealisation = String(realisation.participantId) === String(myParticipantId);
+            const isIncludedInCpr = Boolean(cprByParticipantId[realisation.participantId]?.timeline.some((performance) => String(performance.id) === String(realisation.id)));
+            const modeRealisation = getRealisationMode(realisation, route);
+            const criterionRealisation = getRealisationCriterion(realisation);
+            const forcedMoulinette = Boolean(route?.moulinetteOnly);
+            const modeLabel = REALISATION_MODE_LABELS[modeRealisation] || modeRealisation;
+            const criterionLabel = criterionRealisation ? REALISATION_CRITERION_LABELS[criterionRealisation] : "Critère non précisé (historique)";
+            const routeVideoUrls = Array.isArray(route?.videoUrls) ? route.videoUrls : [];
+            const selectedVideoUrls = Array.isArray(realisation.videoUrls) ? realisation.videoUrls : [];
+            return (
+              <details className="subcard editable-realisation-card progression-realisation-card" key={realisation.id} open={expandedRealisationIds.includes(realisation.id)} onToggle={(event) => setRealisationExpanded(realisation.id, event.currentTarget.open)}>
+                <summary className="card-header realisation-summary progression-realisation-summary">
+                  <div>
+                    <strong>{!selectedParticipantProgress && `${fullName(participant)} — `}{route ? formatRouteForRealisation(route) : "Voie inconnue"}</strong>
+                    <div className="small">{formatDateShortFr(realisation.dateRealisation?.slice(0, 10))} · {modeLabel} · {criterionLabel}{realisation.chute && <> · Vol{realisation.assureurId && participantsById[realisation.assureurId] ? ` · assuré par ${fullName(participantsById[realisation.assureurId])}` : ""}</>}{displayedRating && <> · <span aria-label={`Évaluation ${Number(realisation.rating)} sur 5`}>{displayedRating}</span></>}</div>
                   </div>
-
-                  <div style={{ marginTop: 8 }}>
-                    <label>Commentaire</label>
-                    <input
-                      value={realisation.commentaire || ""}
-                      disabled={!canEditRealisation}
-                        onChange={(event) => updateRealisation(realisation.id, { commentaire: event.target.value })}
-                    />
+                  <div className="group progression-realisation-actions">
+                    {isIncludedInCpr && <span className="pill">Prise en compte dans le CPR</span>}
+                    {selectedVideoUrls.length > 0 && <span className="pill">{selectedVideoUrls.length} vidéo{selectedVideoUrls.length > 1 ? "s" : ""}</span>}
+                    {canEditRealisation && <Button variant="remove" className="progression-realisation-remove" title="Supprimer cette réalisation" aria-label="Supprimer cette réalisation" onClick={(event) => { event.preventDefault(); event.stopPropagation(); deleteRealisation(realisation); }}>×</Button>}
                   </div>
-                </details>
-              );
-            })
-          )}
+                </summary>
+                <div className="grid three">
+                  <div><label>Séance</label><select value={realisation.sessionId} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { sessionId: event.target.value })}>{availableSessionsForRealisation.length === 0 ? <option value="">Aucune séance inscrite</option> : availableSessionsForRealisation.map((sessionOption) => <option key={sessionOption.id} value={sessionOption.id}>{formatDateShortFr(sessionOption.date)} · {sessionOption.slot}</option>)}</select></div>
+                  <div><label>Voie</label><select value={realisation.voieId} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { voieId: event.target.value, videoUrls: [] })}>{routes.map((routeOption) => <option key={routeOption.id} value={routeOption.id}>{formatRouteForRealisation(routeOption)}</option>)}</select></div>
+                  <div className="realisation-mode-field" data-context="existing">
+                    <label>Mode</label>
+                    <select className="realisation-mode-select" aria-label="Mode de réalisation" value={modeRealisation} disabled={!canEditRealisation || forcedMoulinette} onChange={(event) => updateRealisation(realisation.id, { modeRealisation: event.target.value })}>
+                      {Object.entries(REALISATION_MODE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                    </select>
+                    {forcedMoulinette && <div className="small">Cette voie est configurée en moulinette uniquement.</div>}
+                  </div>
+                  <div><label>Critère</label><select value={criterionRealisation} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { styleRealisation: event.target.value })}>{!criterionRealisation && <option value="" disabled>Non précisé (historique)</option>}{Object.entries(REALISATION_CRITERION_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
+                  <div><label>Cotation proposée</label><select value={realisation.cotationProposee || ""} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { cotationProposee: event.target.value })}><option value="">Aucune</option>{GRADES.map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select></div>
+                  {displayedRating && <div><label>Évaluation</label><div className="pill" aria-label={`Évaluation ${Number(realisation.rating)} sur 5`}>{displayedRating}</div></div>}
+                </div>
+                <div style={{ marginTop: 8 }}><label>Commentaire</label><input value={realisation.commentaire || ""} disabled={!canEditRealisation} onChange={(event) => updateRealisation(realisation.id, { commentaire: event.target.value })} /></div>
+
+                <div className="subcard" style={{ marginTop: 10 }}>
+                  <strong>Vidéos de cette réalisation</strong>
+                  {routeVideoUrls.length === 0 ? (
+                    <div className="small" style={{ marginTop: 6 }}>Aucune vidéo n’est encore associée à cette voie.</div>
+                  ) : (
+                    <div className="stack" style={{ marginTop: 8 }}>
+                      {routeVideoUrls.map((url, index) => {
+                        const checked = selectedVideoUrls.includes(url);
+                        const limitReached = selectedVideoUrls.length >= 3;
+                        return (
+                          <label className="checkbox-field" key={url}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={!canEditRealisation || (!checked && limitReached)}
+                              onChange={(event) => {
+                                const next = event.target.checked
+                                  ? [...selectedVideoUrls, url].slice(0, 3)
+                                  : selectedVideoUrls.filter((item) => item !== url);
+                                updateRealisation(realisation.id, { videoUrls: next });
+                              }}
+                            />
+                            <span>Vidéo {index + 1}{/^\/routes\//.test(url) ? " · chargée dans ClimbCrew" : " · lien externe"}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="small" style={{ marginTop: 6 }}>Jusqu’à 3 vidéos peuvent être rattachées précisément à ce passage.</div>
+                </div>
+
+                <VideoTechnicalAnalysis videoUrls={selectedVideoUrls} />
+              </details>
+            );
+          })}
         </div>
       </div>}
     </div>

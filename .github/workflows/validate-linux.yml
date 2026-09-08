@@ -19,30 +19,65 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: validate-linux-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
-    name: Validate Linux build and runtime
+    name: Tests, build and runtime validation
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ inputs.ref || github.sha }}
 
       - name: Configure Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Validate canonical version
+        shell: bash
+        env:
+          VERSION_CONSISTENCY_ONLY: "1"
+        run: |
+          set -euo pipefail
+          chmod +x .github/scripts/verify-version.sh
+          .github/scripts/verify-version.sh
+          printf 'VITE_APP_VERSION=%s\n' "$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_ENV"
 
       - name: Validate source consistency
         run: node scripts/validate-source.mjs
 
+      - name: Install root tooling
+        run: npm ci --no-audit --no-fund
+
+      - name: Run ESLint
+        run: npm run lint
+
       - name: Validate backend syntax
         run: node --check backend/server.js
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci --no-audit --no-fund
+
+      - name: Audit backend dependencies
+        working-directory: backend
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Run backend tests
+        working-directory: backend
+        run: npm test
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -56,9 +91,25 @@ jobs:
           done
           exit 1
 
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=moderate
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm test
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+
+      - name: Install Chromium for pinned Playwright
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Android responsive browser tests
+        working-directory: frontend
+        run: npx playwright test --config=playwright.config.mjs
 
       - name: Prepare validation environment
         run: cp .env.production.example .env.production
@@ -69,25 +120,126 @@ jobs:
       - name: Build Linux images
         run: docker compose --env-file .env.production -f docker-compose.prod.yml build
 
-      - name: Start stack and smoke test
+      - name: Start stack
         shell: bash
         run: |
           set -euo pipefail
-          docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+          if ! docker compose --env-file .env.production -f docker-compose.prod.yml up -d; then
+            echo "Docker Compose failed while starting the validation stack."
+            docker compose --env-file .env.production -f docker-compose.prod.yml ps || true
+            docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail=200 backend db backup-init || true
+            exit 1
+          fi
 
+      - name: Verify production CSP permits WebAssembly but blocks JavaScript eval
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ready=false
+          for attempt in {1..40}; do
+            if curl --fail --silent http://127.0.0.1:8080/ >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo "Frontend production unavailable for CSP browser validation."
+            exit 1
+          fi
+
+          node --input-type=module <<'NODE'
+          import { chromium } from "@playwright/test";
+
+          const browser = await chromium.launch({ headless: true });
+          try {
+            const page = await browser.newPage();
+            const response = await page.goto("http://127.0.0.1:8080/", { waitUntil: "domcontentloaded" });
+            if (!response || !response.ok()) {
+              throw new Error(`Frontend production inaccessible: HTTP ${response?.status() ?? "unknown"}`);
+            }
+
+            const result = await page.evaluate(async () => {
+              let wasmOk = false;
+              let wasmError = "";
+              try {
+                await WebAssembly.instantiate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]));
+                wasmOk = true;
+              } catch (error) {
+                wasmError = String(error);
+              }
+
+              let evalBlocked = false;
+              try {
+                globalThis.eval("1 + 1");
+              } catch {
+                evalBlocked = true;
+              }
+
+              return { wasmOk, wasmError, evalBlocked };
+            });
+
+            if (!result.wasmOk) {
+              throw new Error(`La CSP bloque encore WebAssembly: ${result.wasmError}`);
+            }
+            if (!result.evalBlocked) {
+              throw new Error("La CSP autorise eval() JavaScript alors qu'il doit rester bloqué.");
+            }
+          } finally {
+            await browser.close();
+          }
+          NODE
+
+      - name: Runtime health and authorization smoke tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ready=false
           for attempt in {1..40}; do
             if curl --fail --silent http://127.0.0.1:3000/health >/dev/null \
               && curl --fail --silent http://127.0.0.1:8080/ >/dev/null; then
-              echo "ClimbCrew smoke test succeeded."
-              exit 0
+              ready=true
+              break
             fi
             sleep 3
           done
 
-          docker compose --env-file .env.production -f docker-compose.prod.yml ps
-          docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail=200
-          exit 1
+          if [ "$ready" != true ]; then
+            echo "ClimbCrew did not become healthy."
+            docker compose --env-file .env.production -f docker-compose.prod.yml ps
+            docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail=200
+            exit 1
+          fi
+
+          assert_status() {
+            local expected="$1"
+            local url="$2"
+            local actual
+            actual="$(curl --silent --output /dev/null --write-out '%{http_code}' "$url")"
+            if [ "$actual" != "$expected" ]; then
+              echo "Expected HTTP $expected for $url, got $actual"
+              exit 1
+            fi
+          }
+
+          # Contrats métier minimaux : les données membres et exports ne sont
+          # jamais accessibles sans session, même lorsque la pile démarre bien.
+          assert_status 401 http://127.0.0.1:3000/participants
+          assert_status 401 http://127.0.0.1:3000/admin/export-data
+          assert_status 401 http://127.0.0.1:3000/auth/notification-preference
+          assert_status 404 http://127.0.0.1:3000/import-data
+
+          echo "ClimbCrew runtime and authorization smoke tests succeeded."
 
       - name: Stop validation stack
         if: always()
-        run: docker compose --env-file .env.production -f docker-compose.prod.yml down -v
+        shell: bash
+        run: |
+          if [ -f .env.production ]; then
+            docker compose --env-file .env.production -f docker-compose.prod.yml down -v
+          else
+            echo "Validation arrêtée avant démarrage de la pile ; aucun nettoyage Docker nécessaire."
+          fi

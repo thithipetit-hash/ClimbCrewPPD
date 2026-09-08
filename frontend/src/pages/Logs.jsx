@@ -8,19 +8,27 @@ function formatBackupSize(bytes) {
   return `${(size / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
+const logTextStyle = {
+  minWidth: 0,
+  maxWidth: "100%",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  whiteSpace: "normal",
+};
+
 function ServerSection({ title, summary, children }) {
   return (
-    <details className="card admin-section-details">
+    <details className="card admin-section-details" style={{ minWidth: 0, maxWidth: "100%" }}>
       <summary
         className="card-header"
-        style={{ cursor: "pointer", userSelect: "none", marginBottom: 0 }}
+        style={{ cursor: "pointer", userSelect: "none", marginBottom: 0, minWidth: 0 }}
       >
-        <div>
+        <div style={{ minWidth: 0 }}>
           <h2>{title}</h2>
           {summary ? <div className="small">{summary}</div> : null}
         </div>
       </summary>
-      <div style={{ marginTop: 12 }}>{children}</div>
+      <div style={{ marginTop: 12, minWidth: 0 }}>{children}</div>
     </details>
   );
 }
@@ -181,23 +189,32 @@ export default function Logs({ USE_API, canManageAccountsAndLogs, adminAccessLog
   return (
     <>
       <ServerSection title="Logs" summary={`${adminAccessLogs.length} événement${adminAccessLogs.length > 1 ? "s" : ""}`}>
-        <div className="stack">
+        <div className="stack" style={{ minWidth: 0, maxWidth: "100%" }}>
           {adminAccessLogs.length === 0 ? (
             <div className="muted-box">Aucun log disponible.</div>
           ) : (
             adminAccessLogs.map((log) => (
-              <div className="subcard" key={log.id}>
-                <div className="card-header">
-                  <strong>{log.event_type}</strong>
-                  <span className={`badge ${log.success ? "" : "danger"}`}>{log.success ? "OK" : "Échec"}</span>
+              <div
+                className="subcard"
+                key={log.id}
+                style={{ minWidth: 0, width: "100%", maxWidth: "100%", boxSizing: "border-box", overflow: "hidden" }}
+              >
+                <div
+                  className="card-header"
+                  style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 8, alignItems: "start", minWidth: 0 }}
+                >
+                  <strong style={logTextStyle}>{log.event_type}</strong>
+                  <span className={`badge ${log.success ? "" : "danger"}`} style={{ flexShrink: 0 }}>
+                    {log.success ? "OK" : "Échec"}
+                  </span>
                 </div>
-                <div className="small">
+                <div className="small" style={logTextStyle}>
                   {log.email || "utilisateur inconnu"} · {log.created_at ? log.created_at.replace("T", " ").slice(0, 19) : "-"}
                 </div>
-                <div className="small">
+                <div className="small" style={logTextStyle}>
                   {log.ip_address || "IP inconnue"} · {log.user_agent || "navigateur inconnu"}
                 </div>
-                {log.details_text && <div className="small">Détails : {log.details_text}</div>}
+                {log.details_text && <div className="small" style={logTextStyle}>Détails : {log.details_text}</div>}
               </div>
             ))
           )}

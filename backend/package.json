@@ -4,9 +4,10 @@
   "version": "1.5.0-render-linux-compatible",
   "type": "module",
   "scripts": {
-    "start": "node --import ./admin-user-enhancements.js server.js",
+    "start": "node --import ./deployment-bootstrap.js server.js",
     "test": "node --test",
-    "backup:decrypt": "node tools/decrypt-backup.mjs"
+    "backup:decrypt": "node tools/decrypt-backup.mjs",
+    "import:legacy": "node tools/import-legacy.mjs"
   },
   "engines": {
     "node": ">=20.18.0 <25"
@@ -18,5 +19,8 @@
     "express": "^4.21.2",
     "nodemailer": "^9.0.3",
     "pg": "^8.13.1"
+  },
+  "overrides": {
+    "qs": "6.16.0"
   }
 }

@@ -36,7 +36,7 @@ test("la production refuse server.js sans préchargement sécurité", () => {
   assert.equal(hasRequiredEnhancementPreload({
     nodeEnv: "production",
     argv: ["node", "/app/server.js"],
-    execArgv: ["--import", "./admin-user-enhancements.js"],
+    execArgv: ["--import", "./deployment-bootstrap.js"],
   }), true);
 });
 

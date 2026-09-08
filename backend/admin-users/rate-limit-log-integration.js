@@ -1,8 +1,4 @@
-import express from "express";
 import { writeAccessLog } from "./access-log-service.js";
-
-const EXPRESS_RATE_LIMIT_LOG_PATCH = Symbol.for("climbcrew.rate-limit-log-patch");
-const APP_RATE_LIMIT_LOG_MIDDLEWARE = Symbol.for("climbcrew.rate-limit-log-middleware");
 
 export const RATE_LIMIT_ERROR = "Trop de tentatives. Réessaie plus tard.";
 
@@ -86,23 +82,4 @@ export function rateLimitLogMiddleware(req, res, next) {
   };
 
   next();
-}
-
-/**
- * Place le middleware de journalisation avant les routes déclarées par
- * server.js. Le patch reste transitoire tant que le serveur historique n'est
- * pas découpé en routeurs explicites.
- */
-export function installRateLimitLogIntegration() {
-  if (express.application[EXPRESS_RATE_LIMIT_LOG_PATCH]) return;
-  express.application[EXPRESS_RATE_LIMIT_LOG_PATCH] = true;
-
-  const originalUse = express.application.use;
-  express.application.use = function patchedUseWithRateLimitLog(...handlers) {
-    if (!this[APP_RATE_LIMIT_LOG_MIDDLEWARE]) {
-      originalUse.call(this, rateLimitLogMiddleware);
-      this[APP_RATE_LIMIT_LOG_MIDDLEWARE] = true;
-    }
-    return originalUse.apply(this, handlers);
-  };
 }

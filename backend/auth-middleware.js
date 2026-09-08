@@ -1,3 +1,5 @@
+import { setPool } from "./admin-users/database.js";
+
 export function createAuthMiddleware({
   pool,
   hashToken,
@@ -8,9 +10,12 @@ export function createAuthMiddleware({
   constantTimeEqual,
   serializeUser,
 }) {
+  // Le serveur principal crée la connexion PostgreSQL et l'injecte explicitement
+  // dans les services séparés. Aucun remplacement global de pg.Pool n'est requis.
+  setPool(pool);
+
   async function loadSessionFromToken(rawToken) {
     const tokenHash = hashToken(rawToken);
-
     const result = await pool.query(
       `
         select
@@ -41,19 +46,14 @@ export function createAuthMiddleware({
       `,
       [tokenHash]
     );
-
     return result.rows[0] || null;
   }
 
   async function requireAuth(req, res, next) {
     const rawToken = getRequestToken(req);
-
-    if (!rawToken) {
-      return res.status(401).json({ error: "Authentification requise" });
-    }
+    if (!rawToken) return res.status(401).json({ error: "Authentification requise" });
 
     const session = await loadSessionFromToken(rawToken);
-
     if (!session || session.status !== "active") {
       return res.status(401).json({ error: "Session invalide ou compte non actif" });
     }
@@ -66,12 +66,17 @@ export function createAuthMiddleware({
       }
     }
 
+    const user = serializeUser(session);
     req.auth = {
       token: rawToken,
       sessionId: session.session_id,
-      user: serializeUser(session),
+      user,
     };
 
+    // Contexte de compatibilité pour les contrôleurs modernes. Une seule
+    // validation de session/CSRF alimente désormais les deux contrats pendant
+    // la migration, ce qui supprime le second passage en base par requête.
+    req.enhancementAuth = { user };
     next();
   }
 
@@ -79,6 +84,48 @@ export function createAuthMiddleware({
     if (req.auth?.user?.role !== "admin") {
       return res.status(403).json({ error: "Accès administrateur requis" });
     }
+
+    // Toute action d'écriture autorisée à un administrateur est auditée après
+    // l'envoi de la réponse. Le corps de la requête n'est volontairement jamais
+    // journalisé afin d'exclure mots de passe, jetons et autres données sensibles.
+    if (!isSafeMethod(req.method) && !req.adminAuditAttached) {
+      req.adminAuditAttached = true;
+      const startedAt = Date.now();
+      res.once("finish", () => {
+        const user = req.auth?.user;
+        const path = String(req.path || req.url || "").split("?")[0];
+        const forwarded = req.headers["x-forwarded-for"];
+        const ipAddress = typeof forwarded === "string" && forwarded.length > 0
+          ? forwarded.split(",")[0].trim()
+          : req.ip || null;
+        const details = {
+          actor_email: user?.email || null,
+          actor_role: user?.role || "admin",
+          method: String(req.method || "").toUpperCase(),
+          path,
+          status_code: res.statusCode,
+          request_id: req.requestId || null,
+          duration_ms: Date.now() - startedAt,
+        };
+
+        pool.query(
+          `
+            insert into access_logs (user_id, event_type, success, ip_address, user_agent, details)
+            values ($1, 'admin_action', $2, $3, $4, $5::jsonb)
+          `,
+          [
+            user?.id || null,
+            res.statusCode < 400,
+            ipAddress,
+            req.headers["user-agent"] || null,
+            JSON.stringify(details),
+          ]
+        ).catch((error) => {
+          console.error("Journalisation admin_action impossible :", error);
+        });
+      });
+    }
+
     next();
   }
 

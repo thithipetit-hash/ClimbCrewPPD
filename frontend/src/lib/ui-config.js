@@ -27,17 +27,6 @@ export const STYLE_LABELS = {
   test: "Essai / test",
 };
 
-export const THECRAG_STYLE_BY_CLIMBCREW = {
-  a_vue: "Onsight",
-  flash: "Flash",
-  en_tete: "Redpoint",
-  moulinette: "Top rope",
-  avec_repos: "Dog",
-  travaillee: "Redpoint",
-  projet: "Attempt",
-  non_enchainee: "Attempt",
-  test: "Attempt",
-};
 
 export const ROUTE_TAGS = [
   { value: "dalle", label: "Dalle" },
@@ -53,8 +42,7 @@ export const ROUTE_TAGS = [
 export const TABS = [
   { key: "inscriptions", label: "Inscriptions" },
   { key: "voies", label: "Voies" },
-  { key: "progression", label: "Progression" },
-  { key: "mon_profil", label: "Mon Profil" },
+  { key: "mon_profil", label: "Profil" },
   { key: "statistiques", label: "Statistiques" },
   { key: "wall_of_fame", label: "Tableau d’honneur" },
   { key: "faq", label: "FAQ" },

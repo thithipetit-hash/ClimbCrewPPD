@@ -64,6 +64,14 @@ function cleanChoice(value, fallback) {
   return /^[a-z0-9_]{2,40}$/.test(normalized) ? normalized : fallback;
 }
 
+function cleanSexe(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["", "h", "m", "f"].includes(normalized)) {
+    return normalized === "m" ? "h" : normalized;
+  }
+  throw new Error("Le sexe doit être Homme, Femme ou Non précisé.");
+}
+
 /** Remplace PATCH /participants/me/profile sans renvoyer l'image Base64. */
 export async function updateOwnParticipantProfile(req, res) {
   const user = currentUser(req);
@@ -73,18 +81,25 @@ export async function updateOwnParticipantProfile(req, res) {
   }
 
   try {
-    const avatarId = cleanChoice(req.body?.avatarId, "gecko");
-    const crestId = cleanChoice(req.body?.crestId, "cristal");
-    const profilePublic = req.body?.profilePublic !== false;
-    const customAvatar = resolveCustomAvatarUpdate(req.body?.customAvatarImage);
+    const body = req.body || {};
+    const hasField = (field) => Object.prototype.hasOwnProperty.call(body, field);
+
+    // PATCH doit être réellement partiel : une modification de l'avatar ou de
+    // la confidentialité ne doit jamais effacer le sexe déjà enregistré (et inversement).
+    const avatarId = hasField("avatarId") ? cleanChoice(body.avatarId, "gecko") : null;
+    const crestId = hasField("crestId") ? cleanChoice(body.crestId, "cristal") : null;
+    const profilePublic = hasField("profilePublic") ? body.profilePublic !== false : null;
+    const customAvatar = resolveCustomAvatarUpdate(body.customAvatarImage);
+    const sexe = hasField("sexe") ? cleanSexe(body.sexe) : null;
 
     const result = await getPool().query(
       `
         update participants
-        set avatar_id = $2,
-            crest_id = $3,
-            profile_public = $4,
-            custom_avatar_image = case when $5::boolean then custom_avatar_image else $6 end
+        set avatar_id = coalesce($2, avatar_id),
+            crest_id = coalesce($3, crest_id),
+            profile_public = coalesce($4::boolean, profile_public),
+            custom_avatar_image = case when $5::boolean then custom_avatar_image else $6 end,
+            sexe = coalesce($7, sexe)
         where id = $1
         returning
           id, nom, prenom, email, login_email, passport, sexe, cotisation, ffme,
@@ -99,13 +114,14 @@ export async function updateOwnParticipantProfile(req, res) {
         profilePublic,
         customAvatar.keepExisting,
         customAvatar.value,
+        sexe,
       ],
     );
 
     if (!result.rowCount) return res.status(404).json({ error: "Grimpeur introuvable" });
     return res.json(serializeParticipant(result.rows[0]));
   } catch (error) {
-    if (/image personnalisée|WebP/i.test(String(error.message || ""))) {
+    if (/image personnalisée|WebP|sexe/i.test(String(error.message || ""))) {
       return res.status(400).json({ error: error.message });
     }
     console.error("PATCH /participants/me/profile", error);
