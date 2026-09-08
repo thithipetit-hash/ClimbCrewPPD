@@ -1,0 +1,40 @@
+name: Diagnostic public production
+
+on:
+  push:
+    branches:
+      - diagnostic-public-production
+    paths:
+      - .github/workflows/diagnose-public-production.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect public production
+        shell: bash
+        run: |
+          set -euo pipefail
+          DOMAIN=climbcrew.dip-tcs.com
+          echo '=== DNS ==='
+          getent ahostsv4 "$DOMAIN" | head -n 10 || true
+          echo '=== TLS ==='
+          echo | openssl s_client -connect "${DOMAIN}:443" -servername "$DOMAIN" 2>/dev/null | openssl x509 -noout -subject -issuer -ext subjectAltName || true
+          echo '=== ROOT HEADERS ==='
+          curl -sS -D - -o /tmp/root.html --max-time 20 "https://${DOMAIN}/" || true
+          echo '=== ROOT PREFIX ==='
+          head -c 400 /tmp/root.html 2>/dev/null || true
+          echo
+          echo '=== MARKER HEADERS ==='
+          curl -sS -D - -o /tmp/marker --max-time 20 "https://${DOMAIN}/deployment-version.json?diag=1" || true
+          echo '=== MARKER BODY ==='
+          head -c 1000 /tmp/marker 2>/dev/null || true
+          echo
+          echo '=== HEALTH ==='
+          curl -sS -D - -o /tmp/health --max-time 20 "https://${DOMAIN}/api/health" || true
+          head -c 500 /tmp/health 2>/dev/null || true
+          echo
