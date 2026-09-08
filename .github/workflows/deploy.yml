@@ -2,20 +2,19 @@ name: Validate and Deploy
 
 on:
   pull_request:
-    branches:
-      - main
-      - production
+    branches: [main, production]
   push:
-    branches:
-      - main
-      - production
+    branches: [main, production]
   workflow_dispatch:
     inputs:
       branch:
-        description: 'Branch to deploy'
+        description: 'Branch to validate/deploy'
         required: true
         default: 'main'
-        type: string
+        type: choice
+        options:
+          - main
+          - production
 
 permissions:
   contents: read
@@ -32,7 +31,6 @@ jobs:
     outputs:
       validated_sha: ${{ steps.validated_commit.outputs.sha }}
       deploy_branch: ${{ steps.validated_commit.outputs.branch }}
-
     steps:
       - name: Récupérer le dépôt à valider
         uses: actions/checkout@v4
@@ -47,25 +45,21 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_BRANCH: ${{ github.event.inputs.branch }}
           REF_NAME: ${{ github.ref_name }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-
           VALIDATED_SHA="$(git rev-parse HEAD)"
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            DEPLOY_BRANCH="$INPUT_BRANCH"
-          else
-            DEPLOY_BRANCH="$REF_NAME"
-          fi
-
-          if [ -z "$VALIDATED_SHA" ] || [ -z "$DEPLOY_BRANCH" ]; then
-            echo "ERROR: impossible de déterminer le SHA ou la branche validée."
-            exit 1
-          fi
-
+          case "$EVENT_NAME" in
+            workflow_dispatch) DEPLOY_BRANCH="$INPUT_BRANCH" ;;
+            pull_request) DEPLOY_BRANCH="$BASE_REF" ;;
+            *) DEPLOY_BRANCH="$REF_NAME" ;;
+          esac
+          test -n "$VALIDATED_SHA"
+          test -n "$DEPLOY_BRANCH"
           printf 'sha=%s\n' "$VALIDATED_SHA" >> "$GITHUB_OUTPUT"
           printf 'branch=%s\n' "$DEPLOY_BRANCH" >> "$GITHUB_OUTPUT"
-          echo "Commit à valider : $VALIDATED_SHA"
-          echo "Branche associée : $DEPLOY_BRANCH"
+          echo "Commit validé : $VALIDATED_SHA"
+          echo "Branche cible : $DEPLOY_BRANCH"
 
       - name: Vérifier l'incrément de version
         shell: bash
@@ -77,21 +71,13 @@ jobs:
       - name: Installer Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Installer le frontend
         working-directory: frontend
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            npm ci --no-audit --no-fund && exit 0
-            echo "npm ci a échoué (tentative ${attempt}/3), nouvel essai dans 5s..."
-            sleep 5
-          done
-          exit 1
+        run: npm ci --no-audit --no-fund
 
       - name: Auditer les dépendances frontend
         working-directory: frontend
@@ -107,15 +93,7 @@ jobs:
 
       - name: Installer le backend
         working-directory: backend
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            npm ci --no-audit --no-fund && exit 0
-            echo "npm ci a échoué (tentative ${attempt}/3), nouvel essai dans 5s..."
-            sleep 5
-          done
-          exit 1
+        run: npm ci --no-audit --no-fund
 
       - name: Auditer les dépendances backend
         working-directory: backend
@@ -148,7 +126,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
-
     steps:
       - name: Récupérer exactement le commit validé
         uses: actions/checkout@v4
@@ -158,7 +135,7 @@ jobs:
       - name: Installer Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: '24'
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -170,22 +147,22 @@ jobs:
         working-directory: backend
         env:
           NODE_ENV: test
-          PORT: "3100"
+          PORT: '3100'
           DATABASE_URL: postgres://climbcrew_test:climbcrew_test_password@127.0.0.1:5432/climbcrew_test
-          PG_SSL: "false"
+          PG_SSL: 'false'
           PUBLIC_URL: http://127.0.0.1:5173
           FRONTEND_ORIGIN: http://127.0.0.1:5173
           CORS_ORIGIN: http://127.0.0.1:5173
-          SECURE_COOKIES: "false"
+          SECURE_COOKIES: 'false'
           COOKIE_SAMESITE: lax
-          EMAIL_ENABLED: "false"
-          BACKUP_ENABLED: "false"
-          REQUIRE_ADMIN_ACCOUNT_APPROVAL: "false"
-          ALLOW_FIRST_ADMIN_BOOTSTRAP: "true"
+          EMAIL_ENABLED: 'false'
+          BACKUP_ENABLED: 'false'
+          REQUIRE_ADMIN_ACCOUNT_APPROVAL: 'false'
+          ALLOW_FIRST_ADMIN_BOOTSTRAP: 'true'
           FIRST_ADMIN_EMAIL: admin@integration.test
           FIRST_ADMIN_PASSWORD: Integration_Admin1!
-          ALLOW_WEAK_FIRST_ADMIN_PASSWORD: "false"
-          BCRYPT_ROUNDS: "10"
+          ALLOW_WEAK_FIRST_ADMIN_PASSWORD: 'false'
+          BCRYPT_ROUNDS: '10'
         run: node integration/security-flow.integration.mjs
 
   linux_validate:
@@ -195,330 +172,153 @@ jobs:
     with:
       ref: ${{ needs.validate.outputs.validated_sha }}
 
-  # Le déploiement n'est autorisé qu'après validation du code, intégration sur
-  # PostgreSQL et démarrage réel de la pile Linux du même commit.
-  #
-  # Deux cibles partagent ce même runner self-hosted, sur le même serveur :
-  # - main       -> /opt/climbcrew (pre-production, pre-climbcrew.dip-tcs.com)
-  # - production -> secrets.PROD_DEPLOY_ROOT (climbcrew.dip-tcs.com, le
-  #                 répertoire déjà utilisé historiquement pour ce domaine ;
-  #                 son chemin n'est jamais écrit dans le dépôt)
   deploy:
-    name: Déployer sur le serveur de production
-    needs:
-      - validate
-      - integration
-      - linux_validate
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    name: Déployer la production réelle
+    needs: [validate, integration, linux_validate]
+    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.validate.outputs.deploy_branch == 'production' }}
     runs-on: self-hosted
     timeout-minutes: 30
-
+    env:
+      DEPLOY_ROOT: /opt/climbcrew
     steps:
-      - name: Déterminer le répertoire de déploiement
-        shell: bash
-        env:
-          DEPLOY_BRANCH: ${{ needs.validate.outputs.deploy_branch }}
-          PROD_DEPLOY_ROOT: ${{ secrets.PROD_DEPLOY_ROOT }}
-        run: |
-          set -euo pipefail
-          if [ "$DEPLOY_BRANCH" = "production" ]; then
-            if [ -z "${PROD_DEPLOY_ROOT:-}" ]; then
-              echo "ERROR: le secret PROD_DEPLOY_ROOT n'est pas configuré pour déployer la branche production."
-              exit 1
-            fi
-            echo "DEPLOY_ROOT=${PROD_DEPLOY_ROOT}" >> "$GITHUB_ENV"
-            echo "Cible : production (climbcrew.dip-tcs.com)"
-          else
-            echo "DEPLOY_ROOT=/opt/climbcrew" >> "$GITHUB_ENV"
-            echo "Cible : pre-production (pre-climbcrew.dip-tcs.com)"
-          fi
-
-      - name: Vérifier le runner et l'environnement de production
+      - name: Vérifier que le runner pointe bien sur la production
         shell: bash
         run: |
           set -euo pipefail
-
           for command in git docker curl; do
-            if ! command -v "$command" >/dev/null 2>&1; then
-              echo "ERROR: commande requise absente du runner : $command"
+            command -v "$command" >/dev/null 2>&1 || { echo "ERROR: commande absente: $command"; exit 1; }
+          done
+          docker compose version >/dev/null
+          test -d "$DEPLOY_ROOT/.git" || { echo "ERROR: clone persistant absent: $DEPLOY_ROOT"; exit 1; }
+          test -f "$DEPLOY_ROOT/.env.production" || { echo "ERROR: .env.production absent"; exit 1; }
+          if ! sudo grep -RqsE 'server_name[[:space:]]+climbcrew\.dip-tcs\.com' /etc/nginx/sites-enabled 2>/dev/null; then
+            echo 'ERROR: ce runner ne publie pas climbcrew.dip-tcs.com.'
+            exit 1
+          fi
+          if docker inspect climbcrew-backend >/dev/null 2>&1; then
+            CURRENT_ROOT="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' climbcrew-backend 2>/dev/null || true)"
+            if [ -n "$CURRENT_ROOT" ] && [ "$CURRENT_ROOT" != "$DEPLOY_ROOT" ]; then
+              echo "ERROR: climbcrew-backend appartient à $CURRENT_ROOT, pas à $DEPLOY_ROOT"
               exit 1
             fi
-          done
-
-          if ! docker compose version >/dev/null 2>&1; then
-            echo "ERROR: le plugin Docker Compose n'est pas disponible."
-            exit 1
           fi
+          echo "Cible confirmée: $DEPLOY_ROOT -> climbcrew.dip-tcs.com"
 
-          if [ ! -d "$DEPLOY_ROOT/.git" ]; then
-            echo "ERROR: $DEPLOY_ROOT n'est pas un clone Git persistant."
-            echo "Initialiser le dépôt sur le serveur avant de relancer le workflow."
-            exit 1
-          fi
+      - name: Sauvegarder PostgreSQL avant bascule
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker inspect climbcrew-db >/dev/null 2>&1 || { echo 'ERROR: conteneur PostgreSQL de production absent'; exit 1; }
+          docker ps --format '{{.Names}}' | grep -qx 'climbcrew-db' || { echo 'ERROR: PostgreSQL de production arrêté'; exit 1; }
+          BACKUP_DIR="$DEPLOY_ROOT/backups/predeploy"
+          mkdir -p "$BACKUP_DIR"
+          STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+          BACKUP_FILE="$BACKUP_DIR/predeploy-${STAMP}.dump"
+          docker exec climbcrew-db sh -lc 'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$BACKUP_FILE"
+          test -s "$BACKUP_FILE" || { echo 'ERROR: sauvegarde PostgreSQL vide'; exit 1; }
+          sha256sum "$BACKUP_FILE"
+          ls -1t "$BACKUP_DIR"/predeploy-*.dump 2>/dev/null | tail -n +11 | xargs -r rm -f
+          echo "Sauvegarde pré-déploiement créée: $BACKUP_FILE"
 
-          if [ ! -f "$DEPLOY_ROOT/.env.production" ]; then
-            echo "ERROR: $DEPLOY_ROOT/.env.production not found."
-            echo "Please create it manually before deploying."
-            exit 1
-          fi
-
-          cd "$DEPLOY_ROOT"
-          echo "Runner prêt. HEAD actuel : $(git rev-parse HEAD)"
-          echo "Remote origin : $(git remote get-url origin)"
-          echo ".env.production found"
-
-      - name: Synchroniser le dépôt local avec le SHA validé
+      - name: Synchroniser le dépôt sur le SHA production validé
         id: sync_repo
         shell: bash
         env:
           VALIDATED_SHA: ${{ needs.validate.outputs.validated_sha }}
-          DEPLOY_BRANCH: ${{ needs.validate.outputs.deploy_branch }}
         run: |
           set -euo pipefail
           cd "$DEPLOY_ROOT"
-
-          if ! git check-ref-format --branch "$DEPLOY_BRANCH" >/dev/null 2>&1; then
-            echo "ERROR: nom de branche invalide : $DEPLOY_BRANCH"
-            exit 1
-          fi
-
-          # Le répertoire "production" a été repris tel quel depuis un autre
-          # pipeline : son remote "origin" peut encore pointer vers un autre
-          # dépôt. On le réaligne systématiquement sur celui-ci avant de fetcher.
           EXPECTED_ORIGIN="https://github.com/${GITHUB_REPOSITORY}.git"
-          CURRENT_ORIGIN="$(git remote get-url origin 2>/dev/null || echo "")"
+          CURRENT_ORIGIN="$(git remote get-url origin 2>/dev/null || true)"
           if [ "$CURRENT_ORIGIN" != "$EXPECTED_ORIGIN" ]; then
-            echo "Remote origin inattendu ($CURRENT_ORIGIN), réalignement sur $EXPECTED_ORIGIN"
             git remote set-url origin "$EXPECTED_ORIGIN" 2>/dev/null || git remote add origin "$EXPECTED_ORIGIN"
           fi
-
           PREVIOUS_SHA="$(git rev-parse HEAD)"
           printf 'previous_sha=%s\n' "$PREVIOUS_SHA" >> "$GITHUB_OUTPUT"
-          echo "SHA actuellement présent sur le serveur : $PREVIOUS_SHA"
-          echo "SHA validé à déployer : $VALIDATED_SHA"
-          echo "Branche source : $DEPLOY_BRANCH"
-
-          FETCH_REFSPEC="refs/heads/${DEPLOY_BRANCH}:refs/remotes/origin/${DEPLOY_BRANCH}"
           FETCH_OK=false
-
           for attempt in 1 2 3 4 5; do
-            echo "git fetch : tentative ${attempt}/5"
-            if timeout 90s git fetch --no-tags --prune origin "$FETCH_REFSPEC"; then
+            if timeout 90s git fetch --no-tags --prune origin 'refs/heads/production:refs/remotes/origin/production'; then
               FETCH_OK=true
               break
             fi
-
-            if [ "$attempt" -lt 5 ]; then
-              delay=$((attempt * 10))
-              echo "Fetch impossible, nouvel essai dans ${delay}s..."
-              sleep "$delay"
-            fi
+            sleep $((attempt * 10))
           done
+          [ "$FETCH_OK" = true ] || { echo 'ERROR: git fetch impossible'; exit 1; }
+          git cat-file -e "${VALIDATED_SHA}^{commit}" 2>/dev/null || { echo 'ERROR: SHA validé absent'; exit 1; }
+          git merge-base --is-ancestor "$VALIDATED_SHA" refs/remotes/origin/production || { echo 'ERROR: SHA hors branche production'; exit 1; }
+          git checkout -B production "$VALIDATED_SHA"
+          [ "$(git rev-parse HEAD)" = "$VALIDATED_SHA" ] || exit 1
+          echo "Production verrouillée sur $VALIDATED_SHA (ancien SHA: $PREVIOUS_SHA)"
 
-          if [ "$FETCH_OK" != "true" ]; then
-            echo "ERROR: impossible de synchroniser le dépôt après 5 tentatives."
-            echo "La version actuellement présente n'est pas modifiée."
-            exit 1
-          fi
-
-          if ! git cat-file -e "${VALIDATED_SHA}^{commit}" 2>/dev/null; then
-            echo "SHA validé absent du clone local, tentative de récupération ciblée."
-            for attempt in 1 2 3; do
-              if timeout 90s git fetch --no-tags origin "$VALIDATED_SHA"; then
-                break
-              fi
-              sleep $((attempt * 10))
-            done
-          fi
-
-          if ! git cat-file -e "${VALIDATED_SHA}^{commit}" 2>/dev/null; then
-            echo "ERROR: le SHA validé $VALIDATED_SHA est introuvable sur le runner."
-            exit 1
-          fi
-
-          if ! git merge-base --is-ancestor "$VALIDATED_SHA" "refs/remotes/origin/$DEPLOY_BRANCH"; then
-            echo "ERROR: le SHA validé n'appartient plus à la branche distante $DEPLOY_BRANCH."
-            echo "Relancer une validation sur l'état actuel de la branche."
-            exit 1
-          fi
-
-          git reset --hard "$VALIDATED_SHA"
-
-          ACTUAL_SHA="$(git rev-parse HEAD)"
-          if [ "$ACTUAL_SHA" != "$VALIDATED_SHA" ]; then
-            echo "ERROR: HEAD=$ACTUAL_SHA alors que $VALIDATED_SHA était attendu."
-            exit 1
-          fi
-
-          echo "Dépôt verrouillé sur le SHA validé : $ACTUAL_SHA"
-
-      - name: Synchroniser les identifiants SMTP dans .env.production
+      - name: Synchroniser les secrets applicatifs disponibles
         shell: bash
         env:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-        run: |
-          set -euo pipefail
-          if [ -z "${SMTP_USER:-}" ] || [ -z "${SMTP_PASSWORD:-}" ]; then
-            echo "SMTP_USER/SMTP_PASSWORD secrets not set, leaving .env.production untouched."
-            exit 0
-          fi
-
-          ENV_FILE="${DEPLOY_ROOT}/.env.production"
-
-          set_env_var() {
-            local key="$1"
-            local value="$2"
-            if grep -q "^${key}=" "$ENV_FILE"; then
-              sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
-            else
-              echo "${key}=${value}" >> "$ENV_FILE"
-            fi
-          }
-
-          set_env_var "EMAIL_ENABLED" "true"
-          set_env_var "SMTP_HOST" "smtp.gmail.com"
-          set_env_var "SMTP_PORT" "587"
-          set_env_var "SMTP_SECURE" "false"
-          set_env_var "SMTP_REQUIRE_TLS" "true"
-          set_env_var "SMTP_USER" "${SMTP_USER}"
-          set_env_var "SMTP_PASSWORD" "${SMTP_PASSWORD}"
-          set_env_var "EMAIL_FROM_NAME" "ClimbClubCristal"
-          set_env_var "EMAIL_FROM_ADDRESS" "${SMTP_USER}"
-          echo "SMTP credentials synced into .env.production"
-
-      - name: Verrouiller les réglages de sécurité des comptes dans .env.production
-        shell: bash
-        run: |
-          set -euo pipefail
-          ENV_FILE="${DEPLOY_ROOT}/.env.production"
-
-          set_env_var() {
-            local key="$1"
-            local value="$2"
-            if grep -q "^${key}=" "$ENV_FILE"; then
-              sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
-            else
-              echo "${key}=${value}" >> "$ENV_FILE"
-            fi
-          }
-
-          # Toute création de compte doit être validée par un administrateur :
-          # ce réglage est forcé à chaque déploiement pour ne jamais dépendre
-          # d'un .env.production oublié dans un état permissif.
-          set_env_var "REQUIRE_ADMIN_ACCOUNT_APPROVAL" "true"
-
-          # Le bootstrap du premier administrateur est un geste ponctuel et
-          # volontaire (voir backend/deployment-compatibility.js) : il est
-          # remis à false à chaque déploiement automatique.
-          set_env_var "ALLOW_FIRST_ADMIN_BOOTSTRAP" "false"
-
-          echo "Réglages de sécurité des comptes verrouillés dans .env.production"
-
-      - name: Synchroniser la clé de chiffrement des sauvegardes dans .env.production
-        shell: bash
-        env:
           BACKUP_EMAIL_ENCRYPTION_KEY: ${{ secrets.BACKUP_EMAIL_ENCRYPTION_KEY }}
         run: |
           set -euo pipefail
-          if [ -z "${BACKUP_EMAIL_ENCRYPTION_KEY:-}" ]; then
-            echo "BACKUP_EMAIL_ENCRYPTION_KEY secret not set, leaving .env.production untouched."
-            exit 0
-          fi
-
-          ENV_FILE="${DEPLOY_ROOT}/.env.production"
-
+          ENV_FILE="$DEPLOY_ROOT/.env.production"
           set_env_var() {
-            local key="$1"
-            local value="$2"
+            local key="$1" value="$2"
             if grep -q "^${key}=" "$ENV_FILE"; then
               sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
             else
-              echo "${key}=${value}" >> "$ENV_FILE"
+              printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
             fi
           }
-
-          set_env_var "BACKUP_EMAIL_ENCRYPTION_KEY" "${BACKUP_EMAIL_ENCRYPTION_KEY}"
-          echo "Clé de chiffrement des sauvegardes synchronisée dans .env.production"
-
-      - name: Désactiver un éventuel service historique non-Docker (cible production)
-        if: needs.validate.outputs.deploy_branch == 'production'
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Ce dépôt remplace intégralement l'ancien mode de déploiement de la
-          # cible "production" (auparavant un service systemd Node en direct
-          # sur la machine, port 3000). On le désactive systématiquement avant
-          # de laisser Docker Compose reprendre les mêmes ports, que ce
-          # service soit encore actif ou déjà remplacé.
-          SERVICE="climbcrew-backend.service"
-          if systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
-            echo "Service systemd historique actif ($SERVICE), arrêt avant le passage en Docker."
-            sudo systemctl stop "$SERVICE" || echo "AVERTISSEMENT: impossible d'arrêter $SERVICE automatiquement (intervention manuelle nécessaire)."
-            sudo systemctl disable "$SERVICE" 2>/dev/null || true
-          else
-            echo "Aucun service systemd historique actif ($SERVICE) : rien à faire."
+          set_env_var REQUIRE_ADMIN_ACCOUNT_APPROVAL true
+          set_env_var ALLOW_FIRST_ADMIN_BOOTSTRAP false
+          if [ -n "${SMTP_USER:-}" ] && [ -n "${SMTP_PASSWORD:-}" ]; then
+            set_env_var EMAIL_ENABLED true
+            set_env_var SMTP_HOST smtp.gmail.com
+            set_env_var SMTP_PORT 587
+            set_env_var SMTP_SECURE false
+            set_env_var SMTP_REQUIRE_TLS true
+            set_env_var SMTP_USER "$SMTP_USER"
+            set_env_var SMTP_PASSWORD "$SMTP_PASSWORD"
+            set_env_var EMAIL_FROM_NAME ClimbClubCristal
+            set_env_var EMAIL_FROM_ADDRESS "$SMTP_USER"
           fi
+          if [ -n "${BACKUP_EMAIL_ENCRYPTION_KEY:-}" ]; then
+            set_env_var BACKUP_EMAIL_ENCRYPTION_KEY "$BACKUP_EMAIL_ENCRYPTION_KEY"
+          fi
+          echo 'Configuration de sécurité synchronisée.'
 
-      - name: Construire et démarrer la version validée
+      - name: Construire et démarrer le SHA validé
         shell: bash
         env:
           VALIDATED_SHA: ${{ needs.validate.outputs.validated_sha }}
         run: |
           set -euo pipefail
           cd "$DEPLOY_ROOT"
-
-          echo "=== Building and starting validated commit $VALIDATED_SHA ==="
           docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+          echo "Pile démarrée pour $VALIDATED_SHA"
 
-      - name: Contrôler la santé après déploiement
+      - name: Contrôler la santé locale
         shell: bash
         env:
           VALIDATED_SHA: ${{ needs.validate.outputs.validated_sha }}
         run: |
           set -euo pipefail
-
-          echo "=== Checking backend health ==="
           BACKEND_OK=false
           for attempt in $(seq 1 24); do
-            if curl --fail --silent --max-time 5 http://127.0.0.1:3000/health >/dev/null; then
-              BACKEND_OK=true
-              break
-            fi
-            echo "Backend pas encore prêt (${attempt}/24)"
+            if curl --fail --silent --max-time 5 http://127.0.0.1:3000/health >/dev/null; then BACKEND_OK=true; break; fi
             sleep 5
           done
-
-          if [ "$BACKEND_OK" != "true" ]; then
-            echo "ERROR: backend health check failed"
-            docker logs --tail 200 climbcrew-backend || true
-            exit 1
-          fi
-
-          echo "=== Checking frontend ==="
+          [ "$BACKEND_OK" = true ] || { docker logs --tail 200 climbcrew-backend || true; exit 1; }
           FRONTEND_OK=false
           for attempt in $(seq 1 12); do
-            if curl --fail --silent --max-time 5 http://127.0.0.1:8080/ >/dev/null; then
-              FRONTEND_OK=true
-              break
-            fi
-            echo "Frontend pas encore prêt (${attempt}/12)"
+            if curl --fail --silent --max-time 5 http://127.0.0.1:8080/ >/dev/null; then FRONTEND_OK=true; break; fi
             sleep 5
           done
-
-          if [ "$FRONTEND_OK" != "true" ]; then
-            echo "ERROR: frontend health check failed"
-            docker compose --env-file "$DEPLOY_ROOT/.env.production" -f "$DEPLOY_ROOT/docker-compose.prod.yml" ps || true
-            exit 1
-          fi
-
-          echo "Backend healthy"
-          echo "Frontend healthy"
-          echo "=== Deployment completed for $VALIDATED_SHA ==="
-
+          [ "$FRONTEND_OK" = true ] || { docker compose --env-file "$DEPLOY_ROOT/.env.production" -f "$DEPLOY_ROOT/docker-compose.prod.yml" ps || true; exit 1; }
+          echo "Backend OK · Frontend OK · SHA $VALIDATED_SHA"
           {
-            echo "### Déploiement ClimbCrew"
-            echo "- Commit validé et déployé : \`$VALIDATED_SHA\`"
-            echo "- Backend : OK"
-            echo "- Frontend : OK"
+            echo '### Déploiement production ClimbCrew'
+            echo "- SHA: \`$VALIDATED_SHA\`"
+            echo '- Domaine: `climbcrew.dip-tcs.com`'
+            echo '- PostgreSQL sauvegardé avant bascule'
+            echo '- Backend: OK'
+            echo '- Frontend: OK'
           } >> "$GITHUB_STEP_SUMMARY"
