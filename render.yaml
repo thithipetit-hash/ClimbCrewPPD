@@ -11,7 +11,7 @@ services:
     runtime: node
     plan: free
     rootDir: backend
-    autoDeployTrigger: commit
+    autoDeployTrigger: checksPass
     buildCommand: npm ci --omit=dev --no-audit --no-fund
     startCommand: npm start
     healthCheckPath: /health
@@ -66,14 +66,16 @@ services:
       - key: SETUP_TOKEN
         generateValue: true
 
-      # À renseigner dans Render. Pour une base neuve, activer temporairement
-      # ALLOW_FIRST_ADMIN_BOOTSTRAP=true, démarrer une fois, puis remettre false.
+      # Les identifiants initiaux restent saisis dans Render et hors Git.
+      # Le bootstrap reste actif en PPD afin qu'une base neuve soit utilisable
+      # dès son premier démarrage ; dès qu'un administrateur actif existe,
+      # l'initialiseur n'écrase plus son compte ni son mot de passe.
       - key: FIRST_ADMIN_EMAIL
         sync: false
       - key: FIRST_ADMIN_PASSWORD
         sync: false
       - key: ALLOW_FIRST_ADMIN_BOOTSTRAP
-        sync: false
+        value: "true"
       - key: ALLOW_WEAK_FIRST_ADMIN_PASSWORD
         value: "false"
       - key: BCRYPT_ROUNDS
@@ -97,7 +99,7 @@ services:
     name: ClimbCrewPPD-frontend
     runtime: static
     rootDir: frontend
-    autoDeployTrigger: commit
+    autoDeployTrigger: checksPass
     buildCommand: npm ci --no-audit --no-fund && VITE_API_URL="https://${CLIMBCREW_PPD_API_HOST}/api" VITE_CSRF_COOKIE_NAME=climbcrew_ppd_csrf npm run build
     staticPublishPath: dist
     envVars:
