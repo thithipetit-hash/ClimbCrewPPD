@@ -11,63 +11,33 @@ permissions:
   contents: read
 
 jobs:
-  inspect_public:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Inspect public production
-        shell: bash
-        run: |
-          set -euo pipefail
-          DOMAIN=climbcrew.dip-tcs.com
-          echo '=== DNS ==='
-          getent ahostsv4 "$DOMAIN" | head -n 10 || true
-          echo '=== TLS ==='
-          echo | openssl s_client -connect "${DOMAIN}:443" -servername "$DOMAIN" 2>/dev/null | openssl x509 -noout -subject -issuer -ext subjectAltName || true
-          echo '=== ROOT HEADERS ==='
-          curl -sS -D - -o /tmp/root.html --max-time 20 "https://${DOMAIN}/" || true
-          echo '=== ROOT PREFIX ==='
-          head -c 400 /tmp/root.html 2>/dev/null || true
-          echo
-          echo '=== MARKER HEADERS ==='
-          curl -sS -D - -o /tmp/marker --max-time 20 "https://${DOMAIN}/deployment-version.json?diag=1" || true
-          echo '=== MARKER BODY ==='
-          head -c 1000 /tmp/marker 2>/dev/null || true
-          echo
-          echo '=== HEALTH ==='
-          curl -sS -D - -o /tmp/health --max-time 20 "https://${DOMAIN}/api/health" || true
-          head -c 500 /tmp/health 2>/dev/null || true
-          echo
-
   inspect_server:
     runs-on: self-hosted
     timeout-minutes: 5
     steps:
-      - name: Inspect production server routing without changes
+      - name: Locate upstream frontend target without changes
         shell: bash
         run: |
           set +e
           DOMAIN=climbcrew.dip-tcs.com
-          echo '=== HOST ==='
-          hostname
-          date -Is
-          echo -n 'Public IPv4: '; curl -4 -fsS --max-time 10 https://api.ipify.org || true; echo
-          echo '=== DNS FROM SERVER ==='
-          getent ahostsv4 "$DOMAIN" | head -n 10 || true
-          echo '=== NGINX SITE ==='
-          sudo cat /etc/nginx/sites-enabled/climbcrew 2>&1 || true
-          echo '=== LOCAL LISTENERS ==='
-          sudo ss -tlnp | grep -E '(:80 |:443 |:3000 |:8080 )' || true
-          echo '=== CADDY ==='
-          systemctl show caddy --property=ActiveState,FragmentPath 2>&1 || true
-          sudo find /etc/caddy -maxdepth 2 -type f -print -exec sed -n '1,240p' {} \; 2>/dev/null || true
-          echo '=== DOCKER ==='
-          sudo docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Label "com.docker.compose.project.working_dir"}}' || true
-          echo '=== DIRECT FRONTEND MARKER ==='
-          curl -sS -D - -o /tmp/direct-marker http://127.0.0.1:8080/deployment-version.json || true
-          cat /tmp/direct-marker 2>/dev/null || true; echo
-          echo '=== DIRECT FRONTEND ROOT HEADERS ==='
-          curl -sS -D - -o /dev/null http://127.0.0.1:8080/ || true
-          echo '=== LOCAL NGINX HTTPS VIA LOOPBACK ==='
-          curl -sS --resolve "${DOMAIN}:443:127.0.0.1" -D - -o /tmp/local-marker "https://${DOMAIN}/deployment-version.json" || true
-          cat /tmp/local-marker 2>/dev/null || true; echo
+          echo '=== NETWORK ==='
+          ip -br -4 addr || true
+          ip route || true
+          echo '=== NEIGHBORS ==='
+          ip neigh || true
+          echo '=== KNOWN NEIGHBOR HTTP RESPONSES ==='
+          for IP in $(ip neigh | awk '/lladdr/ {print $1}' | grep -E '^[0-9]+(\.[0-9]+){3}$' | sort -u); do
+            echo "--- ${IP}:80 ---"
+            curl -sS --connect-timeout 1 --max-time 3 -H "Host: ${DOMAIN}" -D - -o /tmp/neigh-body "http://${IP}/deployment-version.json" 2>/dev/null | grep -Ei '^(HTTP/|Server:|Location:|Content-Type:|Last-Modified:|Via:)' || true
+            head -c 220 /tmp/neigh-body 2>/dev/null | tr '\n' ' '; echo
+            echo "--- ${IP}:443 ---"
+            curl -k -sS --connect-timeout 1 --max-time 3 --resolve "${DOMAIN}:443:${IP}" -D - -o /tmp/neigh-tls "https://${DOMAIN}/deployment-version.json" 2>/dev/null | grep -Ei '^(HTTP/|Server:|Location:|Content-Type:|Last-Modified:|Via:)' || true
+            head -c 220 /tmp/neigh-tls 2>/dev/null | tr '\n' ' '; echo
+          done
+          echo '=== GATEWAY ==='
+          GW=$(ip route | awk '/^default/ {print $3; exit}')
+          echo "gateway=${GW}"
+          if [ -n "$GW" ]; then
+            curl -k -sS --connect-timeout 2 --max-time 5 --resolve "${DOMAIN}:443:${GW}" -D - -o /tmp/gw "https://${DOMAIN}/deployment-version.json" 2>/dev/null | grep -Ei '^(HTTP/|Server:|Location:|Content-Type:|Last-Modified:|Via:)' || true
+            head -c 500 /tmp/gw 2>/dev/null || true; echo
+          fi
