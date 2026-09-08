@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  inspect:
+  inspect_public:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -38,3 +38,36 @@ jobs:
           curl -sS -D - -o /tmp/health --max-time 20 "https://${DOMAIN}/api/health" || true
           head -c 500 /tmp/health 2>/dev/null || true
           echo
+
+  inspect_server:
+    runs-on: self-hosted
+    timeout-minutes: 5
+    steps:
+      - name: Inspect production server routing without changes
+        shell: bash
+        run: |
+          set +e
+          DOMAIN=climbcrew.dip-tcs.com
+          echo '=== HOST ==='
+          hostname
+          date -Is
+          echo -n 'Public IPv4: '; curl -4 -fsS --max-time 10 https://api.ipify.org || true; echo
+          echo '=== DNS FROM SERVER ==='
+          getent ahostsv4 "$DOMAIN" | head -n 10 || true
+          echo '=== NGINX SITE ==='
+          sudo cat /etc/nginx/sites-enabled/climbcrew 2>&1 || true
+          echo '=== LOCAL LISTENERS ==='
+          sudo ss -tlnp | grep -E '(:80 |:443 |:3000 |:8080 )' || true
+          echo '=== CADDY ==='
+          systemctl show caddy --property=ActiveState,FragmentPath 2>&1 || true
+          sudo find /etc/caddy -maxdepth 2 -type f -print -exec sed -n '1,240p' {} \; 2>/dev/null || true
+          echo '=== DOCKER ==='
+          sudo docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Label "com.docker.compose.project.working_dir"}}' || true
+          echo '=== DIRECT FRONTEND MARKER ==='
+          curl -sS -D - -o /tmp/direct-marker http://127.0.0.1:8080/deployment-version.json || true
+          cat /tmp/direct-marker 2>/dev/null || true; echo
+          echo '=== DIRECT FRONTEND ROOT HEADERS ==='
+          curl -sS -D - -o /dev/null http://127.0.0.1:8080/ || true
+          echo '=== LOCAL NGINX HTTPS VIA LOOPBACK ==='
+          curl -sS --resolve "${DOMAIN}:443:127.0.0.1" -D - -o /tmp/local-marker "https://${DOMAIN}/deployment-version.json" || true
+          cat /tmp/local-marker 2>/dev/null || true; echo
