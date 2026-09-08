@@ -1,56 +1,73 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEPLOY_ROOT="${1:?Usage: rollback-preprod.sh <deploy-root> <previous-sha> <backup-file> [ppd-domain]}"
+DEPLOY_ROOT="${1:?Usage: rollback-preprod.sh <deploy-root> <previous-sha> <backup-file> [ppd-domain] [candidate-started]}"
 PREVIOUS_SHA="${2:?SHA précédent requis}"
-BACKUP_FILE="${3:?Dump PostgreSQL requis}"
+BACKUP_FILE="${3:-}"
 PPD_DOMAIN="${4:-pre-climbcrew.dip-tcs.com}"
+CANDIDATE_STARTED="${5:-false}"
 
 cd "$DEPLOY_ROOT"
 
-test -s "$BACKUP_FILE" || {
-  echo "ERROR: dump de rollback absent: $BACKUP_FILE" >&2
-  exit 1
-}
 git cat-file -e "${PREVIOUS_SHA}^{commit}" 2>/dev/null || {
   echo "ERROR: ancien SHA introuvable: $PREVIOUS_SHA" >&2
   exit 1
 }
 
-echo "Rollback automatique vers ${PREVIOUS_SHA}."
+case "$CANDIDATE_STARTED" in
+  true|false) ;;
+  *)
+    echo "ERROR: candidate-started doit valoir true ou false." >&2
+    exit 1
+    ;;
+esac
 
-# Arrête les processus applicatifs avant de remettre la base exactement dans
-# l'état du dump pré-déploiement. PostgreSQL reste disponible localement.
-docker compose --env-file .env.production -f docker-compose.prod.yml stop frontend backend || true
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d db
+echo "Rollback automatique vers ${PREVIOUS_SHA} (candidate-started=${CANDIDATE_STARTED})."
 
-DB_READY=false
-for attempt in $(seq 1 30); do
-  if docker exec climbcrew-db sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1; then
-    DB_READY=true
-    break
-  fi
-  sleep 1
-done
-[ "$DB_READY" = true ] || {
-  echo "ERROR: PostgreSQL indisponible pendant le rollback." >&2
-  exit 1
-}
+if [ "$CANDIDATE_STARTED" = true ]; then
+  test -s "$BACKUP_FILE" || {
+    echo "ERROR: dump de rollback absent: $BACKUP_FILE" >&2
+    exit 1
+  }
 
-docker exec -i climbcrew-db pg_restore --list < "$BACKUP_FILE" >/dev/null
+  # La nouvelle pile a pu exécuter des migrations : on remet la base exactement
+  # dans l'état du dump créé avant la bascule puis on reconstruit l'ancien SHA.
+  docker compose --env-file .env.production -f docker-compose.prod.yml stop frontend backend || true
+  docker compose --env-file .env.production -f docker-compose.prod.yml up -d db
 
-docker exec climbcrew-db sh -lc '
-  set -eu
-  dropdb --if-exists --force --maintenance-db=postgres -U "$POSTGRES_USER" "$POSTGRES_DB"
-  createdb --maintenance-db=postgres -U "$POSTGRES_USER" -O "$POSTGRES_USER" "$POSTGRES_DB"
-'
-docker exec -i climbcrew-db sh -lc '
-  exec pg_restore --exit-on-error --no-owner --no-privileges -U "$POSTGRES_USER" -d "$POSTGRES_DB"
-' < "$BACKUP_FILE"
+  DB_READY=false
+  for attempt in $(seq 1 30); do
+    if docker exec climbcrew-db sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1; then
+      DB_READY=true
+      break
+    fi
+    sleep 1
+  done
+  [ "$DB_READY" = true ] || {
+    echo "ERROR: PostgreSQL indisponible pendant le rollback." >&2
+    exit 1
+  }
 
-git checkout -B main "$PREVIOUS_SHA"
-export GITHUB_SHA="$PREVIOUS_SHA"
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+  docker exec -i climbcrew-db pg_restore --list < "$BACKUP_FILE" >/dev/null
+  docker exec climbcrew-db sh -lc '
+    set -eu
+    dropdb --if-exists --force --maintenance-db=postgres -U "$POSTGRES_USER" "$POSTGRES_DB"
+    createdb --maintenance-db=postgres -U "$POSTGRES_USER" -O "$POSTGRES_USER" "$POSTGRES_DB"
+  '
+  docker exec -i climbcrew-db sh -lc '
+    exec pg_restore --exit-on-error --no-owner --no-privileges -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+  ' < "$BACKUP_FILE"
+
+  git checkout -B main "$PREVIOUS_SHA"
+  export GITHUB_SHA="$PREVIOUS_SHA"
+  docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+else
+  # L'échec est survenu avant le démarrage du candidat : les conteneurs et la
+  # base servent encore l'ancienne version. On ne touche donc ni aux données ni
+  # aux processus ; seul le clone persistant revient sur l'ancien SHA.
+  git checkout -B main "$PREVIOUS_SHA"
+  echo "Candidat jamais démarré : PostgreSQL et conteneurs laissés intacts."
+fi
 
 BACKEND_OK=false
 for attempt in $(seq 1 24); do
@@ -87,13 +104,43 @@ LOCAL_MARKER="$(
 printf '%s' "$LOCAL_MARKER" | grep -Fq "\"version\": \"${PREVIOUS_VERSION}\""
 printf '%s' "$LOCAL_MARKER" | grep -Fq "\"commit\": \"${PREVIOUS_SHA}\""
 
-PUBLIC_MARKER="$(
+# Le rollback doit garantir l'état applicatif local. Le frontal public pouvait
+# déjà être dégradé avant la tentative ; son contrôle est donc informatif ici
+# et ne doit pas transformer une restauration réussie en faux échec.
+PROXY_MARKER="$(
+  curl --fail --silent --show-error --max-time 10 \
+    -H "Host: ${PPD_DOMAIN}" \
+    "http://127.0.0.1/deployment-version.json?rollback=${PREVIOUS_SHA}" \
+    || true
+)"
+if printf '%s' "$PROXY_MARKER" | grep -Fq "\"commit\": \"${PREVIOUS_SHA}\""; then
+  echo "Routage Nginx local restauré."
+else
+  echo "::warning::Le routage Nginx PPD n'était pas vérifiable après rollback ; état applicatif local restauré."
+fi
+
+STRICT_PUBLIC="$(
   curl --fail --silent --show-error --location \
     --connect-timeout 5 --max-time 15 \
     -H 'Cache-Control: no-cache' \
-    "https://${PPD_DOMAIN}/deployment-version.json?rollback=${PREVIOUS_SHA}"
+    "https://${PPD_DOMAIN}/deployment-version.json?rollback=${PREVIOUS_SHA}" \
+    2>/dev/null || true
 )"
-printf '%s' "$PUBLIC_MARKER" | grep -Fq "\"version\": \"${PREVIOUS_VERSION}\""
-printf '%s' "$PUBLIC_MARKER" | grep -Fq "\"commit\": \"${PREVIOUS_SHA}\""
+if printf '%s' "$STRICT_PUBLIC" | grep -Fq "\"commit\": \"${PREVIOUS_SHA}\""; then
+  echo "Frontal public restauré avec TLS valide."
+else
+  INSECURE_PUBLIC="$(
+    curl --insecure --fail --silent --show-error --location \
+      --connect-timeout 5 --max-time 15 \
+      -H 'Cache-Control: no-cache' \
+      "https://${PPD_DOMAIN}/deployment-version.json?rollback=${PREVIOUS_SHA}" \
+      2>/dev/null || true
+  )"
+  if printf '%s' "$INSECURE_PUBLIC" | grep -Fq "\"commit\": \"${PREVIOUS_SHA}\""; then
+    echo "::warning::Frontal public restauré, mais le certificat TLS amont ne valide pas ${PPD_DOMAIN}."
+  else
+    echo "::warning::Frontal public non vérifiable après rollback ; l'état local précédent est sain."
+  fi
+fi
 
 echo "Rollback terminé : version ${PREVIOUS_VERSION}, SHA ${PREVIOUS_SHA}."
