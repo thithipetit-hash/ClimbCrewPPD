@@ -14,55 +14,36 @@ jobs:
     runs-on: self-hosted
     timeout-minutes: 5
     steps:
-      - name: Diagnostiquer DNS, TLS et routage
+      - name: Diagnostiquer les frontaux production et PPD
         shell: bash
         run: |
           set +e
-          DOMAIN='pre-climbcrew.dip-tcs.com'
-          GATEWAY='10.0.0.1'
+          PPD='pre-climbcrew.dip-tcs.com'
+          PROD='climbcrew.dip-tcs.com'
           echo '=== HOTE RUNNER ==='
           hostname
           hostname -I 2>/dev/null || true
           echo
-          echo '=== DNS ==='
-          getent ahosts "$DOMAIN" || true
+          for DOMAIN in "$PROD" "$PPD"; do
+            echo "=== $DOMAIN : DNS ==="
+            getent ahosts "$DOMAIN" || true
+            echo
+            echo "=== $DOMAIN : CERTIFICAT TLS ==="
+            if command -v openssl >/dev/null 2>&1; then
+              printf '' | openssl s_client -connect "$DOMAIN:443" -servername "$DOMAIN" 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName 2>/dev/null || true
+            fi
+            echo
+            echo "=== $DOMAIN : HTTPS DIAGNOSTIC ==="
+            SAFE_NAME="${DOMAIN//./-}"
+            curl --insecure --silent --show-error --max-time 10 -D - -o "/tmp/${SAFE_NAME}-body" "https://$DOMAIN/deployment-version.json" || true
+            head -c 1500 "/tmp/${SAFE_NAME}-body" 2>/dev/null || true
+            echo
+            echo
+          done
+          echo '=== NGINX LOCAL PROD ==='
+          curl --silent --show-error --max-time 10 -H "Host: $PROD" http://127.0.0.1/deployment-version.json || true
           echo
-          echo '=== ROUTAGE IP ==='
-          ip route 2>/dev/null || true
-          echo
-          echo '=== PORTS LOCAUX ==='
-          ss -ltn 2>/dev/null | grep -E '(:80|:443|:3000|:8080)[[:space:]]' || true
-          echo
-          echo '=== NGINX LOCAL ==='
-          sudo nginx -T 2>/dev/null | grep -E -C 2 'server_name.*(pre-climbcrew|climbcrew\.dip-tcs\.com)|listen[[:space:]]+80' | head -n 120 || true
-          echo
-          echo '=== MARQUEUR LOCAL VIA HOST ==='
-          curl --silent --show-error --max-time 10 -H "Host: $DOMAIN" http://127.0.0.1/deployment-version.json || true
-          echo
-          echo '=== HTTP PUBLIC ==='
-          curl --silent --show-error --max-time 10 -D - -o /tmp/ppd-http-body "http://$DOMAIN/deployment-version.json" || true
-          head -c 1000 /tmp/ppd-http-body 2>/dev/null || true
-          echo
-          echo '=== CERTIFICAT TLS PRESENTE ==='
-          if command -v openssl >/dev/null 2>&1; then
-            printf '' | openssl s_client -connect "$DOMAIN:443" -servername "$DOMAIN" 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName 2>/dev/null || true
-          fi
-          echo
-          echo '=== HTTPS PUBLIC DIAGNOSTIC SANS VALIDATION CERTIFICAT ==='
-          curl --insecure --silent --show-error --max-time 10 -D - -o /tmp/ppd-https-body "https://$DOMAIN/deployment-version.json" || true
-          head -c 1500 /tmp/ppd-https-body 2>/dev/null || true
-          echo
-          echo '=== PASSERELLE INTERNE HTTP ==='
-          curl --silent --show-error --max-time 8 -D - -o /tmp/gw-http-body "http://$GATEWAY/" || true
-          head -c 1200 /tmp/gw-http-body 2>/dev/null || true
-          echo
-          echo '=== PASSERELLE INTERNE HTTPS ==='
-          curl --insecure --silent --show-error --max-time 8 -D - -o /tmp/gw-https-body "https://$GATEWAY/" || true
-          head -c 1800 /tmp/gw-https-body 2>/dev/null || true
-          echo
-          echo '=== CERTIFICAT PASSERELLE ==='
-          if command -v openssl >/dev/null 2>&1; then
-            printf '' | openssl s_client -connect "$GATEWAY:443" 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName 2>/dev/null || true
-          fi
+          echo '=== NGINX LOCAL PPD ==='
+          curl --silent --show-error --max-time 10 -H "Host: $PPD" http://127.0.0.1/deployment-version.json || true
           echo
           echo '=== FIN ==='
