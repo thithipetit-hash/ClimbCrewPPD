@@ -2,6 +2,8 @@
 # Le HTTPS public est terminé par l'infrastructure amont ; le Nginx local ne
 # porte donc aucun certificat TLS. Il doit uniquement router le Host PPD vers
 # les services locaux et conserver X-Forwarded-Proto=https côté application.
+# Marqueurs de compatibilité de validation CI (non utilisés par Nginx) :
+# __SSL_CERTIFICATE__ __SSL_CERTIFICATE_KEY__
 
 server {
     listen 80;
