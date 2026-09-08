@@ -84,7 +84,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Vérifier le marqueur public comme pour la 003
+      - name: Vérifier le marqueur public avec TLS strict
         shell: bash
         env:
           EXPECTED_VERSION: ${{ needs.apply.outputs.version }}
@@ -94,7 +94,7 @@ jobs:
           DOMAIN='pre-climbcrew.dip-tcs.com'
           PUBLIC_OK=false
           for attempt in $(seq 1 12); do
-            MARKER="$(curl --insecure --fail --silent --show-error --location --connect-timeout 5 --max-time 15 -H 'Cache-Control: no-cache' "https://${DOMAIN}/deployment-version.json?sha=${EXPECTED_SHA}&attempt=${attempt}" || true)"
+            MARKER="$(curl --fail --silent --show-error --location --connect-timeout 5 --max-time 15 -H 'Cache-Control: no-cache' "https://${DOMAIN}/deployment-version.json?sha=${EXPECTED_SHA}&attempt=${attempt}" || true)"
             if printf '%s' "$MARKER" | grep -Fq "\"version\": \"${EXPECTED_VERSION}\"" \
               && printf '%s' "$MARKER" | grep -Fq "\"commit\": \"${EXPECTED_SHA}\""; then
               PUBLIC_OK=true
@@ -104,8 +104,8 @@ jobs:
             sleep 5
           done
           [ "$PUBLIC_OK" = true ] || {
-            echo 'ERROR: le frontal public ne sert pas encore la 260908.005'
+            echo 'ERROR: HTTPS public/TLS strict ne sert pas la 260908.005'
             echo "${MARKER:-}"
             exit 1
           }
-          echo 'PPD PUBLIQUE : 260908.005 accessible depuis Internet.'
+          echo 'PPD PUBLIQUE : 260908.005 accessible depuis Internet avec TLS valide.'
