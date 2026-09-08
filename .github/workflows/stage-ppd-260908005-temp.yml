@@ -1,0 +1,73 @@
+name: Stage PPD 260908.005 temp
+
+on:
+  push:
+    branches:
+      - stage/ppd-260908005
+
+permissions:
+  contents: read
+
+jobs:
+  stage:
+    name: Activer 260908.005 sur le serveur PPD
+    runs-on: self-hosted
+    timeout-minutes: 30
+    env:
+      DEPLOY_ROOT: /opt/climbcrew
+      TARGET_SHA: 363cae76dfa14db261ad648addd3d618563374cd
+      TARGET_VERSION: 260908.005
+      PPD_DOMAIN: pre-climbcrew.dip-tcs.com
+    steps:
+      - name: Sauvegarder puis activer le SHA validé
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_ROOT"
+          test -f .env.production
+          docker inspect climbcrew-db >/dev/null
+          BACKUP_DIR="$DEPLOY_ROOT/backups/predeploy"
+          mkdir -p "$BACKUP_DIR"
+          STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+          BACKUP_FILE="$BACKUP_DIR/manual-stage-${STAMP}.dump"
+          docker exec climbcrew-db sh -lc 'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$BACKUP_FILE"
+          test -s "$BACKUP_FILE"
+          docker exec -i climbcrew-db pg_restore --list < "$BACKUP_FILE" >/dev/null
+          echo "Backup validé: $BACKUP_FILE"
+
+          git fetch --no-tags --prune origin 'refs/heads/main:refs/remotes/origin/main'
+          git cat-file -e "${TARGET_SHA}^{commit}"
+          git merge-base --is-ancestor "$TARGET_SHA" refs/remotes/origin/main
+          git checkout -B main "$TARGET_SHA"
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test "$(tr -d '[:space:]' < VERSION)" = "$TARGET_VERSION"
+
+          bash deploy/scripts/install-preprod-nginx.sh "$PPD_DOMAIN"
+          export GITHUB_SHA="$TARGET_SHA"
+          docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+
+          BACKEND_OK=false
+          for attempt in $(seq 1 24); do
+            if curl --fail --silent --max-time 5 http://127.0.0.1:3000/health >/dev/null; then
+              BACKEND_OK=true
+              break
+            fi
+            sleep 5
+          done
+          test "$BACKEND_OK" = true
+
+          FRONTEND_OK=false
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --max-time 5 http://127.0.0.1:8080/ >/dev/null; then
+              FRONTEND_OK=true
+              break
+            fi
+            sleep 5
+          done
+          test "$FRONTEND_OK" = true
+
+          MARKER="$(curl --fail --silent --max-time 10 -H "Host: $PPD_DOMAIN" http://127.0.0.1/deployment-version.json)"
+          printf '%s' "$MARKER" | grep -Fq "\"version\": \"${TARGET_VERSION}\""
+          printf '%s' "$MARKER" | grep -Fq "\"commit\": \"${TARGET_SHA}\""
+          echo "$MARKER"
+          echo "PPD interne active: ${TARGET_VERSION} / ${TARGET_SHA}"
