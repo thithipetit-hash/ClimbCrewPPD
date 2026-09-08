@@ -22,6 +22,41 @@ PROD_REAL="$(readlink -f "$PROD_SITE")"
 test -n "$PROD_REAL"
 sudo test -f "$PROD_REAL"
 
+# Préflight public AVANT toute mutation Nginx ou bascule applicative.
+# Le certificat TLS et le routage amont sont indépendants de la pile locale :
+# s'ils sont déjà invalides, reconstruire puis rollbacker l'application est
+# inutile et augmente le risque opérationnel. On exige donc ici un HTTPS
+# valide et un endpoint de marqueur atteignable, sans jamais utiliser -k.
+PUBLIC_PREFLIGHT=""
+if ! PUBLIC_PREFLIGHT="$(
+  curl --fail --silent --show-error --location \
+    --connect-timeout 5 --max-time 15 \
+    -H 'Cache-Control: no-cache' \
+    "https://${PPD_DOMAIN}/deployment-version.json?tls-preflight=$(date +%s)"
+)"; then
+  echo "ERROR: préflight HTTPS PPD invalide pour ${PPD_DOMAIN}." >&2
+  echo "Le déploiement est interrompu avant modification Nginx et avant démarrage du candidat." >&2
+  if command -v openssl >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then
+    echo "Certificat présenté par le frontal amont :" >&2
+    timeout 10 openssl s_client \
+      -connect "${PPD_DOMAIN}:443" \
+      -servername "$PPD_DOMAIN" </dev/null 2>/dev/null \
+      | openssl x509 -noout -subject -issuer -ext subjectAltName 2>/dev/null \
+      || true
+  fi
+  exit 1
+fi
+
+printf '%s' "$PUBLIC_PREFLIGHT" | grep -Fq '"version"' || {
+  echo "ERROR: le frontal PPD répond en HTTPS mais ne sert pas deployment-version.json." >&2
+  exit 1
+}
+printf '%s' "$PUBLIC_PREFLIGHT" | grep -Fq '"commit"' || {
+  echo "ERROR: le marqueur public PPD est incomplet (commit absent)." >&2
+  exit 1
+}
+echo "Préflight HTTPS PPD OK pour ${PPD_DOMAIN}."
+
 PROD_BACKUP="$(mktemp)"
 PPD_BACKUP="$(mktemp)"
 RENDERED="$(mktemp)"
