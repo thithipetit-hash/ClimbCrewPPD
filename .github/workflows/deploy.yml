@@ -173,15 +173,16 @@ jobs:
       ref: ${{ needs.validate.outputs.validated_sha }}
 
   deploy:
-    name: Déployer la production réelle
+    name: Déployer la préproduction
     needs: [validate, integration, linux_validate]
-    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.validate.outputs.deploy_branch == 'production' }}
+    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.validate.outputs.deploy_branch == 'main' }}
     runs-on: self-hosted
     timeout-minutes: 30
     env:
       DEPLOY_ROOT: /opt/climbcrew
+      PPD_DOMAIN: pre-climbcrew.dip-tcs.com
     steps:
-      - name: Vérifier que le runner pointe bien sur la production
+      - name: Vérifier la cible de préproduction
         shell: bash
         run: |
           set -euo pipefail
@@ -191,25 +192,22 @@ jobs:
           docker compose version >/dev/null
           test -d "$DEPLOY_ROOT/.git" || { echo "ERROR: clone persistant absent: $DEPLOY_ROOT"; exit 1; }
           test -f "$DEPLOY_ROOT/.env.production" || { echo "ERROR: .env.production absent"; exit 1; }
-          if ! sudo grep -RqsE 'server_name[[:space:]]+climbcrew\.dip-tcs\.com' /etc/nginx/sites-enabled 2>/dev/null; then
-            echo 'ERROR: ce runner ne publie pas climbcrew.dip-tcs.com.'
+          CURRENT_ORIGIN="$(cd "$DEPLOY_ROOT" && git remote get-url origin 2>/dev/null || true)"
+          EXPECTED_ORIGIN="https://github.com/${GITHUB_REPOSITORY}.git"
+          [ "$CURRENT_ORIGIN" = "$EXPECTED_ORIGIN" ] || { echo "ERROR: origin inattendu: $CURRENT_ORIGIN"; exit 1; }
+          HTTP_CODE="$(curl --insecure --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 15 "https://${PPD_DOMAIN}/" || true)"
+          if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" = "000" ] || [[ "$HTTP_CODE" =~ ^5 ]]; then
+            echo "ERROR: frontal PPD inaccessible: HTTP $HTTP_CODE"
             exit 1
           fi
-          if docker inspect climbcrew-backend >/dev/null 2>&1; then
-            CURRENT_ROOT="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' climbcrew-backend 2>/dev/null || true)"
-            if [ -n "$CURRENT_ROOT" ] && [ "$CURRENT_ROOT" != "$DEPLOY_ROOT" ]; then
-              echo "ERROR: climbcrew-backend appartient à $CURRENT_ROOT, pas à $DEPLOY_ROOT"
-              exit 1
-            fi
-          fi
-          echo "Cible confirmée: $DEPLOY_ROOT -> climbcrew.dip-tcs.com"
+          echo "Cible confirmée: $DEPLOY_ROOT -> $PPD_DOMAIN"
 
       - name: Sauvegarder PostgreSQL avant bascule
         shell: bash
         run: |
           set -euo pipefail
-          docker inspect climbcrew-db >/dev/null 2>&1 || { echo 'ERROR: conteneur PostgreSQL de production absent'; exit 1; }
-          docker ps --format '{{.Names}}' | grep -qx 'climbcrew-db' || { echo 'ERROR: PostgreSQL de production arrêté'; exit 1; }
+          docker inspect climbcrew-db >/dev/null 2>&1 || { echo 'ERROR: conteneur PostgreSQL PPD absent'; exit 1; }
+          docker ps --format '{{.Names}}' | grep -qx 'climbcrew-db' || { echo 'ERROR: PostgreSQL PPD arrêté'; exit 1; }
           BACKUP_DIR="$DEPLOY_ROOT/backups/predeploy"
           mkdir -p "$BACKUP_DIR"
           STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -220,7 +218,7 @@ jobs:
           ls -1t "$BACKUP_DIR"/predeploy-*.dump 2>/dev/null | tail -n +11 | xargs -r rm -f
           echo "Sauvegarde pré-déploiement créée: $BACKUP_FILE"
 
-      - name: Synchroniser le dépôt sur le SHA production validé
+      - name: Synchroniser le dépôt sur le SHA PPD validé
         id: sync_repo
         shell: bash
         env:
@@ -228,16 +226,11 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_ROOT"
-          EXPECTED_ORIGIN="https://github.com/${GITHUB_REPOSITORY}.git"
-          CURRENT_ORIGIN="$(git remote get-url origin 2>/dev/null || true)"
-          if [ "$CURRENT_ORIGIN" != "$EXPECTED_ORIGIN" ]; then
-            git remote set-url origin "$EXPECTED_ORIGIN" 2>/dev/null || git remote add origin "$EXPECTED_ORIGIN"
-          fi
           PREVIOUS_SHA="$(git rev-parse HEAD)"
           printf 'previous_sha=%s\n' "$PREVIOUS_SHA" >> "$GITHUB_OUTPUT"
           FETCH_OK=false
           for attempt in 1 2 3 4 5; do
-            if timeout 90s git fetch --no-tags --prune origin 'refs/heads/production:refs/remotes/origin/production'; then
+            if timeout 90s git fetch --no-tags --prune origin 'refs/heads/main:refs/remotes/origin/main'; then
               FETCH_OK=true
               break
             fi
@@ -245,10 +238,10 @@ jobs:
           done
           [ "$FETCH_OK" = true ] || { echo 'ERROR: git fetch impossible'; exit 1; }
           git cat-file -e "${VALIDATED_SHA}^{commit}" 2>/dev/null || { echo 'ERROR: SHA validé absent'; exit 1; }
-          git merge-base --is-ancestor "$VALIDATED_SHA" refs/remotes/origin/production || { echo 'ERROR: SHA hors branche production'; exit 1; }
-          git checkout -B production "$VALIDATED_SHA"
+          git merge-base --is-ancestor "$VALIDATED_SHA" refs/remotes/origin/main || { echo 'ERROR: SHA hors branche main'; exit 1; }
+          git checkout -B main "$VALIDATED_SHA"
           [ "$(git rev-parse HEAD)" = "$VALIDATED_SHA" ] || exit 1
-          echo "Production verrouillée sur $VALIDATED_SHA (ancien SHA: $PREVIOUS_SHA)"
+          echo "Préproduction verrouillée sur $VALIDATED_SHA (ancien SHA: $PREVIOUS_SHA)"
 
       - name: Synchroniser les secrets applicatifs disponibles
         shell: bash
@@ -283,7 +276,7 @@ jobs:
           if [ -n "${BACKUP_EMAIL_ENCRYPTION_KEY:-}" ]; then
             set_env_var BACKUP_EMAIL_ENCRYPTION_KEY "$BACKUP_EMAIL_ENCRYPTION_KEY"
           fi
-          echo 'Configuration de sécurité synchronisée.'
+          echo 'Configuration PPD synchronisée.'
 
       - name: Construire et démarrer le SHA validé
         shell: bash
@@ -293,7 +286,7 @@ jobs:
           set -euo pipefail
           cd "$DEPLOY_ROOT"
           docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
-          echo "Pile démarrée pour $VALIDATED_SHA"
+          echo "Pile PPD démarrée pour $VALIDATED_SHA"
 
       - name: Contrôler la santé locale
         shell: bash
@@ -314,11 +307,36 @@ jobs:
           done
           [ "$FRONTEND_OK" = true ] || { docker compose --env-file "$DEPLOY_ROOT/.env.production" -f "$DEPLOY_ROOT/docker-compose.prod.yml" ps || true; exit 1; }
           echo "Backend OK · Frontend OK · SHA $VALIDATED_SHA"
+
+      - name: Vérifier la version 003 sur le frontal PPD
+        shell: bash
+        env:
+          VALIDATED_SHA: ${{ needs.validate.outputs.validated_sha }}
+        run: |
+          set -euo pipefail
+          EXPECTED_VERSION="$(tr -d '[:space:]' < "$DEPLOY_ROOT/VERSION")"
+          LOCAL_MARKER="$(curl --fail --silent --max-time 10 "http://127.0.0.1:8080/deployment-version.json?sha=${VALIDATED_SHA}")"
+          printf '%s' "$LOCAL_MARKER" | grep -Fq "\"version\": \"${EXPECTED_VERSION}\"" || { echo 'ERROR: version locale inattendue'; echo "$LOCAL_MARKER"; exit 1; }
+          printf '%s' "$LOCAL_MARKER" | grep -Fq "\"commit\": \"${VALIDATED_SHA}\"" || { echo 'ERROR: commit local inattendu'; echo "$LOCAL_MARKER"; exit 1; }
+
+          PUBLIC_OK=false
+          for attempt in $(seq 1 12); do
+            PUBLIC_MARKER="$(curl --insecure --fail --silent --show-error --max-time 15 -H 'Cache-Control: no-cache' "https://${PPD_DOMAIN}/deployment-version.json?sha=${VALIDATED_SHA}&attempt=${attempt}" || true)"
+            if printf '%s' "$PUBLIC_MARKER" | grep -Fq "\"version\": \"${EXPECTED_VERSION}\"" \
+              && printf '%s' "$PUBLIC_MARKER" | grep -Fq "\"commit\": \"${VALIDATED_SHA}\""; then
+              PUBLIC_OK=true
+              break
+            fi
+            sleep 5
+          done
+          [ "$PUBLIC_OK" = true ] || { echo 'ERROR: le frontal PPD ne sert pas le SHA attendu'; echo "${PUBLIC_MARKER:-}"; exit 1; }
           {
-            echo '### Déploiement production ClimbCrew'
+            echo '### Déploiement préproduction ClimbCrew'
+            echo "- Version: \`$EXPECTED_VERSION\`"
             echo "- SHA: \`$VALIDATED_SHA\`"
-            echo '- Domaine: `climbcrew.dip-tcs.com`'
+            echo "- Domaine: \`$PPD_DOMAIN\`"
             echo '- PostgreSQL sauvegardé avant bascule'
             echo '- Backend: OK'
             echo '- Frontend: OK'
+            echo '- Marqueur public: OK'
           } >> "$GITHUB_STEP_SUMMARY"

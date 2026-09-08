@@ -33,10 +33,9 @@ test("les vidéos d'une réalisation peuvent être effacées sans interface de c
   assert.doesNotMatch(videoSource, /<video/);
 });
 
-test("le contrôle du proxy vérifie qu'un bloc de 768 Kio franchit la production", () => {
-  assert.match(nginxWorkflowSource, /climbcrew\.dip-tcs\.com/);
-  assert.doesNotMatch(nginxWorkflowSource, /pre-climbcrew\.dip-tcs\.com/);
-  assert.match(nginxWorkflowSource, /head_branch == 'production'/);
+test("le contrôle du proxy vérifie qu'un bloc de 768 Kio franchit la préproduction", () => {
+  assert.match(nginxWorkflowSource, /pre-climbcrew\.dip-tcs\.com/);
+  assert.match(nginxWorkflowSource, /head_branch == 'main'/);
   assert.match(nginxWorkflowSource, /client_max_body_size\[\[:space:\]\]\+55m/);
   assert.match(nginxWorkflowSource, /bs=1K count=768/);
   assert.match(nginxWorkflowSource, /HTTP_CODE.*413/s);
