@@ -1,0 +1,111 @@
+name: Republish 005 like 003 temp
+
+on:
+  push:
+    branches:
+      - ops/republish-005-like-003
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    name: Appliquer le vhost partagé de la 003
+    runs-on: self-hosted
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.apply.outputs.version }}
+      sha: ${{ steps.apply.outputs.sha }}
+    steps:
+      - name: Reprendre exactement la publication Nginx de la 003
+        id: apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY_ROOT='/opt/climbcrew'
+          PROD_SITE='/etc/nginx/sites-enabled/climbcrew'
+          PPD_SITE='/etc/nginx/sites-enabled/climbcrew-preprod'
+          PROD_DOMAIN='climbcrew.dip-tcs.com'
+          PPD_DOMAIN='pre-climbcrew.dip-tcs.com'
+          EXPECTED_VERSION='260908.005'
+          EXPECTED_SHA='363cae76dfa14db261ad648addd3d618563374cd'
+
+          cd "$DEPLOY_ROOT"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(tr -d '[:space:]' < VERSION)" = "$EXPECTED_VERSION"
+          curl --fail --silent --max-time 10 http://127.0.0.1:3000/health >/dev/null
+
+          PROD_REAL="$(readlink -f "$PROD_SITE")"
+          test -n "$PROD_REAL"
+          sudo test -f "$PROD_REAL"
+
+          BACKUP_DIR="$DEPLOY_ROOT/backups/nginx"
+          mkdir -p "$BACKUP_DIR"
+          STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+          sudo cp "$PROD_REAL" "$BACKUP_DIR/climbcrew-${STAMP}.conf"
+          if sudo test -e "$PPD_SITE"; then
+            sudo cp "$PPD_SITE" "$BACKUP_DIR/climbcrew-preprod-${STAMP}.conf"
+          fi
+
+          RESTORE_PROD="$BACKUP_DIR/climbcrew-${STAMP}.conf"
+          restore() {
+            status=$?
+            trap - ERR
+            sudo cp "$RESTORE_PROD" "$PROD_REAL" || true
+            if [ -f "$BACKUP_DIR/climbcrew-preprod-${STAMP}.conf" ]; then
+              sudo cp "$BACKUP_DIR/climbcrew-preprod-${STAMP}.conf" "$PPD_SITE" || true
+            fi
+            sudo nginx -t || true
+            sudo systemctl reload nginx 2>/dev/null || sudo nginx -s reload || true
+            exit "$status"
+          }
+          trap restore ERR
+
+          sudo rm -f "$PPD_SITE"
+          if ! sudo grep -Eq "server_name[^;]*${PPD_DOMAIN//./\\.}[^;]*;" "$PROD_REAL"; then
+            sudo sed -i -E "s|(server_name[[:space:]]+[^;]*${PROD_DOMAIN//./\\.}[^;]*)(;)|\\1 ${PPD_DOMAIN}\\2|g" "$PROD_REAL"
+          fi
+          sudo grep -Eq "server_name[^;]*${PROD_DOMAIN//./\\.}[^;]*${PPD_DOMAIN//./\\.}[^;]*;" "$PROD_REAL"
+          sudo nginx -t
+          sudo systemctl reload nginx 2>/dev/null || sudo nginx -s reload
+
+          MARKER="$(curl --fail --silent --max-time 10 -H "Host: $PPD_DOMAIN" http://127.0.0.1/deployment-version.json)"
+          printf '%s' "$MARKER" | grep -Fq "\"version\": \"${EXPECTED_VERSION}\""
+          printf '%s' "$MARKER" | grep -Fq "\"commit\": \"${EXPECTED_SHA}\""
+          echo "$MARKER"
+          echo "version=$EXPECTED_VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$EXPECTED_SHA" >> "$GITHUB_OUTPUT"
+          trap - ERR
+          echo 'Publication locale selon méthode 003 : OK'
+
+  external_check:
+    name: Vérifier réellement depuis Internet
+    needs: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vérifier le marqueur public comme pour la 003
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ needs.apply.outputs.version }}
+          EXPECTED_SHA: ${{ needs.apply.outputs.sha }}
+        run: |
+          set -euo pipefail
+          DOMAIN='pre-climbcrew.dip-tcs.com'
+          PUBLIC_OK=false
+          for attempt in $(seq 1 12); do
+            MARKER="$(curl --insecure --fail --silent --show-error --location --connect-timeout 5 --max-time 15 -H 'Cache-Control: no-cache' "https://${DOMAIN}/deployment-version.json?sha=${EXPECTED_SHA}&attempt=${attempt}" || true)"
+            if printf '%s' "$MARKER" | grep -Fq "\"version\": \"${EXPECTED_VERSION}\"" \
+              && printf '%s' "$MARKER" | grep -Fq "\"commit\": \"${EXPECTED_SHA}\""; then
+              PUBLIC_OK=true
+              echo "$MARKER"
+              break
+            fi
+            sleep 5
+          done
+          [ "$PUBLIC_OK" = true ] || {
+            echo 'ERROR: le frontal public ne sert pas encore la 260908.005'
+            echo "${MARKER:-}"
+            exit 1
+          }
+          echo 'PPD PUBLIQUE : 260908.005 accessible depuis Internet.'
