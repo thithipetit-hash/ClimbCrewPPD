@@ -1,0 +1,66 @@
+name: Diagnostic production topology
+
+on:
+  push:
+    branches:
+      - diagnostic-prod-topology
+    paths:
+      - .github/workflows/diagnose-prod-topology.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    name: Inspecter la topologie ClimbCrew en lecture seule
+    runs-on: self-hosted
+    timeout-minutes: 5
+    steps:
+      - name: Inspecter sans modifier le serveur
+        shell: bash
+        run: |
+          set +e
+          echo '=== HOTE ==='
+          hostname
+          date -Is
+
+          echo '=== COMPOSE ==='
+          docker compose ls -a 2>&1 || true
+
+          echo '=== CONTENEURS ==='
+          sudo docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}\t{{.Label "com.docker.compose.project"}}\t{{.Label "com.docker.compose.project.working_dir"}}' 2>&1 || true
+
+          echo '=== PORTS EN ECOUTE ==='
+          sudo ss -tlnp 2>&1 | grep -E '(:80 |:443 |:3000 |:3001 |:8080 |:8081 |:8082 |:3002 )' || true
+
+          echo '=== NGINX CLIMBCREW ==='
+          sudo grep -RHE 'server_name .*climbcrew|proxy_pass ' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true
+
+          echo '=== SITES NGINX ACTIVES ==='
+          ls -la /etc/nginx/sites-enabled 2>&1 || true
+
+          echo '=== SYSTEMD HISTORIQUE ==='
+          systemctl show climbcrew-backend.service --property=WorkingDirectory,ActiveState,FragmentPath 2>&1 || true
+
+          echo '=== REPERTOIRES CLIMBCREW ==='
+          sudo find /opt /srv /var/www /home -maxdepth 4 -iname '*climbcrew*' -type d 2>/dev/null | sort -u || true
+
+          echo '=== DEPOTS ET MARQUEURS ==='
+          while IFS= read -r d; do
+            [ -d "$d" ] || continue
+            if [ -d "$d/.git" ] || [ -f "$d/.env.production" ] || [ -f "$d/docker-compose.prod.yml" ]; then
+              echo "--- $d ---"
+              [ -d "$d/.git" ] && git -C "$d" remote -v 2>/dev/null | sed -E 's#(https://)[^/@]+@#\1***@#g'
+              [ -d "$d/.git" ] && echo "branch=$(git -C "$d" branch --show-current 2>/dev/null)"
+              [ -f "$d/VERSION" ] && echo "version=$(cat "$d/VERSION" 2>/dev/null)"
+              [ -f "$d/.env.production" ] && echo 'env.production=present'
+              [ -f "$d/docker-compose.prod.yml" ] && echo 'compose.prod=present'
+            fi
+          done < <(sudo find /opt /srv /var/www /home -maxdepth 4 -iname '*climbcrew*' -type d 2>/dev/null | sort -u)
+
+          echo '=== DNS ==='
+          echo -n 'climbcrew.dip-tcs.com -> '; getent ahostsv4 climbcrew.dip-tcs.com 2>/dev/null | awk 'NR==1{print $1}' || true
+          echo -n 'pre-climbcrew.dip-tcs.com -> '; getent ahostsv4 pre-climbcrew.dip-tcs.com 2>/dev/null | awk 'NR==1{print $1}' || true
+
+          echo '=== CERTIFICATS (NOMS SEULEMENT) ==='
+          sudo find /etc/letsencrypt/live -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort || true
