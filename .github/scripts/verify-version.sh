@@ -32,7 +32,7 @@ version_compare_key() {
   printf '%s%s\n' "$date_part" "$sequence_part"
 }
 
-infra_only_change() {
+non_runtime_change() {
   local diff_base=""
   local changed_files=""
 
@@ -55,12 +55,12 @@ infra_only_change() {
 
   while IFS= read -r path; do
     case "$path" in
-      .github/*) ;;
+      .github/*|frontend/test/*|backend/test/*|backend/integration/*) ;;
       *) return 1 ;;
     esac
   done <<< "$changed_files"
 
-  echo "Modification d'infrastructure uniquement ; VERSION applicative inchangée autorisée."
+  echo "Modification CI/tests uniquement ; VERSION applicative inchangée autorisée."
   printf '%s\n' "$changed_files"
   return 0
 }
@@ -78,7 +78,7 @@ if [ "$VERSION_CONSISTENCY_ONLY" = "1" ]; then
   exit 0
 fi
 
-if infra_only_change; then
+if non_runtime_change; then
   exit 0
 fi
 
