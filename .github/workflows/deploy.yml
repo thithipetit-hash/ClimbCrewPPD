@@ -202,6 +202,49 @@ jobs:
           fi
           echo "Cible confirmée: $DEPLOY_ROOT -> $PPD_DOMAIN"
 
+      - name: Assurer le vhost public de préproduction
+        shell: bash
+        run: |
+          set -euo pipefail
+          NGINX_SITE="/etc/nginx/sites-enabled/climbcrew"
+          PROD_DOMAIN="climbcrew.dip-tcs.com"
+
+          command -v sudo >/dev/null 2>&1 || { echo 'ERROR: sudo absent'; exit 1; }
+          sudo test -f "$NGINX_SITE" || { echo "ERROR: vhost Nginx absent: $NGINX_SITE"; exit 1; }
+
+          if sudo grep -Eq "server_name[^;]*${PPD_DOMAIN//./\\.}[^;]*;" "$NGINX_SITE"; then
+            echo "Vhost PPD déjà présent pour $PPD_DOMAIN."
+          else
+            if ! sudo grep -Eq "server_name[^;]*${PROD_DOMAIN//./\\.}[^;]*;" "$NGINX_SITE"; then
+              echo "ERROR: vhost de référence inattendu dans $NGINX_SITE"
+              sudo grep -n 'server_name' "$NGINX_SITE" || true
+              exit 1
+            fi
+
+            BACKUP_FILE="$(mktemp)"
+            sudo cp "$NGINX_SITE" "$BACKUP_FILE"
+            restore_nginx() {
+              sudo cp "$BACKUP_FILE" "$NGINX_SITE" || true
+              sudo nginx -t || true
+              sudo systemctl reload nginx 2>/dev/null || sudo nginx -s reload || true
+              sudo rm -f "$BACKUP_FILE" || true
+            }
+            trap restore_nginx ERR
+
+            sudo sed -i -E "s|(server_name[[:space:]]+[^;]*${PROD_DOMAIN//./\\.}[^;]*)(;)|\\1 ${PPD_DOMAIN}\\2|g" "$NGINX_SITE"
+            sudo grep -Eq "server_name[^;]*${PPD_DOMAIN//./\\.}[^;]*;" "$NGINX_SITE" || { echo 'ERROR: ajout du domaine PPD non appliqué'; exit 1; }
+            sudo nginx -t
+            if ! sudo systemctl reload nginx 2>/dev/null; then
+              sudo nginx -s reload
+            fi
+            trap - ERR
+            sudo rm -f "$BACKUP_FILE"
+            echo "Vhost PPD ajouté sans retirer $PROD_DOMAIN."
+          fi
+
+          sudo nginx -t
+          sudo nginx -T 2>&1 | grep -E "server_name[^;]*${PPD_DOMAIN//./\\.}" | head -n 5
+
       - name: Sauvegarder PostgreSQL avant bascule
         shell: bash
         run: |
