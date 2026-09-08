@@ -15,29 +15,21 @@ jobs:
     runs-on: self-hosted
     timeout-minutes: 5
     steps:
-      - name: Locate upstream frontend target without changes
+      - name: Locate stale frontend target without changes
         shell: bash
         run: |
           set +e
-          DOMAIN=climbcrew.dip-tcs.com
-          echo '=== NETWORK ==='
-          ip -br -4 addr || true
-          ip route || true
-          echo '=== NEIGHBORS ==='
-          ip neigh || true
-          echo '=== KNOWN NEIGHBOR HTTP RESPONSES ==='
-          for IP in $(ip neigh | awk '/lladdr/ {print $1}' | grep -E '^[0-9]+(\.[0-9]+){3}$' | sort -u); do
-            echo "--- ${IP}:80 ---"
-            curl -sS --connect-timeout 1 --max-time 3 -H "Host: ${DOMAIN}" -D - -o /tmp/neigh-body "http://${IP}/deployment-version.json" 2>/dev/null | grep -Ei '^(HTTP/|Server:|Location:|Content-Type:|Last-Modified:|Via:)' || true
-            head -c 220 /tmp/neigh-body 2>/dev/null | tr '\n' ' '; echo
-            echo "--- ${IP}:443 ---"
-            curl -k -sS --connect-timeout 1 --max-time 3 --resolve "${DOMAIN}:443:${IP}" -D - -o /tmp/neigh-tls "https://${DOMAIN}/deployment-version.json" 2>/dev/null | grep -Ei '^(HTTP/|Server:|Location:|Content-Type:|Last-Modified:|Via:)' || true
-            head -c 220 /tmp/neigh-tls 2>/dev/null | tr '\n' ' '; echo
-          done
-          echo '=== GATEWAY ==='
-          GW=$(ip route | awk '/^default/ {print $3; exit}')
-          echo "gateway=${GW}"
-          if [ -n "$GW" ]; then
-            curl -k -sS --connect-timeout 2 --max-time 5 --resolve "${DOMAIN}:443:${GW}" -D - -o /tmp/gw "https://${DOMAIN}/deployment-version.json" 2>/dev/null | grep -Ei '^(HTTP/|Server:|Location:|Content-Type:|Last-Modified:|Via:)' || true
-            head -c 500 /tmp/gw 2>/dev/null || true; echo
-          fi
+          echo '=== ALL LISTENERS ==='
+          sudo ss -tlnp || true
+          echo '=== NGINX EFFECTIVE ROUTING ==='
+          sudo nginx -T 2>&1 | grep -E '^(# configuration file |[[:space:]]*(listen|server_name|root|proxy_pass|try_files|client_max_body_size)[[:space:]])' || true
+          echo '=== STATIC INDEX CANDIDATES ==='
+          sudo find /var/www /srv /opt /usr/share/nginx -type f -name index.html -printf '%s %TY-%Tm-%TdT%TH:%TM:%TS %p\n' 2>/dev/null | sort -n | tail -n 100 || true
+          echo '=== EXACT 2659-BYTE CANDIDATES ==='
+          sudo find /var/www /srv /opt /usr/share/nginx -type f -size 2659c -printf '%s %TY-%Tm-%TdT%TH:%TM:%TS %p\n' 2>/dev/null || true
+          echo '=== LOCAL CLIMBCREW HTML CANDIDATES ==='
+          while IFS= read -r F; do
+            if sudo grep -q '<title>ClimbCrew</title>' "$F" 2>/dev/null; then
+              sudo stat -c '%s %y %n' "$F" 2>/dev/null
+            fi
+          done < <(sudo find /var/www /srv /opt /usr/share/nginx -type f -name '*.html' 2>/dev/null)
