@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEPLOY_ROOT="${1:?Usage: rollback-preprod.sh <deploy-root> <previous-sha> <backup-file> [ppd-domain] [candidate-started]}"
+DEPLOY_ROOT="${1:?Usage: rollback-preprod.sh <deploy-root> <previous-sha> <backup-file> [ppd-domain] [candidate-started|auto]}"
 PREVIOUS_SHA="${2:?SHA précédent requis}"
 BACKUP_FILE="${3:-}"
 PPD_DOMAIN="${4:-pre-climbcrew.dip-tcs.com}"
-CANDIDATE_STARTED="${5:-false}"
+CANDIDATE_STARTED="${5:-auto}"
 
 cd "$DEPLOY_ROOT"
 
@@ -14,10 +14,23 @@ git cat-file -e "${PREVIOUS_SHA}^{commit}" 2>/dev/null || {
   exit 1
 }
 
+if [ "$CANDIDATE_STARTED" = auto ]; then
+  CURRENT_MARKER="$(
+    curl --fail --silent --max-time 5 \
+      "http://127.0.0.1:8080/deployment-version.json?rollback-detect=${PREVIOUS_SHA}" \
+      2>/dev/null || true
+  )"
+  if printf '%s' "$CURRENT_MARKER" | grep -Fq "\"commit\": \"${PREVIOUS_SHA}\""; then
+    CANDIDATE_STARTED=false
+  else
+    CANDIDATE_STARTED=true
+  fi
+fi
+
 case "$CANDIDATE_STARTED" in
   true|false) ;;
   *)
-    echo "ERROR: candidate-started doit valoir true ou false." >&2
+    echo "ERROR: candidate-started doit valoir true, false ou auto." >&2
     exit 1
     ;;
 esac
@@ -104,14 +117,13 @@ LOCAL_MARKER="$(
 printf '%s' "$LOCAL_MARKER" | grep -Fq "\"version\": \"${PREVIOUS_VERSION}\""
 printf '%s' "$LOCAL_MARKER" | grep -Fq "\"commit\": \"${PREVIOUS_SHA}\""
 
-# Le rollback doit garantir l'état applicatif local. Le frontal public pouvait
-# déjà être dégradé avant la tentative ; son contrôle est donc informatif ici
-# et ne doit pas transformer une restauration réussie en faux échec.
+# Le rollback garantit l'état applicatif local. Le frontal public pouvait déjà
+# être dégradé avant la tentative ; ses contrôles restent informatifs.
 PROXY_MARKER="$(
   curl --fail --silent --show-error --max-time 10 \
     -H "Host: ${PPD_DOMAIN}" \
     "http://127.0.0.1/deployment-version.json?rollback=${PREVIOUS_SHA}" \
-    || true
+    2>/dev/null || true
 )"
 if printf '%s' "$PROXY_MARKER" | grep -Fq "\"commit\": \"${PREVIOUS_SHA}\""; then
   echo "Routage Nginx local restauré."
