@@ -15,21 +15,24 @@ jobs:
     runs-on: self-hosted
     timeout-minutes: 5
     steps:
-      - name: Locate stale frontend target without changes
+      - name: Inspect cloud identity without exposing secrets
         shell: bash
         run: |
           set +e
-          echo '=== ALL LISTENERS ==='
-          sudo ss -tlnp || true
-          echo '=== NGINX EFFECTIVE ROUTING ==='
-          sudo nginx -T 2>&1 | grep -E '^(# configuration file |[[:space:]]*(listen|server_name|root|proxy_pass|try_files|client_max_body_size)[[:space:]])' || true
-          echo '=== STATIC INDEX CANDIDATES ==='
-          sudo find /var/www /srv /opt /usr/share/nginx -type f -name index.html -printf '%s %TY-%Tm-%TdT%TH:%TM:%TS %p\n' 2>/dev/null | sort -n | tail -n 100 || true
-          echo '=== EXACT 2659-BYTE CANDIDATES ==='
-          sudo find /var/www /srv /opt /usr/share/nginx -type f -size 2659c -printf '%s %TY-%Tm-%TdT%TH:%TM:%TS %p\n' 2>/dev/null || true
-          echo '=== LOCAL CLIMBCREW HTML CANDIDATES ==='
-          while IFS= read -r F; do
-            if sudo grep -q '<title>ClimbCrew</title>' "$F" 2>/dev/null; then
-              sudo stat -c '%s %y %n' "$F" 2>/dev/null
-            fi
-          done < <(sudo find /var/www /srv /opt /usr/share/nginx -type f -name '*.html' 2>/dev/null)
+          echo '=== HOST IDENTITY ==='
+          hostname
+          hostname -f || true
+          cloud-init query instance_id 2>/dev/null || true
+          cloud-init query local_hostname 2>/dev/null || true
+          echo '=== OPENSTACK CLIENT ==='
+          command -v openstack || true
+          openstack --version 2>/dev/null || true
+          echo '=== OPENSTACK ENV NAMES ONLY ==='
+          env | cut -d= -f1 | grep -E '^OS_' | sort || true
+          echo '=== INTERNAL DNS ==='
+          for NAME in pre-climbcrew climbcrew prod-climbcrew climbcrew-prod climbcrew-production production-climbcrew; do
+            printf '%-24s ' "$NAME"
+            getent ahostsv4 "$NAME" 2>/dev/null | awk 'NR==1{print $1}' || true
+          done
+          echo '=== RESOLVER ==='
+          resolvectl status 2>/dev/null | sed -n '1,180p' || true
