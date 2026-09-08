@@ -1,0 +1,56 @@
+name: Reload production Nginx routing
+
+on:
+  push:
+    branches:
+      - diagnostic-public-production
+    paths:
+      - .github/workflows/reload-production-nginx.yml
+
+permissions:
+  contents: read
+
+jobs:
+  reload:
+    runs-on: self-hosted
+    timeout-minutes: 5
+    steps:
+      - name: Validate and reload production Nginx
+        shell: bash
+        run: |
+          set -euo pipefail
+          SITE=/etc/nginx/sites-enabled/climbcrew
+          test -f "$SITE"
+          grep -qE 'server_name[[:space:]]+climbcrew\.dip-tcs\.com' "$SITE"
+          grep -qE 'proxy_pass[[:space:]]+http://127\.0\.0\.1:8080' "$SITE"
+          grep -qE 'proxy_pass[[:space:]]+http://127\.0\.0\.1:3000' "$SITE"
+          grep -qE 'client_max_body_size[[:space:]]+55m' "$SITE"
+          curl --fail --silent http://127.0.0.1:8080/deployment-version.json | grep -q '"version": "260908.002"'
+          sudo nginx -t
+          sudo systemctl reload nginx
+          sleep 2
+          curl --fail --silent -H 'Host: climbcrew.dip-tcs.com' http://127.0.0.1/deployment-version.json | tee /tmp/marker
+          grep -q '"version": "260908.002"' /tmp/marker
+          grep -q '"commit": "095a5aa2abdd0f473de29d330eebca2f697f8730"' /tmp/marker
+
+  verify_public:
+    needs: reload
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify public frontend after Nginx reload
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://climbcrew.dip-tcs.com/deployment-version.json?reload-check=1'
+          for attempt in $(seq 1 12); do
+            BODY="$(curl --fail --silent --show-error --location --max-time 10 -H 'Cache-Control: no-cache' "$URL" || true)"
+            if printf '%s' "$BODY" | grep -q '"version": "260908.002"' \
+              && printf '%s' "$BODY" | grep -q '"commit": "095a5aa2abdd0f473de29d330eebca2f697f8730"'; then
+              printf '%s\n' "$BODY"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo 'ERROR: le frontal public ne sert toujours pas le marqueur de production.'
+          exit 1
