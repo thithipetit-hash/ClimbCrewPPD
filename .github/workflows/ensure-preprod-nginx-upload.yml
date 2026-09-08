@@ -1,37 +1,45 @@
-name: Verify preproduction video chunks
+name: Verify production video chunks
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows:
+      - Validate and Deploy
+    types:
+      - completed
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: climbcrew-preprod-video-chunk-probe
+  group: climbcrew-production-video-chunk-probe
   cancel-in-progress: false
 
 jobs:
   verify_video_chunk:
     name: Vérifier le passage d'un bloc vidéo de 768 Kio
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'production') }}
     runs-on: self-hosted
     timeout-minutes: 5
 
     steps:
-      - name: Vérifier Nginx local et le frontal public
+      - name: Vérifier Nginx local et le frontal public de production
         shell: bash
         run: |
           set -euo pipefail
 
-          DOMAIN="pre-climbcrew.dip-tcs.com"
+          DOMAIN="climbcrew.dip-tcs.com"
           NGINX_DUMP="$(sudo nginx -T 2>&1)"
 
           echo "=== Proxy Nginx local ==="
           printf '%s\n' "$NGINX_DUMP" \
             | grep -E '^(# configuration file |[[:space:]]*(server_name|proxy_pass|client_max_body_size)[[:space:]])' \
             | head -n 250 || true
+
+          if ! printf '%s\n' "$NGINX_DUMP" | grep -qE 'server_name[[:space:]]+climbcrew\.dip-tcs\.com'; then
+            echo "ERROR: le runner ne publie pas climbcrew.dip-tcs.com."
+            exit 1
+          fi
 
           if ! printf '%s\n' "$NGINX_DUMP" | grep -qE 'client_max_body_size[[:space:]]+55m;'; then
             echo "ERROR: le Nginx local ClimbCrew n'est pas configuré avec la limite 55m attendue."
@@ -43,10 +51,7 @@ jobs:
           trap 'rm -f "$PROBE_FILE" "$BODY_FILE"' EXIT
           dd if=/dev/zero of="$PROBE_FILE" bs=1K count=768 status=none
 
-          # Le certificat présenté au runner par le frontal interne ne correspond
-          # pas au nom public. --insecure est utilisé uniquement pour ce diagnostic
-          # de taille ; les navigateurs des utilisateurs conservent la validation TLS.
-          HTTP_CODE="$(curl --insecure --silent --show-error --output "$BODY_FILE" \
+          HTTP_CODE="$(curl --silent --show-error --output "$BODY_FILE" \
             --write-out '%{http_code}' --max-time 60 \
             -X POST -H 'Content-Type: application/octet-stream' \
             --data-binary "@$PROBE_FILE" \
@@ -62,4 +67,4 @@ jobs:
             exit 1
           fi
 
-          echo "OK: un bloc de 768 Kio traverse le frontal de préproduction."
+          echo "OK: un bloc de 768 Kio traverse le frontal de production."
