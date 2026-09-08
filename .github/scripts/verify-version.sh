@@ -78,6 +78,17 @@ if [ "$VERSION_CONSISTENCY_ONLY" = "1" ]; then
   exit 0
 fi
 
+# workflow_dispatch redéploie une révision déjà présente sur une branche
+# canonique (main/production). Son incrément a déjà été contrôlé lors de la PR
+# ou du push qui l'a introduite. Refaire une comparaison avec HEAD^ empêcherait
+# notamment de relancer une correction CI-only dont VERSION reste légitimement
+# inchangée. On conserve donc ici la validation du format, sans exiger un nouvel
+# incrément pour la même révision.
+if [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ]; then
+  echo "Relance workflow_dispatch : VERSION déjà validée à l'entrée de la branche."
+  exit 0
+fi
+
 if non_runtime_change; then
   exit 0
 fi
