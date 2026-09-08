@@ -14,12 +14,13 @@ git cat-file -e "${PREVIOUS_SHA}^{commit}" 2>/dev/null || {
   exit 1
 }
 
+CURRENT_MARKER="$(
+  curl --fail --silent --max-time 5 \
+    "http://127.0.0.1:8080/deployment-version.json?rollback-detect=${PREVIOUS_SHA}" \
+    2>/dev/null || true
+)"
+
 if [ "$CANDIDATE_STARTED" = auto ]; then
-  CURRENT_MARKER="$(
-    curl --fail --silent --max-time 5 \
-      "http://127.0.0.1:8080/deployment-version.json?rollback-detect=${PREVIOUS_SHA}" \
-      2>/dev/null || true
-  )"
   if printf '%s' "$CURRENT_MARKER" | grep -Fq "\"commit\": \"${PREVIOUS_SHA}\""; then
     CANDIDATE_STARTED=false
   else
@@ -38,6 +39,22 @@ esac
 echo "Rollback automatique vers ${PREVIOUS_SHA} (candidate-started=${CANDIDATE_STARTED})."
 
 if [ "$CANDIDATE_STARTED" = true ]; then
+  # Avant de restaurer, diagnostique si le candidat était bien routé publiquement
+  # et si le seul défaut est la terminaison TLS amont.
+  CURRENT_COMMIT="$(printf '%s' "$CURRENT_MARKER" | sed -n 's/.*"commit"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  if [ -n "$CURRENT_COMMIT" ]; then
+    CANDIDATE_PUBLIC="$(
+      curl --insecure --fail --silent --show-error --location \
+        --connect-timeout 5 --max-time 15 \
+        -H 'Cache-Control: no-cache' \
+        "https://${PPD_DOMAIN}/deployment-version.json?rollback-diagnose=${CURRENT_COMMIT}" \
+        2>/dev/null || true
+    )"
+    if printf '%s' "$CANDIDATE_PUBLIC" | grep -Fq "\"commit\": \"${CURRENT_COMMIT}\""; then
+      echo "::warning::Le candidat ${CURRENT_COMMIT} était correctement routé publiquement ; l'échec provient du certificat TLS amont."
+    fi
+  fi
+
   test -s "$BACKUP_FILE" || {
     echo "ERROR: dump de rollback absent: $BACKUP_FILE" >&2
     exit 1
