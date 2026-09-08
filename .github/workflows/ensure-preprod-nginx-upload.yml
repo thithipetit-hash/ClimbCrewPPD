@@ -41,12 +41,17 @@ jobs:
             exit 1
           fi
 
+          if ! printf '%s\n' "$NGINX_DUMP" | grep -qE 'server_name[[:space:]]+pre-climbcrew\.dip-tcs\.com[[:space:]]*;'; then
+            echo "ERROR: le vhost PPD dédié n'est pas actif."
+            exit 1
+          fi
+
           PROBE_FILE="$(mktemp)"
           BODY_FILE="$(mktemp)"
           trap 'rm -f "$PROBE_FILE" "$BODY_FILE"' EXIT
           dd if=/dev/zero of="$PROBE_FILE" bs=1K count=768 status=none
 
-          HTTP_CODE="$(curl --insecure --silent --show-error --output "$BODY_FILE" \
+          HTTP_CODE="$(curl --silent --show-error --output "$BODY_FILE" \
             --write-out '%{http_code}' --max-time 60 \
             -X POST -H 'Content-Type: application/octet-stream' \
             --data-binary "@$PROBE_FILE" \
@@ -58,8 +63,8 @@ jobs:
             exit 1
           fi
           if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" = "000" ] || [[ "$HTTP_CODE" =~ ^5 ]]; then
-            echo "ERROR: le contrôle du frontal PPD n'a pas abouti correctement."
+            echo "ERROR: le contrôle du frontal PPD n'a pas abouti correctement avec un TLS valide."
             exit 1
           fi
 
-          echo "OK: un bloc de 768 Kio traverse le frontal de préproduction."
+          echo "OK: un bloc de 768 Kio traverse le frontal HTTPS de préproduction."
