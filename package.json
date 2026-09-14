@@ -4,6 +4,9 @@
   "version": "3.0.0-linux",
   "scripts": {
     "lint": "eslint --config eslint.config.mjs frontend backend scripts shared",
+    "test": "npm --prefix backend test",
+    "test:coverage": "npm --prefix backend run test:coverage",
+    "check": "npm run lint && npm test",
     "prod:config": "docker compose --env-file .env.production -f docker-compose.prod.yml config",
     "prod:build": "docker compose --env-file .env.production -f docker-compose.prod.yml build",
     "prod:up": "docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build",
