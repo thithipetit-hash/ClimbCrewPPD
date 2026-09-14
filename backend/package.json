@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node --import ./deployment-bootstrap.js server.js",
     "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage",
     "backup:decrypt": "node tools/decrypt-backup.mjs",
     "import:legacy": "node tools/import-legacy.mjs"
   },
