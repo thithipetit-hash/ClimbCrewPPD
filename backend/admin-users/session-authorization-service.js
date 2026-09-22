@@ -168,7 +168,11 @@ export async function updateSessionWithAuthorization(req, res) {
     const participantsResult = existing
       ? await client.query(`select participant_id from session_participants where session_id = $1`, [requested.id])
       : { rows: [] };
-    const previousParticipantIds = participantsResult.rows.map((row) => String(row.participant_id));
+    const previousParticipantIds = [...new Set([
+      ...participantsResult.rows.map((row) => String(row.participant_id)),
+      existing?.encadrant_id ? String(existing.encadrant_id) : null,
+      existing?.referent_id ? String(existing.referent_id) : null,
+    ].filter(Boolean))];
 
     const privileges = await loadActorPrivileges(client, actorParticipantId);
     const policy = evaluateSessionMutation({
@@ -215,7 +219,11 @@ export async function updateSessionWithAuthorization(req, res) {
       );
       sessionRow = result.rows[0];
 
-      const nextParticipantIds = [...new Set(requested.participantIds.map(String))];
+      const nextParticipantIds = [...new Set([
+        ...requested.participantIds.map(String),
+        requested.encadrantId ? String(requested.encadrantId) : null,
+        requested.referentId ? String(requested.referentId) : null,
+      ].filter(Boolean))];
       const newlyAdded = nextParticipantIds.filter((id) => !previousParticipantIds.includes(id));
       if (resolvedStatus === "libre") {
         for (const participantId of newlyAdded) await assertLibreEligibility(client, participantId);
@@ -267,7 +275,11 @@ export async function updateSessionWithAuthorization(req, res) {
       status: sessionRow.status,
       encadrantId: sessionRow.encadrant_id ? String(sessionRow.encadrant_id) : null,
       referentId: sessionRow.referent_id ? String(sessionRow.referent_id) : null,
-      participantIds: finalParticipants.rows.map((row) => String(row.participant_id)),
+      participantIds: [...new Set([
+        ...finalParticipants.rows.map((row) => String(row.participant_id)),
+        sessionRow.encadrant_id ? String(sessionRow.encadrant_id) : null,
+        sessionRow.referent_id ? String(sessionRow.referent_id) : null,
+      ].filter(Boolean))],
     });
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
