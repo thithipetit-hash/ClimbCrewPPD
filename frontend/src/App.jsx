@@ -625,7 +625,15 @@ function App() {
       state.sessions.find((s) => s.id === sessionId) ||
       buildDefaultSession(sessionId);
 
-    const updatedSession = { ...currentSession, ...patch };
+    const patchedSession = { ...currentSession, ...patch };
+    const updatedSession = {
+      ...patchedSession,
+      participantIds: [...new Set([
+        ...(patchedSession.participantIds || []).map(String),
+        patchedSession.encadrantId ? String(patchedSession.encadrantId) : null,
+        patchedSession.referentId ? String(patchedSession.referentId) : null,
+      ].filter(Boolean))],
+    };
 
     setState((prev) => {
       const exists = prev.sessions.some((s) => s.id === sessionId);
@@ -649,10 +657,7 @@ function App() {
       buildDefaultSession(sessionId);
 
     const currentParticipantIds = currentSession.participantIds.map(String);
-    const occupied =
-      currentParticipantIds.length +
-      (currentSession.encadrantId ? 1 : 0) +
-      (currentSession.referentId ? 1 : 0);
+    const occupied = currentParticipantIds.length;
 
     if (occupied >= MAX_PARTICIPANTS || currentParticipantIds.includes(requestedId)) return;
 
@@ -679,9 +684,12 @@ function App() {
       state.sessions.find((s) => s.id === sessionId) ||
       buildDefaultSession(sessionId);
 
+    const removedId = String(participantId);
     const updatedSession = {
       ...currentSession,
-      participantIds: currentSession.participantIds.filter((id) => id !== participantId),
+      encadrantId: String(currentSession.encadrantId || "") === removedId ? null : currentSession.encadrantId,
+      referentId: String(currentSession.referentId || "") === removedId ? null : currentSession.referentId,
+      participantIds: currentSession.participantIds.filter((id) => String(id) !== removedId),
     };
 
     setState((prev) => {
