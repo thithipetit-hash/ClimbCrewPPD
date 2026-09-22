@@ -1513,7 +1513,9 @@ async function handleThemePreferenceChange(nextTheme) {
   function renderSessionCard(session, compact = false) {
     const inscrits = session.participantIds.map((id) => participantsById[id]).filter(Boolean);
     const occupied = inscrits.length + (session.encadrantId ? 1 : 0) + (session.referentId ? 1 : 0);
-    const missingSupervisor = (session.status === "encadree" && !session.encadrantId)\n      || (session.status === "libre" && !session.referentId);\n    const freeSessionPassports = new Set(["jaune", "orange", "vert", "bleu"]);
+    const missingSupervisor = (session.status === "encadree" && !session.encadrantId)
+      || (session.status === "libre" && !session.referentId);
+    const freeSessionPassports = new Set(["jaune", "orange", "vert", "bleu"]);
     const availableParticipants = state.participants.filter((p) =>
       !session.participantIds.includes(p.id)
       && (session.status !== "libre" || freeSessionPassports.has(normalizePassport(p.passport)))
