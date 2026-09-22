@@ -63,7 +63,7 @@ jobs:
           echo "Branche cible : $DEPLOY_BRANCH"
 
       - name: Refuser un push direct sur main
-        if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+        # Les déploiements manuels (workflow_dispatch) restent autorisés pour\n        # finaliser un commit déjà présent sur main ; les nouveaux pushes directs\n        # restent interdits et doivent provenir d'une PR fusionnée.\n        if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
