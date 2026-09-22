@@ -4,67 +4,7 @@ import { writeAccessLog } from "./access-log-service.js";
 import { hashToken } from "./security.js";
 import { serializeUser } from "./user-serializer.js";
 import { notifyAccountRequestReviewers } from "./account-notification-preference-service.js";
-import { findParticipantByEmailOnly } from "./email-association-service.js";
 import { sendApprovalNotificationEmail } from "./account-service.js";
-
-/**
- * Recherche/crée la fiche grimpeur correspondante et l'associe au compte.
- * Appelée uniquement après confirmation de l'adresse e-mail : associer un
- * compte non vérifié permettait à une inscription jamais confirmée de
- * verrouiller indéfiniment une fiche, invisible pour un administrateur.
- */
-async function ensureParticipantAfterEmailVerification(client, user) {
-  if (user.participant_id) {
-    const current = await client.query(
-      `select id, can_admin from participants where id = $1 for update`,
-      [user.participant_id],
-    );
-    if (current.rowCount === 1) return current.rows[0];
-  }
-
-  const match = await findParticipantByEmailOnly(client, {
-    email: user.email,
-    userId: user.id,
-  });
-
-  if (match.participantId) {
-    const participantResult = await client.query(
-      `select id, can_admin from participants where id = $1 for update`,
-      [match.participantId],
-    );
-    const participant = participantResult.rows[0] || null;
-    if (!participant) return null;
-
-    await client.query(
-      `update users set participant_id = $2 where id = $1`,
-      [user.id, participant.id],
-    );
-    await client.query(
-      `update participants set login_email = $2 where id = $1`,
-      [participant.id, user.email],
-    );
-    return participant;
-  }
-
-  if (match.issue !== "email_not_found") return null;
-
-  const created = await client.query(
-    `
-      insert into participants (
-        nom, prenom, email, login_email, passport, cotisation, ffme,
-        can_encadrer, can_referer, can_admin
-      ) values ($1, $2, $3, $3, 'sans', false, false, false, false, false)
-      returning id, can_admin
-    `,
-    [user.nom, user.prenom, user.email],
-  );
-  const participant = created.rows[0];
-  await client.query(
-    `update users set participant_id = $2 where id = $1`,
-    [user.id, participant.id],
-  );
-  return participant;
-}
 
 /**
  * Valide la propriété de l'adresse e-mail puis applique la politique courante.
@@ -123,17 +63,10 @@ export async function verifyEmailPendingAdminApproval(req, res) {
       );
     }
 
-    let participant = null;
-    if (tokenRow.status === "pending") {
-      participant = await ensureParticipantAfterEmailVerification(client, tokenRow);
-    }
-
-    const autoActivate = Boolean(
-      !REQUIRE_ADMIN_ACCOUNT_APPROVAL
-      && tokenRow.status === "pending"
-      && participant,
-    );
-    const isAdmin = Boolean(autoActivate && participant?.can_admin);
+    // La vérification de l'e-mail ne crée ni n'associe plus de fiche grimpeur.
+    // L'association compte ↔ participant est exclusivement une action administrateur explicite.
+    const autoActivate = false;
+    const isAdmin = false;
 
     const verifiedUserResult = await client.query(
       `
@@ -204,7 +137,7 @@ export async function verifyEmailPendingAdminApproval(req, res) {
 
     if (verifiedUser.status === "pending") {
       return res.status(200).send(
-        "Adresse e-mail confirmée, mais l’association automatique du compte n’a pas pu être finalisée. Un administrateur doit corriger les données d’association.",
+        "Adresse e-mail confirmée. Un administrateur doit maintenant associer le compte à une fiche grimpeur puis l’approuver.",
       );
     }
 
