@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildRealisationDraft, buildRealisationPayload, getParticipantSessionDays, resolveSessionIdForRealisation } from "../src/lib/realisation-workflow.js";
+import { buildRealisationDraft, buildRealisationPayload, getParticipantSessionDays, getSessionParticipantIds, resolveSessionIdForRealisation } from "../src/lib/realisation-workflow.js";
 
 const sessions = [
   { id:"2026-09-04-midi", date:"2026-09-04", slot:"midi", status:"encadree", encadrantId:"e1", participantIds:["p1"] },
@@ -24,4 +24,10 @@ test("le payload transporte explicitement modeRealisation", () => {
   assert.equal(payload.modeRealisation, "moulinette");
   assert.equal(payload.styleRealisation, "a_vue");
   assert.equal(payload.rating, 5);
+  assert.equal("participantId" in payload, false);
+});
+
+test("participantIds est la liste canonique sans reconstruction des rôles", () => {
+  const session = { participantIds:["p1","e1","r1"], encadrantId:"e1", referentId:"r1" };
+  assert.deepEqual(getSessionParticipantIds(session), ["p1","e1","r1"]);
 });
