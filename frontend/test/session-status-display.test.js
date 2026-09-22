@@ -52,3 +52,16 @@ test("les couleurs de fond respectent la convention des inscriptions et restent 
   assert.match(themeCss, /\.toolbar,[\s\S]*\.card,[\s\S]*background:\s*var\(--theme-card-bg\)\s*!important/);
   assert.match(main, /styles\/session-status-colors\.css/);
 });
+
+
+test("une séance libre ou encadrée sans responsable est neutralisée en gris", async () => {
+  const css = await readFile(new URL("../src/styles/session-status-colors.css", import.meta.url), "utf8");
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+
+  assert.match(app, /session\.status === "encadree" && !session\.encadrantId/);
+  assert.match(app, /session\.status === "libre" && !session\.referentId/);
+  assert.match(app, /session-card-missing-supervisor/);
+  assert.match(css, /session-status-libre\.session-card-missing-supervisor/);
+  assert.match(css, /session-status-encadree\.session-card-missing-supervisor/);
+  assert.match(css, /background:\s*#6b7280\s*!important/);
+});
