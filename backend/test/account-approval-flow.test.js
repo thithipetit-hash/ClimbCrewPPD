@@ -23,39 +23,29 @@ const configSource = await readFile(
   "utf8",
 );
 
-test("l'approbation administrateur est désactivée par défaut et reste configurable", () => {
+test("la demande de compte annonce une association administrateur explicite", () => {
   assert.match(configSource, /REQUIRE_ADMIN_ACCOUNT_APPROVAL/);
-  assert.match(configSource, /"REQUIRE_ADMIN_ACCOUNT_APPROVAL",\s*false/);
-  assert.match(emailAssociationSource, /le compte sera activé automatiquement/);
+  assert.match(emailAssociationSource, /un administrateur devra associer le compte/);
   assert.match(emailAssociationSource, /publicRequestResponse/);
   assert.match(routesSource, /requestAccessByEmailOnly/);
 });
 
-test("une nouvelle fiche participant n'est créée qu'après vérification de l'adresse", () => {
+test("la vérification de l'adresse ne crée ni n'associe automatiquement de participant", () => {
   assert.doesNotMatch(emailAssociationSource, /insert into participants/i);
-  assert.match(emailAssociationSource, /associationDeferredUntilEmailVerified/);
-  assert.match(approvalSource, /ensureParticipantAfterEmailVerification/);
-  assert.match(approvalSource, /insert into participants/i);
-  assert.match(approvalSource, /can_encadrer, can_referer, can_admin/);
+  assert.doesNotMatch(approvalSource, /insert into participants/i);
+  assert.doesNotMatch(approvalSource, /ensureParticipantAfterEmailVerification/);
+  assert.doesNotMatch(routesSource, /associations\/auto/);
+  assert.match(routesSource, /users\/:id\/participant/);
 });
 
-test("l'association à une fiche est tentée à la vérification même si l'approbation manuelle est requise", () => {
-  assert.doesNotMatch(
-    approvalSource,
-    /if \(!REQUIRE_ADMIN_ACCOUNT_APPROVAL && tokenRow\.status === "pending"\) \{\s*participant = await ensureParticipantAfterEmailVerification/,
-  );
-  assert.match(
-    approvalSource,
-    /if \(tokenRow\.status === "pending"\) \{\s*participant = await ensureParticipantAfterEmailVerification/,
-  );
+test("l'association automatique par email n'est plus exposée", () => {
+  assert.doesNotMatch(emailAssociationSource, /associateExistingAccountsByEmail/);
+  assert.doesNotMatch(routesSource, /associateExistingAccountsByEmail/);
 });
 
-test("la vérification de l'e-mail active automatiquement un compte pending associé", () => {
-  assert.match(approvalSource, /autoActivate/);
-  assert.match(approvalSource, /status = case when \$2 then 'active' else status end/);
-  assert.match(approvalSource, /approved_at = case when \$2 then coalesce\(approved_at, now\(\)\)/);
-  assert.match(approvalSource, /account_request_email_verified_auto_activated/);
-  assert.match(approvalSource, /Votre compte est maintenant actif/);
+test("la vérification de l'e-mail conserve le compte pending jusqu'à l'action administrateur", () => {
+  assert.match(approvalSource, /const autoActivate = false/);
+  assert.match(approvalSource, /Un administrateur doit maintenant associer le compte/);
   assert.match(routesSource, /app\.get\("\/auth\/verify-email", verifyEmailPendingAdminApproval\)/);
 });
 
