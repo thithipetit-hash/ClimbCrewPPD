@@ -7,11 +7,9 @@ export function isManagedSession(session) {
 }
 
 export function getSessionParticipantIds(session) {
-  return [...new Set([
-    ...(session?.participantIds || []).map(String),
-    ...(session?.encadrantId ? [String(session.encadrantId)] : []),
-    ...(session?.referentId ? [String(session.referentId)] : []),
-  ])];
+  // participantIds est la liste canonique fournie par l'API : elle inclut déjà
+  // les inscrits, l'encadrant et le référent, sans doublon.
+  return [...new Set((session?.participantIds || []).map(String))];
 }
 
 export function getParticipantSessionDays(sessions, participantId) {
@@ -56,7 +54,6 @@ export function buildRealisationPayload({ draft, sessionId, route = null, now = 
   const rating = Number(draft?.rating || 0);
   return {
     id: `realisation-${now()}`,
-    participantId: draft?.participantId || "",
     sessionId: sessionId || "",
     voieId: draft?.voieId || "",
     dateRealisation: `${draft?.selectedDay || ""}T12:00:00`,
