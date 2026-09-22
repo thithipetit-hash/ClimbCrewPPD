@@ -8,9 +8,8 @@ import { sendAccountRequestConfirmation } from "./email-service.js";
 
 const EMAIL_VERIFICATION_DURATION_MS = 1000 * 60 * 60 * 24 * 7;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PUBLIC_REQUEST_MESSAGE = REQUIRE_ADMIN_ACCOUNT_APPROVAL
-  ? "Si cette adresse peut être utilisée pour un compte ClimbCrew, un e-mail de confirmation sera envoyé. Après confirmation, un administrateur devra associer puis approuver le compte si nécessaire."
-  : "Si cette adresse peut être utilisée pour un compte ClimbCrew, un e-mail de confirmation sera envoyé. Après confirmation de l’adresse e-mail, le compte sera activé automatiquement.";
+const PUBLIC_REQUEST_MESSAGE =
+  "Si cette adresse peut être utilisée pour un compte ClimbCrew, un e-mail de confirmation sera envoyé. Après confirmation, un administrateur devra associer le compte à une fiche grimpeur puis l’approuver.";
 
 function getPublicUrl() {
   return String(
@@ -227,81 +226,6 @@ export async function requestAccessByEmailOnly(req, res) {
     await client.query("rollback").catch(() => undefined);
     console.error("Création de compte impossible :", error);
     return res.status(500).json({ error: "Création de compte momentanément impossible" });
-  } finally {
-    client.release();
-  }
-}
-
-/**
- * Rattrapage des comptes existants : même règle stricte, e-mail uniquement.
- * Le champ `byName` reste présent à 0 pour ne pas casser l'interface existante.
- */
-export async function associateExistingAccountsByEmail(req, res) {
-  const client = await getPool().connect();
-  try {
-    await client.query("begin");
-    const usersResult = await client.query(
-      `
-        select id, participant_id, email, prenom, nom, role, is_admin
-        from users
-        where participant_id is null
-        order by id asc
-        for update
-      `,
-    );
-
-    const summary = {
-      associatedCount: 0,
-      byEmail: 0,
-      byName: 0,
-      ambiguousCount: 0,
-      unavailableCount: 0,
-      unmatchedCount: 0,
-      associatedUserIds: [],
-    };
-
-    for (const user of usersResult.rows) {
-      const match = await findParticipantByEmailOnly(client, {
-        email: user.email,
-        userId: user.id,
-      });
-
-      if (!match.participantId) {
-        if (match.issue === "email_ambiguous") summary.ambiguousCount += 1;
-        else if (match.issue === "email_already_linked") summary.unavailableCount += 1;
-        else summary.unmatchedCount += 1;
-        continue;
-      }
-
-      await client.query(
-        `update users set participant_id = $2 where id = $1`,
-        [user.id, match.participantId],
-      );
-      await client.query(
-        `update participants set login_email = $2 where id = $1`,
-        [match.participantId, cleanEmail(user.email)],
-      );
-
-      summary.associatedCount += 1;
-      summary.byEmail += 1;
-      summary.associatedUserIds.push(String(user.id));
-    }
-
-    await client.query("commit");
-
-    await writeAccessLog({
-      userId: req.auth?.user?.id || req.enhancementAuth?.user?.id || null,
-      eventType: "account_associations_auto",
-      success: true,
-      req,
-      details: summary,
-    });
-
-    return res.json({ ok: true, ...summary });
-  } catch (error) {
-    await client.query("rollback").catch(() => undefined);
-    console.error("Association automatique des comptes impossible :", error);
-    return res.status(500).json({ error: "Association automatique impossible" });
   } finally {
     client.release();
   }
