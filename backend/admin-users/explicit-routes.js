@@ -29,10 +29,7 @@ import {
   updateAccountNotificationPreference,
   updateManagedAccountNotificationPreference,
 } from "./account-notification-preference-service.js";
-import {
-  associateExistingAccountsByEmail,
-  requestAccessByEmailOnly,
-} from "./email-association-service.js";
+import { requestAccessByEmailOnly } from "./email-association-service.js";
 import { importBusinessDataSafely } from "./secure-import-service.js";
 import { exportAllData } from "./export-service.js";
 import {
@@ -106,7 +103,6 @@ export function installExplicitAdminUserRoutes(app, {
   app.post("/admin/reset/:type", requireAuth, requireAdmin, resetAdminData);
   app.get("/admin/export-data", requireAuth, requireAdmin, exportAllData);
   app.post("/admin/auth/users/:id/admin", requireAuth, requireAdmin, updateAdminRightSafely);
-  app.post("/admin/auth/associations/auto", requireAuth, requireAdmin, associateExistingAccountsByEmail);
   app.put("/admin/auth/users/:id/participant", requireAuth, requireAdmin, setAccountParticipantAssociation);
   app.post("/auth/change-password", requireAuth, changePassword);
   app.post("/auth/change-email/request", requireAuth, requestEmailChange);
