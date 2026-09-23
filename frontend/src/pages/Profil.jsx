@@ -339,9 +339,10 @@ export default function Profil({
                 {[
                   ["gripStrengthRightKg", "Préhension droite", "kg", 0, 150, 0.1],
                   ["gripStrengthLeftKg", "Préhension gauche", "kg", 0, 150, 0.1],
-                  ["hang20mmSeconds", "Suspension 20 mm", "s", 0, 600, 0.1],
+                  ["hang20mmSeconds", "Suspension 20 mm (complète ou délestée)", "s", 0, 600, 0.1],
+                  ["jugHangSeconds", "Suspension sur bac", "s", 0, 600, 0.1],
                   ["strictPullups", "Tractions strictes", "nb", 0, 200, 1],
-                  ["weightedPullupKg", "Traction lestée", "kg", 0, 200, 0.1],
+                  ["flexedArmHangSeconds", "Suspension bras fléchis à 90°", "s", 0, 300, 0.1],
                   ["hipMobilityCm", "Mobilité / ouverture hanches", "cm", 0, 300, 0.1],
                 ].map(([key, label, unit, min, max, step]) => (
                   <div key={key}>
