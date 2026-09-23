@@ -311,6 +311,52 @@ export default function Profil({
             </div>
           )}
 
+          {profileIsVisible && (
+            <div className="card profile-physical-card">
+              <div className="card-header"><h3>Profil physique</h3></div>
+              <div className="grid four">
+                {[
+                  ["heightCm", "Taille", "cm", 80, 250, 0.1],
+                  ["weightKg", "Poids", "kg", 20, 250, 0.1],
+                  ["armSpanCm", "Envergure", "cm", 80, 280, 0.1],
+                  ["standingReachCm", "Portée bras levé", "cm", 100, 350, 0.1],
+                ].map(([key, label, unit, min, max, step]) => (
+                  <div key={key}>
+                    <label>{label} ({unit})</label>
+                    <input type="number" min={min} max={max} step={step}
+                      value={selectedParticipant[key] ?? ""}
+                      disabled={!isOwnProfile}
+                      onChange={(event) => handleProfileUpdate({ [key]: event.target.value })} />
+                  </div>
+                ))}
+              </div>
+              <div className="group" style={{ marginTop: 10 }}>
+                <span className="pill">Ape Index : {selectedParticipant.heightCm && selectedParticipant.armSpanCm ? `${(Number(selectedParticipant.armSpanCm) - Number(selectedParticipant.heightCm)).toFixed(1)} cm` : "-"}</span>
+                <span className="pill">Allonge relative : {selectedParticipant.heightCm && selectedParticipant.armSpanCm ? (Number(selectedParticipant.armSpanCm) / Number(selectedParticipant.heightCm)).toFixed(3) : "-"}</span>
+              </div>
+              <h4 style={{ marginBottom: 8 }}>Tests physiques</h4>
+              <div className="grid four">
+                {[
+                  ["gripStrengthRightKg", "Préhension droite", "kg", 0, 150, 0.1],
+                  ["gripStrengthLeftKg", "Préhension gauche", "kg", 0, 150, 0.1],
+                  ["hang20mmSeconds", "Suspension 20 mm", "s", 0, 600, 0.1],
+                  ["strictPullups", "Tractions strictes", "nb", 0, 200, 1],
+                  ["weightedPullupKg", "Traction lestée", "kg", 0, 200, 0.1],
+                  ["hipMobilityCm", "Mobilité / ouverture hanches", "cm", 0, 300, 0.1],
+                ].map(([key, label, unit, min, max, step]) => (
+                  <div key={key}>
+                    <label>{label} ({unit})</label>
+                    <input type="number" min={min} max={max} step={step}
+                      value={selectedParticipant[key] ?? ""}
+                      disabled={!isOwnProfile}
+                      onChange={(event) => handleProfileUpdate({ [key]: event.target.value })} />
+                  </div>
+                ))}
+              </div>
+              {isOwnProfile && <div className="small" style={{ marginTop: 8 }}>Données facultatives. Chaque valeur est enregistrée lors de sa modification.</div>}
+            </div>
+          )}
+
           {!profileIsVisible ? (
             <div className="muted-box private-profile-notice">Ce grimpeur a choisi de conserver son profil privé.</div>
           ) : (
