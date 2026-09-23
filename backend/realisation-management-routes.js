@@ -478,7 +478,7 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
       });
       realisation.participantId = String(participantId);
       realisation.videoUrls = normalizeVideoUrls(req.body?.videoUrls) || [];
-      await assertRealisationIntegrity({ pool, realisation, participantId });
+      await assertRealisationIntegrity({ pool, realisation, participantId, enforceRecentSession: true });
       await assertVideoUrlsBelongToRoute(pool, realisation.voieId, realisation.videoUrls);
 
       await pool.query(
