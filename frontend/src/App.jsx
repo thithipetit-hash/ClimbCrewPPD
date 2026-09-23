@@ -1853,8 +1853,6 @@ async function handleThemePreferenceChange(nextTheme) {
         {tab === "statistiques" && (
           <Statistiques
             sessionStats={sessionStats}
-            routes={state.routes}
-            realisations={state.realisations}
             topRouteRankings={topRouteRankings}
             leadRealisationStats={leadRealisationStats}
             formatRouteName={formatRouteName}
