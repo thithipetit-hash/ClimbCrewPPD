@@ -110,7 +110,9 @@ export async function updateOwnParticipantProfile(req, res) {
       optionalMetric(body, "gripStrengthRightKg", { min: 0, max: 150 }),
       optionalMetric(body, "gripStrengthLeftKg", { min: 0, max: 150 }),
       optionalMetric(body, "hang20mmSeconds", { min: 0, max: 600 }),
+      optionalMetric(body, "jugHangSeconds", { min: 0, max: 600 }),
       optionalMetric(body, "strictPullups", { min: 0, max: 200, integer: true }),
+      optionalMetric(body, "flexedArmHangSeconds", { min: 0, max: 300 }),
       optionalMetric(body, "weightedPullupKg", { min: 0, max: 200 }),
       optionalMetric(body, "hipMobilityCm", { min: 0, max: 300 }),
     ];
@@ -130,16 +132,18 @@ export async function updateOwnParticipantProfile(req, res) {
             grip_strength_right_kg = case when $16::boolean then $17 else grip_strength_right_kg end,
             grip_strength_left_kg = case when $18::boolean then $19 else grip_strength_left_kg end,
             hang_20mm_seconds = case when $20::boolean then $21 else hang_20mm_seconds end,
-            strict_pullups = case when $22::boolean then $23 else strict_pullups end,
-            weighted_pullup_kg = case when $24::boolean then $25 else weighted_pullup_kg end,
-            hip_mobility_cm = case when $26::boolean then $27 else hip_mobility_cm end
+            jug_hang_seconds = case when $22::boolean then $23 else jug_hang_seconds end,
+            strict_pullups = case when $24::boolean then $25 else strict_pullups end,
+            flexed_arm_hang_seconds = case when $26::boolean then $27 else flexed_arm_hang_seconds end,
+            weighted_pullup_kg = case when $28::boolean then $29 else weighted_pullup_kg end,
+            hip_mobility_cm = case when $30::boolean then $31 else hip_mobility_cm end
         where id = $1
         returning
           id, nom, prenom, email, login_email, passport, sexe, cotisation, ffme,
           initiateur_sae, initiateur_sne,
           can_encadrer, can_referer, can_admin, avatar_id, crest_id, profile_public,
           height_cm, weight_kg, arm_span_cm, standing_reach_cm, grip_strength_right_kg,
-          grip_strength_left_kg, hang_20mm_seconds, strict_pullups, weighted_pullup_kg, hip_mobility_cm,
+          grip_strength_left_kg, hang_20mm_seconds, jug_hang_seconds, strict_pullups, flexed_arm_hang_seconds, weighted_pullup_kg, hip_mobility_cm,
           (coalesce(custom_avatar_image, '') <> '') as has_custom_avatar
       `,
       [
@@ -157,9 +161,11 @@ export async function updateOwnParticipantProfile(req, res) {
         hasField("gripStrengthRightKg"), metrics[4],
         hasField("gripStrengthLeftKg"), metrics[5],
         hasField("hang20mmSeconds"), metrics[6],
-        hasField("strictPullups"), metrics[7],
-        hasField("weightedPullupKg"), metrics[8],
-        hasField("hipMobilityCm"), metrics[9],
+        hasField("jugHangSeconds"), metrics[7],
+        hasField("strictPullups"), metrics[8],
+        hasField("flexedArmHangSeconds"), metrics[9],
+        hasField("weightedPullupKg"), metrics[10],
+        hasField("hipMobilityCm"), metrics[11],
       ],
     );
 
