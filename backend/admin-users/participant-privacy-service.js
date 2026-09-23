@@ -78,7 +78,9 @@ export function serializeParticipant(row) {
     gripStrengthRightKg: row.grip_strength_right_kg == null ? null : Number(row.grip_strength_right_kg),
     gripStrengthLeftKg: row.grip_strength_left_kg == null ? null : Number(row.grip_strength_left_kg),
     hang20mmSeconds: row.hang_20mm_seconds == null ? null : Number(row.hang_20mm_seconds),
+    jugHangSeconds: row.jug_hang_seconds == null ? null : Number(row.jug_hang_seconds),
     strictPullups: row.strict_pullups == null ? null : Number(row.strict_pullups),
+    flexedArmHangSeconds: row.flexed_arm_hang_seconds == null ? null : Number(row.flexed_arm_hang_seconds),
     weightedPullupKg: row.weighted_pullup_kg == null ? null : Number(row.weighted_pullup_kg),
     hipMobilityCm: row.hip_mobility_cm == null ? null : Number(row.hip_mobility_cm),
     ...avatarMetadata(row),
@@ -176,8 +178,8 @@ export async function listParticipantsWithPrivacy(req, res) {
         initiateur_sae, initiateur_sne,
         can_encadrer, can_referer, can_admin, avatar_id, crest_id,
         profile_public, height_cm, weight_kg, arm_span_cm, standing_reach_cm,
-        grip_strength_right_kg, grip_strength_left_kg, hang_20mm_seconds, strict_pullups,
-        weighted_pullup_kg, hip_mobility_cm,
+        grip_strength_right_kg, grip_strength_left_kg, hang_20mm_seconds, jug_hang_seconds, strict_pullups,
+        flexed_arm_hang_seconds, weighted_pullup_kg, hip_mobility_cm,
         (coalesce(custom_avatar_image, '') <> '') as has_custom_avatar
       from participants
       order by prenom asc, nom asc
