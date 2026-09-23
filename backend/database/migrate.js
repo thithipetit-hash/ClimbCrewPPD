@@ -6,7 +6,7 @@ const MIGRATION_FILE_PATTERN = /^\d{3,}_[a-z0-9][a-z0-9_-]*\.sql$/i;
 const MIGRATION_LOCK_ID = 947_220_830;
 const MIGRATION_DIRECTORY = fileURLToPath(new URL("./migrations/", import.meta.url));
 
-// Ces noms appartiennent à l'historique consolidé avant .020. Ils conservent
+// Ces noms appartiennent à l'historique consolidé. Ils conservent
 // leurs préfixes parfois dupliqués afin de ne jamais réécrire schema_migrations.
 const HISTORICAL_MIGRATIONS = new Set([
   "001_baseline.sql",
@@ -20,6 +20,7 @@ const HISTORICAL_MIGRATIONS = new Set([
   "006_realisation_technical_analysis.sql",
   "007_runtime_schema_consolidation.sql",
   "008_video_upload_cleanup.sql",
+  "021_realisation_kudos.sql",
 ]);
 
 // Ces trois versions appartenaient historiquement au premier répertoire de
