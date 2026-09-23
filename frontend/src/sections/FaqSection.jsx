@@ -67,6 +67,14 @@ const HELP_ITEMS = [
     content: "Chaque voie distribue exactement 1 000 points entre les grimpeurs distincts qui l'ont réussie en tête avec un critère de réussite. Refaire la même voie ne donne pas une part supplémentaire et une réussite en moulinette ne distribue pas de points d'ascension en tête.",
   },
   {
+    title: "Comment renseigner le profil physique ?",
+    content: "Dans Profil > Profil physique, saisissez les valeurs au clavier. La valeur est enregistrée lorsque vous quittez le champ ou appuyez sur Entrée. Taille, envergure et portée se mesurent en centimètres, le poids en kilogrammes. L’Ape Index correspond à envergure moins taille ; l’allonge relative à envergure divisée par taille ; l’IMC est calculé à partir de la taille et du poids. Un avertissement signale les valeurs qui paraissent incohérentes afin de repérer surtout les erreurs de saisie ou d’unité.",
+  },
+  {
+    title: "Comment réaliser les tests physiques ?",
+    content: "Faites les tests échauffé, reposé et dans des conditions reproductibles. Préhension : dynamomètre tenu bras le long du corps, meilleure valeur de 2 essais par main. Suspension 20 mm : deux mains sur une réglette de 20 mm, bras tendus, chronométrer jusqu’au lâcher ; si délesté, conserver le même délestage lors des comparaisons. Suspension sur bac : deux mains sur une prise franche, bras tendus, chronométrer jusqu’au lâcher. Tractions strictes : départ bras tendus, monter sans élan jusqu’au menton au-dessus des mains, compter uniquement les répétitions complètes. Suspension à 90° : partir coudes fléchis à environ 90° et chronométrer jusqu’à la perte nette de l’angle. Mobilité des hanches : utilisez toujours le même protocole et le même repère de mesure en cm ; la valeur sert surtout au suivi individuel. Arrêtez un test en cas de douleur.",
+  },
+  {
     title: "Comment exporter ses réalisations vers theCrag ?",
     content: "Depuis son propre profil, Exporter pour theCrag génère un fichier CSV adapté à l'import. Le bouton n'est proposé que pour le profil associé au compte connecté.",
   },
