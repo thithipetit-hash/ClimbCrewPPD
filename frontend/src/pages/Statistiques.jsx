@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import StatisticsSection from "../sections/StatisticsSection.jsx";
 import WallOfFameSection from "../sections/WallOfFameSection.jsx";
 import { USE_API, apiFetch } from "../lib/api.js";
+import { average, calculateBmi, realisationQualityScore } from "../lib/profile-physical.js";
+import { getRealisationMode } from "../lib/realisation-mode.js";
 
 const STORAGE_KEY = "climbcrew_local_data_v2";
 
@@ -17,6 +19,8 @@ function readStoredSessions() {
 
 export default function Statistiques({
   sessionStats,
+  routes,
+  realisations,
   topRouteRankings,
   leadRealisationStats,
   formatRouteName,
@@ -70,6 +74,33 @@ export default function Statistiques({
     0,
   );
 
+  const participantsById = Object.fromEntries(sortedStatsParticipants.map((participant) => [String(participant.id), participant]));
+  const routePhysicalStats = (routes || []).map((route) => {
+    const items = (realisations || []).filter((item) => String(item.voieId) === String(route.id));
+    const successful = items.filter((item) => realisationQualityScore(item, route) >= 1000);
+    const lead = successful.filter((item) => ["tete", "en-tete"].includes(getRealisationMode(item, route)));
+    const moulinette = successful.filter((item) => getRealisationMode(item, route) === "moulinette");
+    const leadClimbers = [...new Set(lead.map((item) => String(item.participantId)))]
+      .map((id) => participantsById[id]).filter(Boolean);
+    const mean = (key) => average(leadClimbers.map((participant) => participant[key]));
+    const bmiValues = leadClimbers.map((participant) => calculateBmi(participant.heightCm, participant.weightKg)).filter(Number.isFinite);
+    const apeValues = leadClimbers
+      .filter((participant) => Number(participant.heightCm) > 0 && Number(participant.armSpanCm) > 0)
+      .map((participant) => Number(participant.armSpanCm) - Number(participant.heightCm));
+    return {
+      route,
+      leadCount: lead.length,
+      moulinetteCount: moulinette.length,
+      climberCount: leadClimbers.length,
+      height: mean("heightCm"),
+      weight: mean("weightKg"),
+      span: mean("armSpanCm"),
+      reach: mean("standingReachCm"),
+      ape: average(apeValues),
+      bmi: average(bmiValues),
+    };
+  }).sort((a, b) => String(a.route.numeroCorde || "").localeCompare(String(b.route.numeroCorde || ""), "fr", { numeric: true }));
+
   const extendedSessionStats = {
     ...sessionStats,
     passportCounts,
@@ -96,6 +127,7 @@ export default function Statistiques({
       cprByParticipantId={cprByParticipantId}
       formatPoints={formatPoints}
       pointsByParticipantId={pointsByParticipantId}
+      routePhysicalStats={routePhysicalStats}
     />
     <WallOfFameSection
       wallOfFameCategories={wallOfFameCategories}
