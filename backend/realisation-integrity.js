@@ -7,7 +7,37 @@ export class RealisationIntegrityError extends Error {
   }
 }
 
-export async function assertRealisationIntegrity({ pool, realisation, participantId }) {
+async function assertRecentEligibleSessionDay(pool, participantId, sessionId) {
+  const result = await pool.query(
+    `
+      select distinct s.date
+      from sessions s
+      where s.date <= current_date
+        and (
+          exists (
+            select 1 from session_participants sp
+            where sp.session_id = s.id and sp.participant_id::text = $1
+          )
+          or s.encadrant_id::text = $1
+          or s.referent_id::text = $1
+        )
+      order by s.date desc
+      limit 5
+    `,
+    [String(participantId)],
+  );
+  const allowedDays = new Set(result.rows.map((row) => String(row.date).slice(0, 10)));
+  const sessionDate = await pool.query("select date from sessions where id = $1 limit 1", [sessionId]);
+  const selectedDay = String(sessionDate.rows[0]?.date || "").slice(0, 10);
+  if (!selectedDay || !allowedDays.has(selectedDay)) {
+    throw new RealisationIntegrityError(
+      "La réalisation doit être rattachée à l’une des cinq dernières dates de séance passées.",
+      "sessionId",
+    );
+  }
+}
+
+export async function assertRealisationIntegrity({ pool, realisation, participantId, enforceRecentSession = false }) {
   const ownerId = String(participantId || "");
   if (!ownerId) throw new RealisationIntegrityError("Compte non relié à un grimpeur", "participantId", 403);
 
@@ -48,6 +78,7 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
   }
 
   const session = sessionResult.rows[0];
+  if (enforceRecentSession) await assertRecentEligibleSessionDay(pool, ownerId, realisation.sessionId);
   if (!session.cotisation) {
     throw new RealisationIntegrityError(
       "Le grimpeur doit être cotisant pour enregistrer une réalisation.",
