@@ -64,6 +64,17 @@ function cleanChoice(value, fallback) {
   return /^[a-z0-9_]{2,40}$/.test(normalized) ? normalized : fallback;
 }
 
+function optionalMetric(body, field, { min = 0, max = 1000, integer = false } = {}) {
+  if (!Object.prototype.hasOwnProperty.call(body, field)) return undefined;
+  const raw = body[field];
+  if (raw === "" || raw === null || raw === undefined) return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < min || value > max || (integer && !Number.isInteger(value))) {
+    throw new Error(`${field} doit être compris entre ${min} et ${max}.`);
+  }
+  return value;
+}
+
 function cleanSexe(value) {
   const normalized = String(value || "").trim().toLowerCase();
   if (["", "h", "m", "f"].includes(normalized)) {
@@ -91,6 +102,18 @@ export async function updateOwnParticipantProfile(req, res) {
     const profilePublic = hasField("profilePublic") ? body.profilePublic !== false : null;
     const customAvatar = resolveCustomAvatarUpdate(body.customAvatarImage);
     const sexe = hasField("sexe") ? cleanSexe(body.sexe) : null;
+    const metrics = [
+      optionalMetric(body, "heightCm", { min: 80, max: 250 }),
+      optionalMetric(body, "weightKg", { min: 20, max: 250 }),
+      optionalMetric(body, "armSpanCm", { min: 80, max: 280 }),
+      optionalMetric(body, "standingReachCm", { min: 100, max: 350 }),
+      optionalMetric(body, "gripStrengthRightKg", { min: 0, max: 150 }),
+      optionalMetric(body, "gripStrengthLeftKg", { min: 0, max: 150 }),
+      optionalMetric(body, "hang20mmSeconds", { min: 0, max: 600 }),
+      optionalMetric(body, "strictPullups", { min: 0, max: 200, integer: true }),
+      optionalMetric(body, "weightedPullupKg", { min: 0, max: 200 }),
+      optionalMetric(body, "hipMobilityCm", { min: 0, max: 300 }),
+    ];
 
     const result = await getPool().query(
       `
@@ -99,12 +122,24 @@ export async function updateOwnParticipantProfile(req, res) {
             crest_id = coalesce($3, crest_id),
             profile_public = coalesce($4::boolean, profile_public),
             custom_avatar_image = case when $5::boolean then custom_avatar_image else $6 end,
-            sexe = coalesce($7, sexe)
+            sexe = coalesce($7, sexe),
+            height_cm = case when $8::boolean then $9 else height_cm end,
+            weight_kg = case when $10::boolean then $11 else weight_kg end,
+            arm_span_cm = case when $12::boolean then $13 else arm_span_cm end,
+            standing_reach_cm = case when $14::boolean then $15 else standing_reach_cm end,
+            grip_strength_right_kg = case when $16::boolean then $17 else grip_strength_right_kg end,
+            grip_strength_left_kg = case when $18::boolean then $19 else grip_strength_left_kg end,
+            hang_20mm_seconds = case when $20::boolean then $21 else hang_20mm_seconds end,
+            strict_pullups = case when $22::boolean then $23 else strict_pullups end,
+            weighted_pullup_kg = case when $24::boolean then $25 else weighted_pullup_kg end,
+            hip_mobility_cm = case when $26::boolean then $27 else hip_mobility_cm end
         where id = $1
         returning
           id, nom, prenom, email, login_email, passport, sexe, cotisation, ffme,
           initiateur_sae, initiateur_sne,
           can_encadrer, can_referer, can_admin, avatar_id, crest_id, profile_public,
+          height_cm, weight_kg, arm_span_cm, standing_reach_cm, grip_strength_right_kg,
+          grip_strength_left_kg, hang_20mm_seconds, strict_pullups, weighted_pullup_kg, hip_mobility_cm,
           (coalesce(custom_avatar_image, '') <> '') as has_custom_avatar
       `,
       [
@@ -115,13 +150,23 @@ export async function updateOwnParticipantProfile(req, res) {
         customAvatar.keepExisting,
         customAvatar.value,
         sexe,
+        hasField("heightCm"), metrics[0],
+        hasField("weightKg"), metrics[1],
+        hasField("armSpanCm"), metrics[2],
+        hasField("standingReachCm"), metrics[3],
+        hasField("gripStrengthRightKg"), metrics[4],
+        hasField("gripStrengthLeftKg"), metrics[5],
+        hasField("hang20mmSeconds"), metrics[6],
+        hasField("strictPullups"), metrics[7],
+        hasField("weightedPullupKg"), metrics[8],
+        hasField("hipMobilityCm"), metrics[9],
       ],
     );
 
     if (!result.rowCount) return res.status(404).json({ error: "Grimpeur introuvable" });
     return res.json(serializeParticipant(result.rows[0]));
   } catch (error) {
-    if (/image personnalisée|WebP|sexe/i.test(String(error.message || ""))) {
+    if (/image personnalisée|WebP|sexe|heightCm|weightKg|armSpanCm|standingReachCm|gripStrength|hang20mm|strictPullups|weightedPullup|hipMobility/i.test(String(error.message || ""))) {
       return res.status(400).json({ error: error.message });
     }
     console.error("PATCH /participants/me/profile", error);
