@@ -6,13 +6,14 @@ function fail(message) {
 }
 
 const app = fs.readFileSync("frontend/src/App.jsx", "utf8");
+const planningView = fs.readFileSync("frontend/src/lib/planning-view.js", "utf8");
 const domain = fs.readFileSync("frontend/src/lib/domain.js", "utf8");
 const routeDisplayGroups = fs.readFileSync("frontend/src/lib/route-display-groups.js", "utf8");
 const viteConfig = fs.readFileSync("frontend/vite.config.js", "utf8");
 const frontendDockerfile = fs.readFileSync("frontend/Dockerfile.prod", "utf8");
-const dayStart = app.indexOf("const daySessions = useMemo");
-const weekStart = app.indexOf("const weekDates = useMemo", dayStart);
-const dayBlock = dayStart >= 0 && weekStart > dayStart ? app.slice(dayStart, weekStart) : "";
+const dayStart = planningView.indexOf("const daySessions = useMemo");
+const weekStart = planningView.indexOf("const weekDates = useMemo", dayStart);
+const dayBlock = dayStart >= 0 && weekStart > dayStart ? planningView.slice(dayStart, weekStart) : "";
 if (!dayBlock) fail("bloc daySessions introuvable");
 if (dayBlock.includes("defaultSessionStatus(date, slot)")) fail("référence indéfinie date dans daySessions");
 if (!dayBlock.includes("defaultSessionStatus(selectedDate, slot)")) fail("statut par défaut de daySessions non sécurisé");
