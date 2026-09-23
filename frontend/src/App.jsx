@@ -266,7 +266,9 @@ function App() {
     return modalAllEligibleParticipants.filter((participant) => participantIdsForSelectedDay.has(participant.id));
   }, [newRealisation.selectedDay, modalAllEligibleParticipants, state.sessions]);
 
-  const { selectedDate, daySessions, weekSessions } = usePlanningSessions(state);\n\n  const selectedParticipantRealisations = useMemo(() => {
+  const { selectedDate, daySessions, weekSessions } = usePlanningSessions(state);
+
+  const selectedParticipantRealisations = useMemo(() => {
     return state.realisations
       .filter((r) => r.participantId === state.selectedParticipantProgress)
       .sort((a, b) => a.dateRealisation.localeCompare(b.dateRealisation));
