@@ -22,6 +22,7 @@ export default function StatisticsSection({
   getPassportStyle,
   normalizePassport,
   getPassportDotStyle,
+  routePhysicalStats = [],
 }) {
   return (
     <>
@@ -89,6 +90,33 @@ export default function StatisticsSection({
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <h2>Statistiques par voie</h2>
+          <span className="small">Morphologie moyenne des grimpeurs ayant réussi en tête</span>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table className="data-table" style={{ width: "100%" }}>
+            <thead><tr>
+              <th>Voie</th><th>En tête</th><th>Moulinette</th><th>Grimpeurs tête</th>
+              <th>Taille</th><th>Poids</th><th>Envergure</th><th>Ape</th><th>Portée</th><th>IMC</th>
+            </tr></thead>
+            <tbody>
+              {routePhysicalStats.map((entry) => {
+                const fmt = (value, unit = "") => Number.isFinite(value) ? `${value.toFixed(1)}${unit}` : "-";
+                return <tr key={entry.route.id}>
+                  <td>{formatRouteName(entry.route)} · {entry.route.cotationAjustee || entry.route.cotationReference || "-"}</td>
+                  <td>{entry.leadCount}</td><td>{entry.moulinetteCount}</td><td>{entry.climberCount}</td>
+                  <td>{fmt(entry.height, " cm")}</td><td>{fmt(entry.weight, " kg")}</td><td>{fmt(entry.span, " cm")}</td>
+                  <td>{fmt(entry.ape, " cm")}</td><td>{fmt(entry.reach, " cm")}</td><td>{fmt(entry.bmi)}</td>
+                </tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="small" style={{ marginTop: 8 }}>Les moyennes ignorent les données physiques non renseignées. Un grimpeur ayant plusieurs réussites en tête sur la même voie ne compte qu’une fois dans les moyennes.</div>
       </div>
 
       <div className="card">
