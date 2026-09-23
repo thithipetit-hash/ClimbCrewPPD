@@ -1,3 +1,4 @@
+import { calculateCpr } from "../../../shared/cpr.js";
 import { PASSPORT_STYLES } from "./ui-config.js";
 import {
   REALISATION_CRITERION_WEIGHTS,
@@ -199,38 +200,13 @@ export function nextBusinessDay(dateStr, delta) {
 }
 
 export function calculateSimpleCpr(realisations, routesById, now = Date.now()) {
-  const cutoff = now - (90 * 24 * 60 * 60 * 1000);
-
-  const bestRecent = realisations
-    .map((r) => {
-      const route = routesById[r.voieId];
-      const dateTimestamp = new Date(r.dateRealisation).getTime();
-      if (!route || !Number.isFinite(dateTimestamp) || dateTimestamp < cutoff || dateTimestamp > now) return null;
-
-      if (!isSuccessfulRealisation(r)) return null;
-
-      const grade = route.cotationAjustee || route.cotationReference;
-      const gradeIndex = gradeToIndex(grade);
-      if (gradeIndex < 0) return null;
-
-      return {
-        id: r.id,
-        date: r.dateRealisation,
-        grade,
-        // Le CPR mesure la cotation des voies réellement réussies.
-        // Les coefficients de style restent disponibles pour les autres calculs,
-        // mais ne doivent pas gonfler artificiellement le niveau CPR.
-        weightedIndex: gradeIndex,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.weightedIndex - a.weightedIndex || b.date.localeCompare(a.date))
-    .slice(0, 10);
-
-  if (!bestRecent.length) return { currentGrade: null, averageIndex: null, timeline: [] };
-
-  const averageIndex = bestRecent.reduce((sum, item) => sum + item.weightedIndex, 0) / bestRecent.length;
-  return { currentGrade: indexToGrade(Math.round(averageIndex)), averageIndex, timeline: bestRecent };
+  return calculateCpr({
+    realisations,
+    routesById,
+    grades: GRADES,
+    isSuccessful: isSuccessfulRealisation,
+    now,
+  });
 }
 
 /**
