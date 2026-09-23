@@ -19,6 +19,16 @@ create table if not exists participants (
   avatar_id text not null default 'gecko',
   crest_id text not null default 'cristal',
   profile_public boolean not null default true,
+  height_cm numeric(5,1),
+  weight_kg numeric(5,1),
+  arm_span_cm numeric(5,1),
+  standing_reach_cm numeric(5,1),
+  grip_strength_right_kg numeric(5,1),
+  grip_strength_left_kg numeric(5,1),
+  hang_20mm_seconds numeric(6,1),
+  strict_pullups integer,
+  weighted_pullup_kg numeric(5,1),
+  hip_mobility_cm numeric(5,1),
   custom_avatar_image text not null default '',
   created_at timestamptz not null default now()
 );
