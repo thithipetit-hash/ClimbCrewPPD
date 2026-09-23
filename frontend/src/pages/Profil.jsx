@@ -3,6 +3,7 @@ import Button from "../components/Button.jsx";
 import ClimberProfilePanel from "../components/ClimberProfilePanel.jsx";
 import ParticipantBadges from "../components/ParticipantBadges.jsx";
 import ProfileGecko from "../components/ProfileGecko.jsx";
+import PhysicalProfileCard from "../components/PhysicalProfileCard.jsx";
 import ProfileRealisationRecorder from "../components/ProfileRealisationRecorder.jsx";
 import RealisationVideoAnalysis from "../components/RealisationVideoAnalysis.jsx";
 import CprEvolutionChart from "../sections/CprEvolutionChart.jsx";
@@ -21,6 +22,7 @@ import {
   getRealisationCriterion,
   getRealisationMode,
 } from "../lib/realisation-mode.js";
+import { bestRealisationIds, realisationQualityScore } from "../lib/profile-physical.js";
 
 function sortParticipantsForProfile(participants, myParticipantId) {
   return [...participants].sort((a, b) => {
@@ -31,7 +33,7 @@ function sortParticipantsForProfile(participants, myParticipantId) {
   });
 }
 
-function sortRealisationsForDisplay(realisations, routesById, sortBy) {
+function sortRealisationsForDisplay(realisations, routesById, sortBy, bestIds = new Set()) {
   return [...realisations].sort((a, b) => {
     const dateOrder = String(b.dateRealisation || "").localeCompare(String(a.dateRealisation || ""));
     if (sortBy === "date") return dateOrder;
@@ -42,6 +44,13 @@ function sortRealisationsForDisplay(realisations, routesById, sortBy) {
     if (sortBy === "rope") {
       const ropeOrder = normalizeRopeNumber(routeA?.numeroCorde) - normalizeRopeNumber(routeB?.numeroCorde);
       return ropeOrder || dateOrder;
+    }
+
+    if (sortBy === "best") {
+      const bestOrder = Number(bestIds.has(String(b.id))) - Number(bestIds.has(String(a.id)));
+      if (bestOrder) return bestOrder;
+      const qualityOrder = realisationQualityScore(b, routeB) - realisationQualityScore(a, routeA);
+      return qualityOrder || dateOrder;
     }
 
     if (sortBy === "difficulty") {
@@ -148,7 +157,8 @@ export default function Profil({
   const selectedRealisations = realisations
     .filter((realisation) => String(realisation.participantId) === String(selectedParticipantId))
     .sort((a, b) => String(b.dateRealisation || "").localeCompare(String(a.dateRealisation || "")));
-  const displayedRealisations = sortRealisationsForDisplay(selectedRealisations, routesById, realisationSort);
+  const bestIds = bestRealisationIds(selectedRealisations, routesById);
+  const displayedRealisations = sortRealisationsForDisplay(selectedRealisations, routesById, realisationSort, bestIds);
   const cpr = cprByParticipantId[selectedParticipantId] || {};
   const points = pointsByParticipantId[selectedParticipantId] || 0;
   const participations = sessionStats.participationCount[selectedParticipantId] || 0;
@@ -311,53 +321,7 @@ export default function Profil({
             </div>
           )}
 
-          {profileIsVisible && (
-            <div className="card profile-physical-card">
-              <div className="card-header"><h3>Profil physique</h3></div>
-              <div className="grid four">
-                {[
-                  ["heightCm", "Taille", "cm", 80, 250, 0.1],
-                  ["weightKg", "Poids", "kg", 20, 250, 0.1],
-                  ["armSpanCm", "Envergure", "cm", 80, 280, 0.1],
-                  ["standingReachCm", "Portée bras levé", "cm", 100, 350, 0.1],
-                ].map(([key, label, unit, min, max, step]) => (
-                  <div key={key}>
-                    <label>{label} ({unit})</label>
-                    <input type="number" min={min} max={max} step={step}
-                      value={selectedParticipant[key] ?? ""}
-                      disabled={!isOwnProfile}
-                      onChange={(event) => handleProfileUpdate({ [key]: event.target.value })} />
-                  </div>
-                ))}
-              </div>
-              <div className="group" style={{ marginTop: 10 }}>
-                <span className="pill">Ape Index : {selectedParticipant.heightCm && selectedParticipant.armSpanCm ? `${(Number(selectedParticipant.armSpanCm) - Number(selectedParticipant.heightCm)).toFixed(1)} cm` : "-"}</span>
-                <span className="pill">Allonge relative : {selectedParticipant.heightCm && selectedParticipant.armSpanCm ? (Number(selectedParticipant.armSpanCm) / Number(selectedParticipant.heightCm)).toFixed(3) : "-"}</span>
-              </div>
-              <h4 style={{ marginBottom: 8 }}>Tests physiques</h4>
-              <div className="grid four">
-                {[
-                  ["gripStrengthRightKg", "Préhension droite", "kg", 0, 150, 0.1],
-                  ["gripStrengthLeftKg", "Préhension gauche", "kg", 0, 150, 0.1],
-                  ["hang20mmSeconds", "Suspension 20 mm (complète ou délestée)", "s", 0, 600, 0.1],
-                  ["jugHangSeconds", "Suspension sur bac", "s", 0, 600, 0.1],
-                  ["strictPullups", "Tractions strictes", "nb", 0, 200, 1],
-                  ["flexedArmHangSeconds", "Suspension bras fléchis à 90°", "s", 0, 300, 0.1],
-                  ["hipMobilityCm", "Mobilité / ouverture hanches", "cm", 0, 300, 0.1],
-                ].map(([key, label, unit, min, max, step]) => (
-                  <div key={key}>
-                    <label>{label} ({unit})</label>
-                    <input type="number" min={min} max={max} step={step}
-                      value={selectedParticipant[key] ?? ""}
-                      disabled={!isOwnProfile}
-                      onChange={(event) => handleProfileUpdate({ [key]: event.target.value })} />
-                  </div>
-                ))}
-              </div>
-              {isOwnProfile && <div className="small" style={{ marginTop: 8 }}>Données facultatives. Chaque valeur est enregistrée lors de sa modification.</div>}
-            </div>
-          )}
-
+          {profileIsVisible && <PhysicalProfileCard participant={selectedParticipant} editable={isOwnProfile} onUpdate={handleProfileUpdate} />}
           {!profileIsVisible ? (
             <div className="muted-box private-profile-notice">Ce grimpeur a choisi de conserver son profil privé.</div>
           ) : (
@@ -423,6 +387,7 @@ export default function Profil({
                           <option value="date">Date</option>
                           <option value="rope">Corde</option>
                           <option value="difficulty">Difficulté</option>
+                          <option value="best">Meilleure réalisation</option>
                         </select>
                       </label>
                     </div>
@@ -440,7 +405,7 @@ export default function Profil({
                         : "Critère non précisé (historique)";
                       const forcedMoulinette = Boolean(route?.moulinetteOnly);
                       return (
-                        <details className="subcard editable-realisation-card" key={realisation.id}>
+                        <details className="subcard editable-realisation-card" key={realisation.id} style={bestIds.has(String(realisation.id)) ? { background: "#dff3e4", borderColor: "#5b9b68" } : undefined}>
                           <summary className="card-header realisation-summary">
                             <div>
                               <strong>{route ? formatRouteForRealisation(route) : "Voie inconnue"}</strong>
