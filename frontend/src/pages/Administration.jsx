@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Button from "../components/Button.jsx";
+import SaveFeedback from "../components/SaveFeedback.jsx";
 import { apiFetch, USE_API } from "../lib/api.js";
 import { fullName } from "../lib/domain.js";
 
@@ -34,6 +35,20 @@ export default function Administration({
   const [notificationPreferences, setNotificationPreferences] = useState({});
   const [savingControl, setSavingControl] = useState("");
   const [nativeAdminError, setNativeAdminError] = useState("");
+  const [participantDrafts, setParticipantDrafts] = useState({});
+  const [participantSaveState, setParticipantSaveState] = useState({});
+
+  useEffect(() => {
+    setParticipantDrafts(Object.fromEntries(
+      adminParticipants.map((participant) => [String(participant.id), {
+        nom: participant.nom || "",
+        prenom: participant.prenom || "",
+        email: participant.email || "",
+        passport: participant.passport || "sans",
+        sexe: participant.sexe || "",
+      }])
+    ));
+  }, [adminParticipants]);
 
   useEffect(() => {
     if (!USE_API || !adminUnlocked) return;
@@ -46,6 +61,72 @@ export default function Administration({
       })
       .catch((error) => setNativeAdminError(String(error.message || error)));
   }, [adminUnlocked]);
+
+  function participantDraftFor(participant) {
+    return participantDrafts[String(participant.id)] || {
+      nom: participant.nom || "",
+      prenom: participant.prenom || "",
+      email: participant.email || "",
+      passport: participant.passport || "sans",
+      sexe: participant.sexe || "",
+    };
+  }
+
+  function setParticipantDraftField(participant, key, value) {
+    const participantId = String(participant.id);
+    setParticipantDrafts((current) => ({
+      ...current,
+      [participantId]: { ...participantDraftFor(participant), ...current[participantId], [key]: value },
+    }));
+    setParticipantSaveState((current) => ({
+      ...current,
+      [participantId]: { status: "dirty", message: "Modifications non enregistrées" },
+    }));
+  }
+
+  async function saveParticipantDraft(participant) {
+    const participantId = String(participant.id);
+    const draft = participantDraftFor(participant);
+    setParticipantSaveState((current) => ({
+      ...current,
+      [participantId]: { status: "saving", message: "Enregistrement…" },
+    }));
+    try {
+      await updateParticipant(participant.id, draft);
+      setParticipantSaveState((current) => ({
+        ...current,
+        [participantId]: { status: "success", message: "✓ Participant enregistré" },
+      }));
+    } catch (error) {
+      setParticipantSaveState((current) => ({
+        ...current,
+        [participantId]: { status: "error", message: `Enregistrement impossible : ${String(error?.message || error)}` },
+      }));
+    }
+  }
+
+  async function saveQuickField(participant, key, value) {
+    const participantId = String(participant.id);
+    setSavingControl(`participant:${participantId}:${key}`);
+    setParticipantSaveState((current) => ({
+      ...current,
+      [participantId]: { status: "saving", message: "Enregistrement…" },
+    }));
+    try {
+      await updateParticipant(participant.id, { [key]: value });
+      setParticipantSaveState((current) => ({
+        ...current,
+        [participantId]: { status: "success", message: "✓ Enregistré" },
+      }));
+    } catch (error) {
+      setParticipantSaveState((current) => ({
+        ...current,
+        [participantId]: { status: "error", message: `Enregistrement impossible : ${String(error?.message || error)}` },
+      }));
+    } finally {
+      setSavingControl("");
+    }
+  }
 
   function qualificationFor(participant) {
     return qualificationOverrides[String(participant.id)] || {
@@ -74,6 +155,10 @@ export default function Administration({
           initiateurSae: Boolean(saved.initiateurSae),
           initiateurSne: Boolean(saved.initiateurSne),
         },
+      }));
+      setParticipantSaveState((current) => ({
+        ...current,
+        [participantId]: { status: "success", message: "✓ Qualification enregistrée" },
       }));
     } catch (error) {
       setQualificationOverrides((current) => ({ ...current, [participantId]: previous }));
@@ -108,6 +193,10 @@ export default function Administration({
       setNotificationPreferences((current) => ({
         ...current,
         [participantId]: { ...optimistic, receiveAccountNotifications: Boolean(saved.receiveAccountNotifications) },
+      }));
+      setParticipantSaveState((current) => ({
+        ...current,
+        [participantId]: { status: "success", message: "✓ Préférence enregistrée" },
       }));
     } catch (error) {
       setNotificationPreferences((current) => ({ ...current, [participantId]: previous }));
@@ -177,35 +266,43 @@ export default function Administration({
             const notificationEligible = Boolean(participant.canAdmin && preference.userId && preference.status === "active" && preference.isAdmin);
             const qualificationSaving = savingControl === `qualification:${participant.id}`;
             const notificationSaving = savingControl === `notification:${participant.id}`;
+            const participantQuickSaving = savingControl.startsWith(`participant:${participant.id}:`);
+            const draft = participantDraftFor(participant);
+            const saveState = participantSaveState[String(participant.id)] || { status: "idle", message: "" };
             return (
               <details className="subcard participant-admin-details" key={participant.id}>
                 <summary style={{ cursor: "pointer", fontWeight: 700 }}>{fullName(participant)}</summary>
                 <div className="grid four" style={{ marginTop: 10 }}>
-                  <div><label>Nom</label><input value={participant.nom} onChange={(event) => updateParticipant(participant.id, { nom: event.target.value })} /></div>
-                  <div><label>Prénom</label><input value={participant.prenom} onChange={(event) => updateParticipant(participant.id, { prenom: event.target.value })} /></div>
-                  <div><label>Adresse e-mail</label><input type="email" value={participant.email || ""} onChange={(event) => updateParticipant(participant.id, { email: event.target.value })} /></div>
+                  <div><label>Nom</label><input value={draft.nom} onChange={(event) => setParticipantDraftField(participant, "nom", event.target.value)} /></div>
+                  <div><label>Prénom</label><input value={draft.prenom} onChange={(event) => setParticipantDraftField(participant, "prenom", event.target.value)} /></div>
+                  <div><label>Adresse e-mail</label><input type="email" value={draft.email} onChange={(event) => setParticipantDraftField(participant, "email", event.target.value)} /></div>
                   <div>
                     <label>Passeport</label>
-                    <select value={participant.passport} onChange={(event) => updateParticipant(participant.id, { passport: event.target.value })}>
+                    <select value={draft.passport} onChange={(event) => setParticipantDraftField(participant, "passport", event.target.value)}>
                       <option value="sans">Sans</option><option value="jaune">Jaune</option><option value="orange">Orange</option><option value="vert">Vert</option><option value="bleu">Bleu</option><option value="decouverte">Découverte</option>
                     </select>
                   </div>
                   <div>
                     <label>Sexe</label>
                     <div className="group">
-                      <label><input type="radio" name={`participant-sexe-${participant.id}`} checked={participant.sexe === "h"} onChange={() => updateParticipant(participant.id, { sexe: "h" })} /> H</label>
-                      <label><input type="radio" name={`participant-sexe-${participant.id}`} checked={participant.sexe === "f"} onChange={() => updateParticipant(participant.id, { sexe: "f" })} /> F</label>
-                      <label><input type="radio" name={`participant-sexe-${participant.id}`} checked={!participant.sexe} onChange={() => updateParticipant(participant.id, { sexe: "" })} /> Non précisé</label>
+                      <label><input type="radio" name={`participant-sexe-${participant.id}`} checked={draft.sexe === "h"} onChange={() => setParticipantDraftField(participant, "sexe", "h")} /> H</label>
+                      <label><input type="radio" name={`participant-sexe-${participant.id}`} checked={draft.sexe === "f"} onChange={() => setParticipantDraftField(participant, "sexe", "f")} /> F</label>
+                      <label><input type="radio" name={`participant-sexe-${participant.id}`} checked={!draft.sexe} onChange={() => setParticipantDraftField(participant, "sexe", "")} /> Non précisé</label>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "end" }}><Button variant="danger" onClick={() => deleteParticipant(participant.id)}>Supprimer</Button></div>
+                  <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
+                    <Button disabled={saveState.status !== "dirty" || participantQuickSaving} onClick={() => saveParticipantDraft(participant)}>
+                      {saveState.status === "saving" ? "Enregistrement…" : "Enregistrer"}
+                    </Button>
+                    <Button variant="danger" disabled={participantQuickSaving || saveState.status === "saving"} onClick={() => deleteParticipant(participant.id)}>Supprimer</Button>
+                  </div>
                 </div>
                 <div className="group" style={{ marginTop: 12 }}>
-                  <label><input type="checkbox" checked={participant.cotisation} onChange={(event) => updateParticipant(participant.id, { cotisation: event.target.checked })} /> Cotisation</label>
-                  <label><input type="checkbox" checked={participant.ffme} onChange={(event) => updateParticipant(participant.id, { ffme: event.target.checked })} /> FFME</label>
-                  <label><input type="checkbox" checked={participant.canEncadrer} onChange={(event) => updateParticipant(participant.id, { canEncadrer: event.target.checked })} /> Encadrant</label>
-                  <label><input type="checkbox" checked={participant.canReferer} onChange={(event) => updateParticipant(participant.id, { canReferer: event.target.checked })} /> Référent</label>
-                  <label><input type="checkbox" checked={Boolean(participant.canAdmin)} onChange={(event) => updateParticipant(participant.id, { canAdmin: event.target.checked })} /> Administrateur</label>
+                  <label><input type="checkbox" checked={participant.cotisation} disabled={participantQuickSaving} onChange={(event) => saveQuickField(participant, "cotisation", event.target.checked)} /> Cotisation</label>
+                  <label><input type="checkbox" checked={participant.ffme} disabled={participantQuickSaving} onChange={(event) => saveQuickField(participant, "ffme", event.target.checked)} /> FFME</label>
+                  <label><input type="checkbox" checked={participant.canEncadrer} disabled={participantQuickSaving} onChange={(event) => saveQuickField(participant, "canEncadrer", event.target.checked)} /> Encadrant</label>
+                  <label><input type="checkbox" checked={participant.canReferer} disabled={participantQuickSaving} onChange={(event) => saveQuickField(participant, "canReferer", event.target.checked)} /> Référent</label>
+                  <label><input type="checkbox" checked={Boolean(participant.canAdmin)} disabled={participantQuickSaving} onChange={(event) => saveQuickField(participant, "canAdmin", event.target.checked)} /> Administrateur</label>
                   {USE_API && <label><input type="checkbox" checked={qualification.initiateurSae} disabled={qualificationSaving} onChange={(event) => saveQualification(participant, "initiateurSae", event.target.checked)} /> Initiateur SAE</label>}
                   {USE_API && <label><input type="checkbox" checked={qualification.initiateurSne} disabled={qualificationSaving} onChange={(event) => saveQualification(participant, "initiateurSne", event.target.checked)} /> Initiateur SNE</label>}
                   {USE_API && (
@@ -214,6 +311,7 @@ export default function Administration({
                     </label>
                   )}
                 </div>
+                <SaveFeedback status={saveState.status} message={saveState.message} />
               </details>
             );
           })}

@@ -1381,3 +1381,37 @@ button:not(.danger):not(.secondary):not(.ghost),
   .buddy-summary { align-items: flex-start; }
   .buddy-match { display: grid; }
 }
+
+
+/* Acquittement homogène des saisies et enregistrements */
+.save-feedback {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.save-feedback.dirty,
+.save-feedback.saving { color: #facc15; }
+.save-feedback.success { color: #86efac; }
+.save-feedback.error { color: #fca5a5; }
+
+.confirmation-toast.error-toast {
+  background: #7f1d1d !important;
+  color: #fee2e2 !important;
+  border-color: rgba(254, 202, 202, .45) !important;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: .65;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}

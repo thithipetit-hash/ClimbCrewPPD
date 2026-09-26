@@ -44,7 +44,7 @@ export function useAppUiState({ useApi }) {
   const [adminError, setAdminError] = useState("");
   const [routeError, setRouteError] = useState("");
   const [importMessage, setImportMessage] = useState("");
-  const [, setSyncMessage] = useState(useApi ? "API activée" : "Mode local");
+  const [syncMessage, setSyncMessage] = useState("");
   const [confirmationMessage, setConfirmationMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -53,7 +53,7 @@ export function useAppUiState({ useApi }) {
     statsSortField, setStatsSortField, statsSortDirection, setStatsSortDirection,
     wallOfFameSexFilter, setWallOfFameSexFilter, recentlyAddedParticipantIds, setRecentlyAddedParticipantIds,
     adminInput, setAdminInput, adminUnlocked, setAdminUnlocked, adminError, setAdminError,
-    routeError, setRouteError, importMessage, setImportMessage, setSyncMessage,
+    routeError, setRouteError, importMessage, setImportMessage, syncMessage, setSyncMessage,
     confirmationMessage, setConfirmationMessage, isSyncing, setIsSyncing,
   };
 }
