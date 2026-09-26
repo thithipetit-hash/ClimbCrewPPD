@@ -94,7 +94,7 @@ export default function Profil({
   const [theCragImportStatus, setTheCragImportStatus] = React.useState(null);
   const [theCragStartDate, setTheCragStartDate] = React.useState("");
   const [kudosPendingId, setKudosPendingId] = React.useState("");
-  const [buddyAvailability, setBuddyAvailability] = React.useState({ days: [], slots: [], note: "" });
+  const [buddyAvailability, setBuddyAvailability] = React.useState({ availabilityKeys: [], note: "" });
   const [buddyMatches, setBuddyMatches] = React.useState([]);
   const [buddySaving, setBuddySaving] = React.useState(false);
 
@@ -120,7 +120,7 @@ export default function Profil({
     if (!USE_API || !myParticipantId) return;
     Promise.all([apiFetch("/buddy/me"), apiFetch("/buddy")])
       .then(([mine, matches]) => {
-        setBuddyAvailability({ days: mine?.days || [], slots: mine?.slots || [], note: mine?.note || "" });
+        setBuddyAvailability({ availabilityKeys: mine?.availabilityKeys || [], note: mine?.note || "" });
         setBuddyMatches(Array.isArray(matches) ? matches : []);
       })
       .catch(() => {});
@@ -202,12 +202,13 @@ export default function Profil({
     }
   }
 
-  function toggleBuddyValue(field, value) {
+  function toggleBuddyAvailability(day, slot) {
+    const key = `${day}:${slot}`;
     setBuddyAvailability((current) => ({
       ...current,
-      [field]: current[field].includes(value)
-        ? current[field].filter((item) => item !== value)
-        : [...current[field], value],
+      availabilityKeys: current.availabilityKeys.includes(key)
+        ? current.availabilityKeys.filter((item) => item !== key)
+        : [...current.availabilityKeys, key],
     }));
   }
 
@@ -216,7 +217,7 @@ export default function Profil({
       setBuddySaving(true);
       setProfileError("");
       const saved = await apiFetch("/buddy/me", { method: "PUT", body: JSON.stringify(buddyAvailability) });
-      setBuddyAvailability({ days: saved.days || [], slots: saved.slots || [], note: saved.note || "" });
+      setBuddyAvailability({ availabilityKeys: saved.availabilityKeys || [], note: saved.note || "" });
       const matches = await apiFetch("/buddy");
       setBuddyMatches(Array.isArray(matches) ? matches : []);
     } catch (error) {
@@ -365,15 +366,26 @@ export default function Profil({
                 <span className="buddy-count">{buddyMatches.length} disponible{buddyMatches.length > 1 ? "s" : ""}</span>
               </summary>
               <div className="buddy-content">
-                <div><strong>Jours</strong><div className="buddy-options">
-                  {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map((day) => <button type="button" key={day} className={buddyAvailability.days.includes(day) ? "buddy-chip active" : "buddy-chip"} onClick={() => toggleBuddyValue("days", day)}>{day}</button>)}
-                </div></div>
-                <div><strong>Créneaux</strong><div className="buddy-options">
-                  {[["matin","Matin"],["midi","Midi"],["soir","Soir"]].map(([value,label]) => <button type="button" key={value} className={buddyAvailability.slots.includes(value) ? "buddy-chip active" : "buddy-chip"} onClick={() => toggleBuddyValue("slots", value)}>{label}</button>)}
-                </div></div>
+                <div>
+                  <strong>Disponibilités du lundi au vendredi</strong>
+                  <div className="buddy-week-grid" role="group" aria-label="Disponibilités Climb Buddy">
+                    <span />
+                    {["Matin", "Midi", "Soir"].map((label) => <strong key={label} className="buddy-grid-heading">{label}</strong>)}
+                    {["Lun", "Mar", "Mer", "Jeu", "Ven"].map((day) => (
+                      <React.Fragment key={day}>
+                        <strong className="buddy-grid-day">{day}</strong>
+                        {[["matin","Matin"],["midi","Midi"],["soir","Soir"]].map(([slot,label]) => {
+                          const key = `${day}:${slot}`;
+                          const selected = buddyAvailability.availabilityKeys.includes(key);
+                          return <button type="button" key={key} className={selected ? "buddy-chip active" : "buddy-chip"} aria-pressed={selected} aria-label={`${day} ${label}`} onClick={() => toggleBuddyAvailability(day, slot)}>{selected ? "✓" : "—"}</button>;
+                        })}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
                 <label>Précision facultative<input maxLength={240} value={buddyAvailability.note} onChange={(event) => setBuddyAvailability((current) => ({ ...current, note: event.target.value }))} placeholder="Ex. plutôt après 18 h, prévenir la veille…" /></label>
                 <div className="buddy-actions"><Button type="button" variant="secondary" disabled={buddySaving} onClick={saveBuddyAvailability}>{buddySaving ? "Enregistrement…" : "Enregistrer mes disponibilités"}</Button></div>
-                {buddyMatches.length > 0 && <div className="buddy-match-list"><strong>Grimpeurs disponibles</strong>{buddyMatches.map((buddy) => <div className="buddy-match" key={buddy.participantId}><span><strong>{buddy.name}</strong><span className="small"> · {buddy.days.join(", ")} · {buddy.slots.map((slot) => slot === "soir" ? "Soir" : slot === "midi" ? "Midi" : "Matin").join(", ")}</span></span>{buddy.note && <span className="small">{buddy.note}</span>}</div>)}</div>}
+                {buddyMatches.length > 0 && <div className="buddy-match-list"><strong>Grimpeurs disponibles</strong>{buddyMatches.map((buddy) => <div className="buddy-match" key={buddy.participantId}><span><strong>{buddy.name}</strong><span className="small"> · {(buddy.availabilityKeys || []).map((key) => { const [day, slot] = key.split(":"); return `${day} ${slot === "soir" ? "Soir" : slot === "midi" ? "Midi" : "Matin"}`; }).join(", ")}</span></span>{buddy.note && <span className="small">{buddy.note}</span>}</div>)}</div>}
               </div>
             </details>
           )}
