@@ -63,7 +63,8 @@ import { PASSWORD_RULE_TEXT, isStrongPassword } from "./lib/password-policy.js";
 import { buildRouteDisplayGroups } from "./lib/route-display-groups.js";
 import { buildTheCragExport } from "./lib/thecrag.js";
 import { usePlanningSessions } from "./lib/planning-view.js";
-import { buddyPreferenceKeyForSession, buddyPreferencesFromAvailability } from "./lib/buddy-preferences.js";
+import { buddyPreferenceKeyForSession } from "./lib/buddy-preferences.js";
+import { useBuddyAvailability } from "./hooks/useBuddyAvailability.js";
 import {
   buildRealisationDraft,
   buildRealisationPayload,
@@ -182,49 +183,11 @@ function App() {
     [canAccessAdminTabs]
   );
   const currentPageLabel = TABS.find((item) => item.key === tab)?.label || "";
-  const [buddyPreferencesByParticipantId, setBuddyPreferencesByParticipantId] = React.useState({});
-
-  useEffect(() => {
-    if (!USE_API || !authUser || tab !== "inscriptions") return undefined;
-
-    let cancelled = false;
-
-    async function loadBuddyPreferences() {
-      try {
-        const otherAvailabilities = await apiFetch("/buddy");
-        let ownAvailability = null;
-
-        if (authUser.participantId) {
-          ownAvailability = await apiFetch("/buddy/me");
-        }
-
-        if (cancelled) return;
-
-        const preferencesByParticipantId = {};
-        for (const availability of Array.isArray(otherAvailabilities) ? otherAvailabilities : []) {
-          const participantId = String(availability?.participantId || "");
-          if (participantId) {
-            preferencesByParticipantId[participantId] = buddyPreferencesFromAvailability(availability);
-          }
-        }
-
-        const ownParticipantId = String(authUser.participantId || "");
-        if (ownParticipantId && ownAvailability) {
-          preferencesByParticipantId[ownParticipantId] = buddyPreferencesFromAvailability(ownAvailability);
-        }
-
-        setBuddyPreferencesByParticipantId(preferencesByParticipantId);
-      } catch (error) {
-        console.error("Impossible de charger les disponibilités Buddy pour le planning.", error);
-        if (!cancelled) setBuddyPreferencesByParticipantId({});
-      }
-    }
-
-    loadBuddyPreferences();
-    return () => {
-      cancelled = true;
-    };
-  }, [tab, authUser?.id, authUser?.participantId]);
+  const buddyPreferencesByParticipantId = useBuddyAvailability({
+    useApi: USE_API,
+    authUser,
+    active: tab === "inscriptions",
+  });
 
   useEffect(() => {
     if (tab === "parametres") return;
