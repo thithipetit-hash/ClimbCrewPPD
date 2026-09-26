@@ -34,6 +34,7 @@ test("un seul répertoire canonique conserve toutes les versions historiques dan
     "014_chat_reactions.sql",
     "015_chat_social.sql",
     "016_buddy_availability.sql",
+    "017_buddy_daily_session_preferences.sql",
     "021_realisation_kudos.sql",
     "022_chat_replies.sql",
   ]);

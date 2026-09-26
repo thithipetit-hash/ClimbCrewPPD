@@ -31,8 +31,8 @@ test("les caractéristiques sont associées à la voie à sa création et à sa 
   assert.match(source, /tags: newRoute\.tags/);
   assert.match(source, /tags: routeEditDraft\.tags/);
   assert.doesNotMatch(source, /newRealisation\.tags/);
-  assert.match(voies, /Caractéristiques :/);
-  assert.match(voies, /non renseignées/);
+  assert.match(voies, /className="route-meta-line"/);
+  assert.match(voies, /Sans caractéristique/);
   assert.match(voies, /className="route-characteristic"/);
   assert.match(voies, /prev\.tags\.filter/);
   assert.match(voies, /\.\.\.prev\.tags/);
