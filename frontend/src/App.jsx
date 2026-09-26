@@ -64,6 +64,7 @@ import { PASSWORD_RULE_TEXT, isStrongPassword } from "./lib/password-policy.js";
 import { buildRouteDisplayGroups } from "./lib/route-display-groups.js";
 import { buildTheCragExport } from "./lib/thecrag.js";
 import { usePlanningSessions } from "./lib/planning-view.js";
+import { hasBuddyAvailabilityForSession } from "./lib/buddy-preferences.js";
 import { useBuddyAvailability } from "./hooks/useBuddyAvailability.js";
 import { useSessionPersistence } from "./hooks/useSessionPersistence.js";
 import { useRealisationPersistence } from "./hooks/useRealisationPersistence.js";
@@ -1547,7 +1548,14 @@ async function handleThemePreferenceChange(nextTheme) {
               >
                 <span className="participant-identity">
                   <span className="passport-dot" style={getPassportDotStyle(p)} aria-hidden="true" />
-                  <span className="participant-name">{fullName(p)}</span>
+                  <span
+                    className="participant-name"
+                    style={hasBuddyAvailabilityForSession(buddyPreferencesByParticipantId, p.id, session)
+                      ? { textDecoration: "underline" }
+                      : undefined}
+                  >
+                    {fullName(p)}
+                  </span>
                 </span>
                 <Button variant="remove" onClick={() => removeParticipantFromSession(session.id, p.id)} aria-label="Retirer">×</Button>
               </div>
