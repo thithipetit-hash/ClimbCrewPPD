@@ -1377,3 +1377,20 @@ button:not(.danger):not(.secondary):not(.ghost),
   .buddy-summary { align-items: flex-start; }
   .buddy-match { display: grid; }
 }
+
+.buddy-week-grid {
+  display: grid;
+  grid-template-columns: minmax(42px, auto) repeat(3, minmax(64px, 1fr));
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+}
+.buddy-grid-heading,
+.buddy-grid-day {
+  text-align: center;
+  font-size: .82rem;
+}
+.buddy-week-grid .buddy-chip {
+  width: 100%;
+  min-width: 0;
+}
