@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import StatisticsSection from "../sections/StatisticsSection.jsx";
-import WallOfFameSection from "../sections/WallOfFameSection.jsx";
 import { USE_API, apiFetch } from "../lib/api.js";
 
 const STORAGE_KEY = "climbcrew_local_data_v2";
@@ -30,10 +29,7 @@ export default function Statistiques({
   normalizePassport,
   cprByParticipantId,
   formatPoints,
-  pointsByParticipantId,
-  wallOfFameCategories,
-  wallOfFameSexFilter,
-  setWallOfFameSexFilter,
+  pointsByParticipantId
 }) {
   const [statisticsSessions, setStatisticsSessions] = useState(() => readStoredSessions());
 
@@ -79,7 +75,6 @@ export default function Statistiques({
   };
 
   return (
-    <>
     <StatisticsSection
       sessionStats={extendedSessionStats}
       topRouteRankings={topRouteRankings}
@@ -97,14 +92,5 @@ export default function Statistiques({
       formatPoints={formatPoints}
       pointsByParticipantId={pointsByParticipantId}
     />
-    <WallOfFameSection
-      wallOfFameCategories={wallOfFameCategories}
-      getPassportStyle={getPassportStyle}
-      getPassportDotStyle={getPassportDotStyle}
-      normalizePassport={normalizePassport}
-      wallOfFameSexFilter={wallOfFameSexFilter}
-      setWallOfFameSexFilter={setWallOfFameSexFilter}
-    />
-    </>
   );
 }
