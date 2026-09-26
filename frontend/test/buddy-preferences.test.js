@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buddyPreferenceKeyForSession,
   buddyPreferencesFromAvailability,
   formatBuddyPreferences,
   normalizeBuddyPreferences,
@@ -25,4 +26,12 @@ test("le résumé conserve l'association exacte jour-séance", () => {
     formatBuddyPreferences({ preferences: ["Lun:matin", "Mar:soir"] }),
     "Lundi : Matin · Mardi : Soir",
   );
+});
+
+test("une date de séance produit la préférence Buddy jour-créneau correspondante", () => {
+  assert.equal(buddyPreferenceKeyForSession("2026-09-28", "midi"), "Lun:midi");
+  assert.equal(buddyPreferenceKeyForSession("2026-10-01", "soir"), "Jeu:soir");
+  assert.equal(buddyPreferenceKeyForSession("2026-10-02", "matin"), "Ven:matin");
+  assert.equal(buddyPreferenceKeyForSession("2026-09-27", "midi"), "");
+  assert.equal(buddyPreferenceKeyForSession("2026-09-28", "nuit"), "");
 });
