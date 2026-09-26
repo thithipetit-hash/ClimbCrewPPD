@@ -42,7 +42,7 @@ jobs:
           fi
 
           if ! printf '%s\n' "$NGINX_DUMP" | grep -qE 'server_name[[:space:]]+pre-climbcrew\.dip-tcs\.com[[:space:]]*;'; then
-            echo "ERROR: le vhost PPD dédié n'est pas actif."
+            echo "ERROR: le domaine PPD n'est pas présent dans la configuration Nginx active."
             exit 1
           fi
 
