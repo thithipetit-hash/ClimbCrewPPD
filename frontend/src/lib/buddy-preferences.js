@@ -4,8 +4,6 @@ export const BUDDY_DAYS = [
   { value: "Mer", label: "Mercredi" },
   { value: "Jeu", label: "Jeudi" },
   { value: "Ven", label: "Vendredi" },
-  { value: "Sam", label: "Samedi" },
-  { value: "Dim", label: "Dimanche" },
 ];
 
 export const BUDDY_SLOTS = [
