@@ -63,6 +63,7 @@ import { PASSWORD_RULE_TEXT, isStrongPassword } from "./lib/password-policy.js";
 import { buildRouteDisplayGroups } from "./lib/route-display-groups.js";
 import { buildTheCragExport } from "./lib/thecrag.js";
 import { usePlanningSessions } from "./lib/planning-view.js";
+import { buddyPreferenceKeyForSession, buddyPreferencesFromAvailability } from "./lib/buddy-preferences.js";
 import {
   buildRealisationDraft,
   buildRealisationPayload,
@@ -181,6 +182,49 @@ function App() {
     [canAccessAdminTabs]
   );
   const currentPageLabel = TABS.find((item) => item.key === tab)?.label || "";
+  const [buddyPreferencesByParticipantId, setBuddyPreferencesByParticipantId] = React.useState({});
+
+  useEffect(() => {
+    if (!USE_API || !authUser || tab !== "inscriptions") return undefined;
+
+    let cancelled = false;
+
+    async function loadBuddyPreferences() {
+      try {
+        const otherAvailabilities = await apiFetch("/buddy");
+        let ownAvailability = null;
+
+        if (authUser.participantId) {
+          ownAvailability = await apiFetch("/buddy/me");
+        }
+
+        if (cancelled) return;
+
+        const preferencesByParticipantId = {};
+        for (const availability of Array.isArray(otherAvailabilities) ? otherAvailabilities : []) {
+          const participantId = String(availability?.participantId || "");
+          if (participantId) {
+            preferencesByParticipantId[participantId] = buddyPreferencesFromAvailability(availability);
+          }
+        }
+
+        const ownParticipantId = String(authUser.participantId || "");
+        if (ownParticipantId && ownAvailability) {
+          preferencesByParticipantId[ownParticipantId] = buddyPreferencesFromAvailability(ownAvailability);
+        }
+
+        setBuddyPreferencesByParticipantId(preferencesByParticipantId);
+      } catch (error) {
+        console.error("Impossible de charger les disponibilités Buddy pour le planning.", error);
+        if (!cancelled) setBuddyPreferencesByParticipantId({});
+      }
+    }
+
+    loadBuddyPreferences();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, authUser?.id, authUser?.participantId]);
 
   useEffect(() => {
     if (tab === "parametres") return;
@@ -1491,6 +1535,7 @@ async function handleThemePreferenceChange(nextTheme) {
 
   function renderSessionCard(session, compact = false) {
     const sessionParticipantIds = getSessionParticipantIds(session);
+    const buddyPreferenceForSession = buddyPreferenceKeyForSession(session.date, session.slot);
     const inscrits = sessionParticipantIds.map((id) => participantsById[id]).filter(Boolean);
     const occupied = inscrits.length;
     const missingSupervisor = (session.status === "encadree" && !session.encadrantId)
@@ -1577,9 +1622,21 @@ async function handleThemePreferenceChange(nextTheme) {
                 {availableParticipants.length === 0 ? "Aucune personne disponible" : "S'inscrire"}
               </option>
               {sortParticipantsCurrentUserFirst(availableParticipants, authUser?.participantId)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>{fullName(p)}</option>
-                ))}
+                .map((p) => {
+                  const hasDeclaredAvailability = Boolean(
+                    buddyPreferenceForSession
+                    && (buddyPreferencesByParticipantId[String(p.id)] || []).includes(buddyPreferenceForSession)
+                  );
+                  return (
+                    <option
+                      key={p.id}
+                      value={p.id}
+                      style={hasDeclaredAvailability ? { textDecoration: "underline" } : undefined}
+                    >
+                      {fullName(p)}
+                    </option>
+                  );
+                })}
             </select>
           </div>
         </div>
