@@ -65,6 +65,8 @@ import { buildRouteDisplayGroups } from "./lib/route-display-groups.js";
 import { buildTheCragExport } from "./lib/thecrag.js";
 import { usePlanningSessions } from "./lib/planning-view.js";
 import { useBuddyAvailability } from "./hooks/useBuddyAvailability.js";
+import { useSessionPersistence } from "./hooks/useSessionPersistence.js";
+import { useRealisationPersistence } from "./hooks/useRealisationPersistence.js";
 import {
   buildRealisationDraft,
   buildRealisationPayload,
@@ -75,8 +77,6 @@ import {
 } from "./lib/realisation-workflow.js";
 
 const ADMIN_CODE = import.meta.env.VITE_LEGACY_ADMIN_CODE || "";
-const sessionSyncQueues = new Map();
-const realisationSyncQueues = new Map();
 
 function App() {
   const {
@@ -556,53 +556,12 @@ function App() {
     };
   }
 
-  async function syncSessionToApi(session) {
-    if (!USE_API || !session) return true;
-    const sessionId = String(session.id);
-    const previousRequest = sessionSyncQueues.get(sessionId) || Promise.resolve();
-    const request = previousRequest
-      .catch(() => undefined)
-      .then(() => apiFetch(`/sessions/${encodeURIComponent(session.id)}`, {
-        method: "PUT",
-        body: JSON.stringify(session),
-      }));
-    sessionSyncQueues.set(sessionId, request);
-
-    try {
-      await request;
-      setConfirmationMessage("Séance enregistrée.");
-      return true;
-    } catch (error) {
-      setSyncMessage(`Erreur synchronisation séance : ${error.message || error}`);
-      console.error(error);
-      return false;
-    } finally {
-      if (sessionSyncQueues.get(sessionId) === request) sessionSyncQueues.delete(sessionId);
-    }
-  }
-
-  function persistSessionChange(sessionId, previousSession, updatedSession, existed) {
-    setState((prev) => ({
-      ...prev,
-      sessions: existed
-        ? prev.sessions.map((session) => (session.id === sessionId ? updatedSession : session))
-        : [...prev.sessions, updatedSession],
-    }));
-
-    void syncSessionToApi(updatedSession).then((saved) => {
-      if (saved) return;
-      setState((prev) => {
-        const current = prev.sessions.find((session) => session.id === sessionId);
-        if (current !== updatedSession) return prev;
-        return {
-          ...prev,
-          sessions: existed
-            ? prev.sessions.map((session) => (session.id === sessionId ? previousSession : session))
-            : prev.sessions.filter((session) => session.id !== sessionId),
-        };
-      });
-    });
-  }
+  const { syncSessionToApi, persistSessionChange } = useSessionPersistence({
+    useApi: USE_API,
+    setState,
+    onSuccess: setConfirmationMessage,
+    onError: setSyncMessage,
+  });
 
   function ensureSessionsForDate(date) {
     const createdSessions = [];
@@ -977,49 +936,16 @@ function App() {
       });
   }
 
-  async function updateRealisation(realisationId, patch) {
-    const target = state.realisations.find((item) => String(item.id) === String(realisationId));
-    if (!target || String(target.participantId) !== String(myParticipantId)) {
-      setSyncMessage("Erreur : vous pouvez modifier uniquement vos propres réalisations.");
-      return;
-    }
-
-    const next = { ...target, ...patch };
-    if (patch.sessionId) {
-      const session = sessionsById[patch.sessionId];
-      if (session) next.dateRealisation = `${session.date}T12:00:00`;
-    }
-
-    setState((prev) => ({
-      ...prev,
-      realisations: prev.realisations.map((realisation) => (
-        String(realisation.id) === String(realisationId) ? next : realisation
-      )),
-    }));
-
-    const queueKey = String(realisationId);
-    const previousRequest = realisationSyncQueues.get(queueKey) || Promise.resolve();
-    const request = previousRequest
-      .catch(() => undefined)
-      .then(() => updateRealisationInApi(realisationId, patch));
-    realisationSyncQueues.set(queueKey, request);
-
-    try {
-      await request;
-      setConfirmationMessage("Réalisation enregistrée.");
-    } catch (error) {
-      setState((prev) => ({
-        ...prev,
-        realisations: prev.realisations.map((realisation) => (
-          String(realisation.id) === String(realisationId) && realisation === next ? target : realisation
-        )),
-      }));
-      setSyncMessage(`Erreur mise à jour réalisation : ${error.message || error}`);
-      console.error(error);
-    } finally {
-      if (realisationSyncQueues.get(queueKey) === request) realisationSyncQueues.delete(queueKey);
-    }
-  }
+  const updateRealisation = useRealisationPersistence({
+    useApi: USE_API,
+    authUser,
+    state,
+    setState,
+    myParticipantId,
+    sessionsById,
+    onSuccess: setConfirmationMessage,
+    onError: setSyncMessage,
+  });
 
   function openRealisationModal(routeId, requestedParticipantId = "") {
     const route = routesById[routeId];
@@ -1057,14 +983,6 @@ async function persistRealisationToApi(realisation) {
   return await apiFetch("/realisations", {
     method: "POST",
     body: JSON.stringify(realisation),
-  });
-}
-
-async function updateRealisationInApi(realisationId, patch) {
-  if (!USE_API || !authUser) return;
-  await apiFetch(`/realisations/${realisationId}`, {
-    method: "PUT",
-    body: JSON.stringify(patch),
   });
 }
 
