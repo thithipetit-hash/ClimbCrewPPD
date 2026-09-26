@@ -6,6 +6,7 @@ import AppSidebar from "./components/AppSidebar.jsx";
 import MobileBottomNav from "./components/MobileBottomNav.jsx";
 import BroadcastMessageModal from "./components/BroadcastMessageModal.jsx";
 import RealisationModal from "./components/RealisationModal.jsx";
+import AvailableParticipantOptions from "./components/AvailableParticipantOptions.jsx";
 import FaqSection from "./sections/FaqSection.jsx";
 import Inscriptions from "./pages/Inscriptions.jsx";
 import Voies from "./pages/Voies.jsx";
@@ -63,7 +64,6 @@ import { PASSWORD_RULE_TEXT, isStrongPassword } from "./lib/password-policy.js";
 import { buildRouteDisplayGroups } from "./lib/route-display-groups.js";
 import { buildTheCragExport } from "./lib/thecrag.js";
 import { usePlanningSessions } from "./lib/planning-view.js";
-import { buddyPreferenceKeyForSession } from "./lib/buddy-preferences.js";
 import { useBuddyAvailability } from "./hooks/useBuddyAvailability.js";
 import {
   buildRealisationDraft,
@@ -1498,7 +1498,6 @@ async function handleThemePreferenceChange(nextTheme) {
 
   function renderSessionCard(session, compact = false) {
     const sessionParticipantIds = getSessionParticipantIds(session);
-    const buddyPreferenceForSession = buddyPreferenceKeyForSession(session.date, session.slot);
     const inscrits = sessionParticipantIds.map((id) => participantsById[id]).filter(Boolean);
     const occupied = inscrits.length;
     const missingSupervisor = (session.status === "encadree" && !session.encadrantId)
@@ -1584,22 +1583,12 @@ async function handleThemePreferenceChange(nextTheme) {
               <option value="">
                 {availableParticipants.length === 0 ? "Aucune personne disponible" : "S'inscrire"}
               </option>
-              {sortParticipantsCurrentUserFirst(availableParticipants, authUser?.participantId)
-                .map((p) => {
-                  const hasDeclaredAvailability = Boolean(
-                    buddyPreferenceForSession
-                    && (buddyPreferencesByParticipantId[String(p.id)] || []).includes(buddyPreferenceForSession)
-                  );
-                  return (
-                    <option
-                      key={p.id}
-                      value={p.id}
-                      style={hasDeclaredAvailability ? { textDecoration: "underline" } : undefined}
-                    >
-                      {fullName(p)}
-                    </option>
-                  );
-                })}
+              <AvailableParticipantOptions
+                participants={availableParticipants}
+                currentParticipantId={authUser?.participantId}
+                session={session}
+                preferencesByParticipantId={buddyPreferencesByParticipantId}
+              />
             </select>
           </div>
         </div>
