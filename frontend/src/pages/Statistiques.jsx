@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import StatisticsSection from "../sections/StatisticsSection.jsx";
 import { USE_API, apiFetch } from "../lib/api.js";
+import { buildRouteRealisationStatistics } from "../lib/route-realisation-statistics.js";
 
 const STORAGE_KEY = "climbcrew_local_data_v2";
 
@@ -18,6 +19,8 @@ export default function Statistiques({
   sessionStats,
   topRouteRankings,
   leadRealisationStats,
+  routes,
+  realisations,
   formatRouteName,
   statsSortField,
   setStatsSortField,
@@ -66,6 +69,11 @@ export default function Statistiques({
     0,
   );
 
+  const routeRealisationStats = useMemo(
+    () => buildRouteRealisationStatistics(routes, realisations),
+    [routes, realisations],
+  );
+
   const extendedSessionStats = {
     ...sessionStats,
     passportCounts,
@@ -79,6 +87,7 @@ export default function Statistiques({
       sessionStats={extendedSessionStats}
       topRouteRankings={topRouteRankings}
       leadRealisationStats={leadRealisationStats}
+      routeRealisationStats={routeRealisationStats}
       formatRouteName={formatRouteName}
       statsSortField={statsSortField}
       setStatsSortField={setStatsSortField}
