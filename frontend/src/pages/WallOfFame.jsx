@@ -1,6 +1,6 @@
 import React from "react";
 import WallOfFameSection from "../sections/WallOfFameSection.jsx";
-import { apiFetch } from "../lib/api.js";
+import { USE_API, apiFetch } from "../lib/api.js";
 
 export default function WallOfFame({
   wallOfFameCategories,
@@ -14,6 +14,7 @@ export default function WallOfFame({
   const [kudoStatsError, setKudoStatsError] = React.useState("");
 
   React.useEffect(() => {
+    if (!USE_API) return undefined;
     let mounted = true;
     apiFetch("/realisations/kudos/stats")
       .then((stats) => {
