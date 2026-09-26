@@ -133,8 +133,11 @@ Une modification de code n'est pas à elle seule une preuve que l'évolution fon
 - Le dépôt de développement préproduction est `thithipetit-hash/ClimbCrewPPD`.
 - Le workflow de validation et de déploiement PPD est piloté par `fabienkazak-maker/ClimbCrew/.github/workflows/deploy.yml`.
 - Un push uniquement dans `ClimbCrewPPD` ne constitue pas un déploiement et ne déclenche pas le workflow du dépôt principal.
-- Pour mettre une version PPD en ligne, finaliser et valider les changements dans `ClimbCrewPPD/main`, puis les intégrer vers `fabienkazak-maker/ClimbCrew:main` via le flux GitHub prévu (Pull Request/fusion).
-- La fusion/push sur `fabienkazak-maker/ClimbCrew:main` déclenche le workflow de validation et déploiement de la préproduction.
+- Pour mettre une version PPD en ligne, finaliser et valider les changements dans `ClimbCrewPPD/main`, puis les intégrer dans le dépôt principal.
+- **Flux PPD vérifié le 26/09/2026 :** dans `fabienkazak-maker/ClimbCrew`, créer une branche dédiée `deploy/<version>` depuis `main`, incrémenter `VERSION`, puis ouvrir une Pull Request de cette branche vers `main`.
+- Laisser les validations de la Pull Request s'exécuter avant fusion. Ce passage par une PR dédiée rend les contrôles préalables consultables et évite de dépendre d'un push direct non observable.
+- Fusionner ensuite la Pull Request validée vers `main` : ce push sur `main` déclenche `.github/workflows/deploy.yml` et le déploiement PPD.
+- Ne pas utiliser un simple push dans `ClimbCrewPPD` comme mécanisme de mise en ligne.
 - Après la fusion, suivre le workflow jusqu'à son terme et vérifier le contrôle public post-déploiement avant d'annoncer que la version est en ligne.
 - La branche `production` du dépôt principal ne doit être utilisée que sur demande explicite de mise en production.
 
