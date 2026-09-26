@@ -8,13 +8,13 @@ import {
 
 test("les préférences buddy sont validées par couple jour-séance", () => {
   assert.deepEqual(
-    cleanBuddyPreferences(["Lun:matin", "Lun:soir", "Lun:matin", "Lun:nuit"]),
+    cleanBuddyPreferences(["Lun:matin", "Lun:soir", "Lun:matin", "Sam:midi", "Dim:soir", "Lun:nuit"]),
     ["Lun:matin", "Lun:soir"],
   );
 });
 
 test("la compatibilité jours/créneaux conserve le produit cartésien historique", () => {
-  const preferences = legacyBuddyPreferences(["Lun", "Mar"], ["midi", "soir"]);
+  const preferences = legacyBuddyPreferences(["Lun", "Mar", "Sam", "Dim"], ["midi", "soir"]);
   assert.deepEqual(preferences, ["Lun:midi", "Lun:soir", "Mar:midi", "Mar:soir"]);
   assert.deepEqual(legacyBuddyLists(preferences), {
     days: ["Lun", "Mar"],

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildRouteRealisationStatistics,
+  filterAndSortRouteRealisationStatistics,
   filterRouteRealisationStatistics,
 } from "../src/lib/route-realisation-statistics.js";
 
@@ -63,5 +64,52 @@ test("filtre sur le mode, le critère et leur combinaison", () => {
   assert.deepEqual(
     filterRouteRealisationStatistics(rows, { mode: "en_tete", criterion: "flash" }).map((row) => row.route.id),
     [],
+  );
+});
+
+
+test("filtre et trie chaque colonne du tableau des réalisations par voie", () => {
+  const rows = buildRouteRealisationStatistics(
+    [
+      { id: "r1", numeroCorde: 2, nomVoie: "Alpha", cotationAjustee: "6a" },
+      { id: "r2", numeroCorde: 1, nomVoie: "Beta", cotationAjustee: "6c" },
+      { id: "r3", numeroCorde: 3, nomVoie: "Gamma", cotationAjustee: "5c" },
+    ],
+    [
+      { voieId: "r1", modeRealisation: "en_tete", styleRealisation: "a_vue" },
+      { voieId: "r1", modeRealisation: "en_tete", styleRealisation: "flash" },
+      { voieId: "r2", modeRealisation: "moulinette", styleRealisation: "travaillee" },
+    ],
+  );
+  const formatRouteName = (route) => route.nomVoie;
+
+  assert.deepEqual(
+    filterAndSortRouteRealisationStatistics(rows, {
+      filters: { lead: ">=1" },
+      sortKey: "grade",
+      sortDirection: "desc",
+      formatRouteName,
+    }).map((row) => row.route.id),
+    ["r1"],
+  );
+
+  assert.deepEqual(
+    filterAndSortRouteRealisationStatistics(rows, {
+      filters: { route: "a" },
+      sortKey: "rope",
+      sortDirection: "asc",
+      formatRouteName,
+    }).map((row) => row.route.id),
+    ["r2", "r1", "r3"],
+  );
+
+  assert.deepEqual(
+    filterAndSortRouteRealisationStatistics(rows, {
+      filters: { total: "0" },
+      sortKey: "route",
+      sortDirection: "asc",
+      formatRouteName,
+    }).map((row) => row.route.id),
+    ["r3"],
   );
 });

@@ -1,12 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { normalizeRopeNumber } from "../lib/domain.js";
 import {
-  REALISATION_CRITERIA,
-  REALISATION_CRITERION_LABELS,
-  REALISATION_MODES,
-  REALISATION_MODE_LABELS,
-} from "../lib/realisation-mode.js";
-import { filterRouteRealisationStatistics } from "../lib/route-realisation-statistics.js";
+  filterAndSortRouteRealisationStatistics,
+  routeRealisationStatisticValue,
+} from "../lib/route-realisation-statistics.js";
 
 const PASSPORT_STATISTICS = [
   ["sans", "Sans"],
@@ -15,6 +11,22 @@ const PASSPORT_STATISTICS = [
   ["vert", "Vert"],
   ["bleu", "Bleu"],
   ["decouverte", "Découverte"],
+];
+
+const ROUTE_REALISATION_COLUMNS = [
+  { key: "rope", label: "Corde", numeric: true },
+  { key: "route", label: "Voie", numeric: false },
+  { key: "grade", label: "Cotation", numeric: false },
+  { key: "total", label: "Total", numeric: true },
+  { key: "lead", label: "En tête", numeric: true },
+  { key: "toprope", label: "Moulinette", numeric: true },
+  { key: "onsight", label: "À vue", numeric: true },
+  { key: "flash", label: "Flash", numeric: true },
+  { key: "worked", label: "Travaillée", numeric: true },
+  { key: "withRest", label: "Avec repos", numeric: true },
+  { key: "project", label: "Projet", numeric: true },
+  { key: "notSent", label: "Non enchaînée", numeric: true },
+  { key: "test", label: "Essai / test", numeric: true },
 ];
 
 export default function StatisticsSection({
@@ -32,19 +44,28 @@ export default function StatisticsSection({
   normalizePassport,
   getPassportDotStyle,
 }) {
-  const [realisationModeFilter, setRealisationModeFilter] = useState("all");
-  const [realisationCriterionFilter, setRealisationCriterionFilter] = useState("all");
+  const [routeColumnFilters, setRouteColumnFilters] = useState({});
+  const [routeSort, setRouteSort] = useState({ key: "rope", direction: "asc" });
 
   const displayedRouteRealisationStats = useMemo(
-    () => filterRouteRealisationStatistics(routeRealisationStats, {
-      mode: realisationModeFilter,
-      criterion: realisationCriterionFilter,
-    }).sort((left, right) => (
-      normalizeRopeNumber(left.route.numeroCorde) - normalizeRopeNumber(right.route.numeroCorde)
-      || formatRouteName(left.route).localeCompare(formatRouteName(right.route), "fr")
-    )),
-    [routeRealisationStats, realisationModeFilter, realisationCriterionFilter, formatRouteName],
+    () => filterAndSortRouteRealisationStatistics(routeRealisationStats, {
+      filters: routeColumnFilters,
+      sortKey: routeSort.key,
+      sortDirection: routeSort.direction,
+      formatRouteName,
+    }),
+    [routeRealisationStats, routeColumnFilters, routeSort, formatRouteName],
   );
+
+  const hasRouteColumnFilters = Object.values(routeColumnFilters).some((value) => String(value || "").trim());
+
+  function toggleRouteSort(key) {
+    setRouteSort((current) => (
+      current.key === key
+        ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" }
+    ));
+  }
 
   return (
     <>
@@ -125,94 +146,102 @@ export default function StatisticsSection({
           </span>
         </div>
 
-        <div className="group" style={{ marginBottom: 12, alignItems: "end", flexWrap: "wrap" }}>
-          <div>
-            <label htmlFor="statistics-realisation-mode">Mode</label>
-            <select
-              id="statistics-realisation-mode"
-              value={realisationModeFilter}
-              onChange={(event) => setRealisationModeFilter(event.target.value)}
-              style={{ minWidth: 150 }}
-            >
-              <option value="all">Tous les modes</option>
-              {REALISATION_MODES.map((mode) => (
-                <option key={mode} value={mode}>{REALISATION_MODE_LABELS[mode]}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="statistics-realisation-criterion">Critère</label>
-            <select
-              id="statistics-realisation-criterion"
-              value={realisationCriterionFilter}
-              onChange={(event) => setRealisationCriterionFilter(event.target.value)}
-              style={{ minWidth: 180 }}
-            >
-              <option value="all">Tous les critères</option>
-              {REALISATION_CRITERIA.map((criterion) => (
-                <option key={criterion} value={criterion}>{REALISATION_CRITERION_LABELS[criterion]}</option>
-              ))}
-            </select>
-          </div>
+        <div className="group" style={{ marginBottom: 8, justifyContent: "flex-end" }}>
           <button
             type="button"
-            disabled={realisationModeFilter === "all" && realisationCriterionFilter === "all"}
-            onClick={() => {
-              setRealisationModeFilter("all");
-              setRealisationCriterionFilter("all");
-            }}
+            disabled={!hasRouteColumnFilters}
+            onClick={() => setRouteColumnFilters({})}
           >
             Effacer les filtres
           </button>
         </div>
 
         <div style={{ overflowX: "auto", border: "1px solid var(--border, #bbb)", borderRadius: 8 }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 1180, background: "var(--surface, white)", fontSize: "clamp(.72rem, .8vw, .86rem)" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 1100, background: "var(--surface, white)", fontSize: "clamp(.72rem, .8vw, .86rem)" }}>
             <thead style={{ background: "var(--card-bg, #eee)" }}>
               <tr>
-                {["Corde", "Voie", "Cotation", "Total", "En tête", "Moulinette", "À vue", "Flash", "Travaillée", "Avec repos", "Projet", "Non enchaînée", "Essai / test", "Historique"].map((label) => (
-                  <th key={label} style={{ padding: "7px 6px", border: "1px solid #bbb", textAlign: label === "Voie" ? "left" : "center", whiteSpace: "nowrap" }}>
-                    {label}
-                  </th>
-                ))}
+                {ROUTE_REALISATION_COLUMNS.map((column) => {
+                  const activeSort = routeSort.key === column.key;
+                  return (
+                    <th
+                      key={column.key}
+                      style={{
+                        padding: "6px 5px",
+                        border: "1px solid #bbb",
+                        textAlign: column.key === "route" ? "left" : "center",
+                        verticalAlign: "top",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleRouteSort(column.key)}
+                        aria-label={`Trier par ${column.label}`}
+                        style={{
+                          width: "100%",
+                          minHeight: 28,
+                          padding: "2px 4px",
+                          fontWeight: 700,
+                          background: "transparent",
+                          border: 0,
+                          color: "inherit",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {column.label} <span aria-hidden="true">{activeSort ? (routeSort.direction === "asc" ? "▲" : "▼") : "↕"}</span>
+                      </button>
+                      <input
+                        type="search"
+                        value={routeColumnFilters[column.key] || ""}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setRouteColumnFilters((current) => ({ ...current, [column.key]: value }));
+                        }}
+                        aria-label={`Filtrer ${column.label}`}
+                        placeholder={column.numeric ? "ex. >=1" : "Filtrer"}
+                        style={{
+                          width: column.key === "route" ? 150 : 86,
+                          minWidth: 0,
+                          marginTop: 3,
+                          padding: "4px 5px",
+                          fontSize: "inherit",
+                        }}
+                      />
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {displayedRouteRealisationStats.length === 0 ? (
                 <tr>
-                  <td colSpan={14} style={{ padding: 12, textAlign: "center", border: "1px solid #ccc" }}>
+                  <td colSpan={ROUTE_REALISATION_COLUMNS.length} style={{ padding: 12, textAlign: "center", border: "1px solid #ccc" }}>
                     Aucune voie ne correspond aux filtres sélectionnés.
                   </td>
                 </tr>
               ) : displayedRouteRealisationStats.map((entry) => (
                 <tr key={entry.route.id}>
-                  <td style={{ padding: 6, textAlign: "center", border: "1px solid #ccc", whiteSpace: "nowrap" }}>
-                    {normalizeRopeNumber(entry.route.numeroCorde)}
-                  </td>
-                  <td style={{ padding: 6, border: "1px solid #ccc", minWidth: 180 }}>
-                    {formatRouteName(entry.route)}
-                    {entry.route.moulinetteOnly && <span className="small"> · Moulinette uniquement</span>}
-                  </td>
-                  <td style={{ padding: 6, textAlign: "center", border: "1px solid #ccc", whiteSpace: "nowrap" }}>
-                    {entry.route.cotationAjustee || entry.route.cotationReference || "nc"}
-                  </td>
-                  {[
-                    entry.total,
-                    entry.modeCounts.en_tete,
-                    entry.modeCounts.moulinette,
-                    entry.criterionCounts.a_vue,
-                    entry.criterionCounts.flash,
-                    entry.criterionCounts.travaillee,
-                    entry.criterionCounts.avec_repos,
-                    entry.criterionCounts.projet,
-                    entry.criterionCounts.non_enchainee,
-                    entry.criterionCounts.test,
-                    entry.historicalCriterionCount,
-                  ].map((count, index) => (
-                    <td key={index} style={{ padding: 6, textAlign: "center", border: "1px solid #ccc", fontVariantNumeric: "tabular-nums" }}>
-                      {count}
-                    </td>
-                  ))}
+                  {ROUTE_REALISATION_COLUMNS.map((column) => {
+                    const value = routeRealisationStatisticValue(entry, column.key, { formatRouteName });
+                    return (
+                      <td
+                        key={column.key}
+                        style={{
+                          padding: 6,
+                          textAlign: column.key === "route" ? "left" : "center",
+                          border: "1px solid #ccc",
+                          minWidth: column.key === "route" ? 180 : undefined,
+                          whiteSpace: column.key === "route" ? "normal" : "nowrap",
+                          fontVariantNumeric: column.numeric ? "tabular-nums" : undefined,
+                        }}
+                      >
+                        {value}
+                        {column.key === "route" && entry.route.moulinetteOnly && (
+                          <span className="small"> · Moulinette uniquement</span>
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
