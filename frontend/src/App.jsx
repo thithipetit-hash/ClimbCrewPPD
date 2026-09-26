@@ -75,6 +75,8 @@ import {
 } from "./lib/realisation-workflow.js";
 
 const ADMIN_CODE = import.meta.env.VITE_LEGACY_ADMIN_CODE || "";
+const sessionSyncQueues = new Map();
+const realisationSyncQueues = new Map();
 
 function App() {
   const {
@@ -90,7 +92,7 @@ function App() {
     adminError, setAdminError,
     routeError, setRouteError,
     importMessage, setImportMessage,
-    setSyncMessage,
+    syncMessage, setSyncMessage,
     confirmationMessage, setConfirmationMessage,
     isSyncing, setIsSyncing,
   } = useAppUiState({ useApi: USE_API });
@@ -135,6 +137,12 @@ function App() {
     const timeoutId = window.setTimeout(() => setConfirmationMessage(""), 3000);
     return () => window.clearTimeout(timeoutId);
   }, [confirmationMessage]);
+
+  useEffect(() => {
+    if (!syncMessage) return undefined;
+    const timeoutId = window.setTimeout(() => setSyncMessage(""), 4500);
+    return () => window.clearTimeout(timeoutId);
+  }, [syncMessage]);
 
   useEffect(() => {
     const applyTheme = () => {
@@ -549,18 +557,51 @@ function App() {
   }
 
   async function syncSessionToApi(session) {
-    if (!USE_API || !session) return;
-    try {
-      await apiFetch(`/sessions/${encodeURIComponent(session.id)}`, {
+    if (!USE_API || !session) return true;
+    const sessionId = String(session.id);
+    const previousRequest = sessionSyncQueues.get(sessionId) || Promise.resolve();
+    const request = previousRequest
+      .catch(() => undefined)
+      .then(() => apiFetch(`/sessions/${encodeURIComponent(session.id)}`, {
         method: "PUT",
         body: JSON.stringify(session),
-      });
-      setSyncMessage("Séance synchronisée via l’API");
+      }));
+    sessionSyncQueues.set(sessionId, request);
+
+    try {
+      await request;
       setConfirmationMessage("Séance enregistrée.");
-    } catch (e) {
-      setSyncMessage("Erreur synchronisation séance");
-      console.error(e);
+      return true;
+    } catch (error) {
+      setSyncMessage(`Erreur synchronisation séance : ${error.message || error}`);
+      console.error(error);
+      return false;
+    } finally {
+      if (sessionSyncQueues.get(sessionId) === request) sessionSyncQueues.delete(sessionId);
     }
+  }
+
+  function persistSessionChange(sessionId, previousSession, updatedSession, existed) {
+    setState((prev) => ({
+      ...prev,
+      sessions: existed
+        ? prev.sessions.map((session) => (session.id === sessionId ? updatedSession : session))
+        : [...prev.sessions, updatedSession],
+    }));
+
+    void syncSessionToApi(updatedSession).then((saved) => {
+      if (saved) return;
+      setState((prev) => {
+        const current = prev.sessions.find((session) => session.id === sessionId);
+        if (current !== updatedSession) return prev;
+        return {
+          ...prev,
+          sessions: existed
+            ? prev.sessions.map((session) => (session.id === sessionId ? previousSession : session))
+            : prev.sessions.filter((session) => session.id !== sessionId),
+        };
+      });
+    });
   }
 
   function ensureSessionsForDate(date) {
@@ -594,10 +635,8 @@ function App() {
   }
 
   function updateSession(sessionId, patch) {
-    const currentSession =
-      state.sessions.find((s) => s.id === sessionId) ||
-      buildDefaultSession(sessionId);
-
+    const existingSession = state.sessions.find((session) => session.id === sessionId);
+    const currentSession = existingSession || buildDefaultSession(sessionId);
     const patchedSession = { ...currentSession, ...patch };
     const updatedSession = {
       ...patchedSession,
@@ -608,74 +647,35 @@ function App() {
       ].filter(Boolean))],
     };
 
-    setState((prev) => {
-      const exists = prev.sessions.some((s) => s.id === sessionId);
-      return {
-        ...prev,
-        sessions: exists
-          ? prev.sessions.map((s) => (s.id === sessionId ? updatedSession : s))
-          : [...prev.sessions, updatedSession],
-      };
-    });
-
-    syncSessionToApi(updatedSession);
+    persistSessionChange(sessionId, currentSession, updatedSession, Boolean(existingSession));
   }
 
   function addParticipantToSession(sessionId, participantId) {
     const requestedId = String(participantId || "");
     if (!requestedId) return;
 
-    const currentSession =
-      state.sessions.find((s) => s.id === sessionId) ||
-      buildDefaultSession(sessionId);
-
+    const existingSession = state.sessions.find((session) => session.id === sessionId);
+    const currentSession = existingSession || buildDefaultSession(sessionId);
     const currentParticipantIds = currentSession.participantIds.map(String);
-    const occupied = currentParticipantIds.length;
+    if (currentParticipantIds.length >= MAX_PARTICIPANTS || currentParticipantIds.includes(requestedId)) return;
 
-    if (occupied >= MAX_PARTICIPANTS || currentParticipantIds.includes(requestedId)) return;
-
-    const updatedSession = {
+    persistSessionChange(sessionId, currentSession, {
       ...currentSession,
       participantIds: [...currentParticipantIds, requestedId],
-    };
-
-    setState((prev) => {
-      const exists = prev.sessions.some((s) => s.id === sessionId);
-      return {
-        ...prev,
-        sessions: exists
-          ? prev.sessions.map((s) => (s.id === sessionId ? updatedSession : s))
-          : [...prev.sessions, updatedSession],
-      };
-    });
-
-    syncSessionToApi(updatedSession);
+    }, Boolean(existingSession));
   }
 
   function removeParticipantFromSession(sessionId, participantId) {
-    const currentSession =
-      state.sessions.find((s) => s.id === sessionId) ||
-      buildDefaultSession(sessionId);
-
+    const existingSession = state.sessions.find((session) => session.id === sessionId);
+    const currentSession = existingSession || buildDefaultSession(sessionId);
     const removedId = String(participantId);
-    const updatedSession = {
+
+    persistSessionChange(sessionId, currentSession, {
       ...currentSession,
       encadrantId: String(currentSession.encadrantId || "") === removedId ? null : currentSession.encadrantId,
       referentId: String(currentSession.referentId || "") === removedId ? null : currentSession.referentId,
       participantIds: currentSession.participantIds.filter((id) => String(id) !== removedId),
-    };
-
-    setState((prev) => {
-      const exists = prev.sessions.some((s) => s.id === sessionId);
-      return {
-        ...prev,
-        sessions: exists
-          ? prev.sessions.map((s) => (s.id === sessionId ? updatedSession : s))
-          : [...prev.sessions, updatedSession],
-      };
-    });
-
-    syncSessionToApi(updatedSession);
+    }, Boolean(existingSession));
   }
 
   async function addParticipant() {
@@ -723,25 +723,38 @@ function App() {
   }
 
   async function updateParticipant(id, patch) {
-    const previous = state.participants;
-    const next = previous.map((p) => (p.id === id ? { ...p, ...patch } : p));
-    setState((prev) => ({ ...prev, participants: next }));
+    const previousParticipant = state.participants.find((participant) => participant.id === id);
+    if (!previousParticipant) throw new Error("Participant introuvable.");
+    const optimistic = { ...previousParticipant, ...patch };
+    setState((prev) => ({
+      ...prev,
+      participants: prev.participants.map((participant) => (participant.id === id ? optimistic : participant)),
+    }));
 
-    if (!USE_API) return;
+    if (!USE_API) {
+      setConfirmationMessage("Participant enregistré.");
+      return optimistic;
+    }
+
     try {
-      const target = next.find((p) => p.id === id);
       const updated = await apiFetch(`/participants/${id}`, {
         method: "PUT",
-        body: JSON.stringify(target),
+        body: JSON.stringify(optimistic),
       });
       setState((prev) => ({
         ...prev,
-        participants: prev.participants.map((p) => (p.id === id ? updated : p)),
+        participants: prev.participants.map((participant) => (participant.id === id ? updated : participant)),
       }));
-    } catch (e) {
-      setState((prev) => ({ ...prev, participants: previous }));
-      setSyncMessage("Erreur mise à jour participant");
-      console.error(e);
+      setConfirmationMessage("Participant enregistré.");
+      return updated;
+    } catch (error) {
+      setState((prev) => ({
+        ...prev,
+        participants: prev.participants.map((participant) => (participant.id === id ? previousParticipant : participant)),
+      }));
+      setSyncMessage(`Erreur mise à jour participant : ${error.message || error}`);
+      console.error(error);
+      throw error;
     }
   }
 
@@ -964,39 +977,48 @@ function App() {
       });
   }
 
-  async function syncRealisationPatch(realisationId, patch) {
-    try {
-      await updateRealisationInApi(realisationId, patch);
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  function updateRealisation(realisationId, patch) {
+  async function updateRealisation(realisationId, patch) {
     const target = state.realisations.find((item) => String(item.id) === String(realisationId));
     if (!target || String(target.participantId) !== String(myParticipantId)) {
-      alert("Vous pouvez modifier uniquement vos propres réalisations.");
+      setSyncMessage("Erreur : vous pouvez modifier uniquement vos propres réalisations.");
       return;
     }
-    syncRealisationPatch(realisationId, patch);
+
+    const next = { ...target, ...patch };
+    if (patch.sessionId) {
+      const session = sessionsById[patch.sessionId];
+      if (session) next.dateRealisation = `${session.date}T12:00:00`;
+    }
+
     setState((prev) => ({
       ...prev,
-      realisations: prev.realisations.map((realisation) => {
-        if (realisation.id !== realisationId) return realisation;
-
-        const next = { ...realisation, ...patch };
-
-        // Si on change la séance, la date de réalisation suit la date de la séance.
-        if (patch.sessionId) {
-          const session = sessionsById[patch.sessionId];
-          if (session) {
-            next.dateRealisation = `${session.date}T12:00:00`;
-          }
-        }
-
-        return next;
-      }),
+      realisations: prev.realisations.map((realisation) => (
+        String(realisation.id) === String(realisationId) ? next : realisation
+      )),
     }));
+
+    const queueKey = String(realisationId);
+    const previousRequest = realisationSyncQueues.get(queueKey) || Promise.resolve();
+    const request = previousRequest
+      .catch(() => undefined)
+      .then(() => updateRealisationInApi(realisationId, patch));
+    realisationSyncQueues.set(queueKey, request);
+
+    try {
+      await request;
+      setConfirmationMessage("Réalisation enregistrée.");
+    } catch (error) {
+      setState((prev) => ({
+        ...prev,
+        realisations: prev.realisations.map((realisation) => (
+          String(realisation.id) === String(realisationId) && realisation === next ? target : realisation
+        )),
+      }));
+      setSyncMessage(`Erreur mise à jour réalisation : ${error.message || error}`);
+      console.error(error);
+    } finally {
+      if (realisationSyncQueues.get(queueKey) === request) realisationSyncQueues.delete(queueKey);
+    }
   }
 
   function openRealisationModal(routeId, requestedParticipantId = "") {
@@ -1655,6 +1677,11 @@ async function handleThemePreferenceChange(nextTheme) {
       {confirmationMessage && (
         <div className="confirmation-toast" role="status" aria-live="polite">
           {confirmationMessage}
+        </div>
+      )}
+      {syncMessage && syncMessage.startsWith("Erreur") && (
+        <div className="confirmation-toast error-toast" role="alert" aria-live="assertive">
+          {syncMessage}
         </div>
       )}
 
