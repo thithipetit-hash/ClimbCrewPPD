@@ -20,6 +20,27 @@ export function buddyPreferenceKey(day, slot) {
   return `${day}:${slot}`;
 }
 
+const BUDDY_DAY_BY_WEEKDAY = {
+  1: "Lun",
+  2: "Mar",
+  3: "Mer",
+  4: "Jeu",
+  5: "Ven",
+};
+
+export function buddyPreferenceKeyForSession(date, slot) {
+  const normalizedSlot = String(slot || "").trim().toLowerCase();
+  if (!BUDDY_SLOTS.some((item) => item.value === normalizedSlot)) return "";
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || "").trim());
+  if (!match) return "";
+
+  const [, year, month, day] = match;
+  const sessionDate = new Date(Number(year), Number(month) - 1, Number(day), 12);
+  const buddyDay = BUDDY_DAY_BY_WEEKDAY[sessionDate.getDay()];
+  return buddyDay ? buddyPreferenceKey(buddyDay, normalizedSlot) : "";
+}
+
 export function normalizeBuddyPreferences(preferences) {
   return [...new Set((Array.isArray(preferences) ? preferences : []).map(String).filter((value) => VALID_PREFERENCES.has(value)))];
 }
