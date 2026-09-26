@@ -97,6 +97,7 @@ export default function Profil({
   const [buddyAvailability, setBuddyAvailability] = React.useState({ availabilityKeys: [], note: "" });
   const [buddyMatches, setBuddyMatches] = React.useState([]);
   const [buddySaving, setBuddySaving] = React.useState(false);
+  const [buddySaveStatus, setBuddySaveStatus] = React.useState(null);
 
   async function toggleKudo(realisation) {
     if (!myParticipantId || kudosPendingId) return;
@@ -215,13 +216,16 @@ export default function Profil({
   async function saveBuddyAvailability() {
     try {
       setBuddySaving(true);
+      setBuddySaveStatus({ type: "pending", message: "Enregistrement en cours…" });
       setProfileError("");
       const saved = await apiFetch("/buddy/me", { method: "PUT", body: JSON.stringify(buddyAvailability) });
       setBuddyAvailability({ availabilityKeys: saved.availabilityKeys || [], note: saved.note || "" });
       const matches = await apiFetch("/buddy");
       setBuddyMatches(Array.isArray(matches) ? matches : []);
+      setBuddySaveStatus({ type: "success", message: "Disponibilités enregistrées." });
     } catch (error) {
       setProfileError(String(error.message || error));
+      setBuddySaveStatus({ type: "error", message: "Échec de l’enregistrement des disponibilités." });
     } finally {
       setBuddySaving(false);
     }
@@ -385,6 +389,7 @@ export default function Profil({
                 </div>
                 <label>Précision facultative<input maxLength={240} value={buddyAvailability.note} onChange={(event) => setBuddyAvailability((current) => ({ ...current, note: event.target.value }))} placeholder="Ex. plutôt après 18 h, prévenir la veille…" /></label>
                 <div className="buddy-actions"><Button type="button" variant="secondary" disabled={buddySaving} onClick={saveBuddyAvailability}>{buddySaving ? "Enregistrement…" : "Enregistrer mes disponibilités"}</Button></div>
+                {buddySaveStatus && <div className={`save-acknowledgement ${buddySaveStatus.type}`} role="status" aria-live="polite">{buddySaveStatus.type === "success" ? "✓ " : buddySaveStatus.type === "error" ? "⚠ " : ""}{buddySaveStatus.message}</div>}
                 {buddyMatches.length > 0 && <div className="buddy-match-list"><strong>Grimpeurs disponibles</strong>{buddyMatches.map((buddy) => <div className="buddy-match" key={buddy.participantId}><span><strong>{buddy.name}</strong><span className="small"> · {(buddy.availabilityKeys || []).map((key) => { const [day, slot] = key.split(":"); return `${day} ${slot === "soir" ? "Soir" : slot === "midi" ? "Midi" : "Matin"}`; }).join(", ")}</span></span>{buddy.note && <span className="small">{buddy.note}</span>}</div>)}</div>}
               </div>
             </details>
