@@ -1742,6 +1742,7 @@ async function handleThemePreferenceChange(nextTheme) {
             deleteRoute={deleteRoute}
             savingRouteId={savingRouteId}
             participants={state.participants}
+            myRealisations={myRealisations}
           />
         )}
 
