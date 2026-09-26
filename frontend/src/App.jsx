@@ -6,6 +6,7 @@ import AppSidebar from "./components/AppSidebar.jsx";
 import MobileBottomNav from "./components/MobileBottomNav.jsx";
 import BroadcastMessageModal from "./components/BroadcastMessageModal.jsx";
 import RealisationModal from "./components/RealisationModal.jsx";
+import AvailableParticipantOptions from "./components/AvailableParticipantOptions.jsx";
 import FaqSection from "./sections/FaqSection.jsx";
 import Inscriptions from "./pages/Inscriptions.jsx";
 import Voies from "./pages/Voies.jsx";
@@ -63,6 +64,7 @@ import { PASSWORD_RULE_TEXT, isStrongPassword } from "./lib/password-policy.js";
 import { buildRouteDisplayGroups } from "./lib/route-display-groups.js";
 import { buildTheCragExport } from "./lib/thecrag.js";
 import { usePlanningSessions } from "./lib/planning-view.js";
+import { useBuddyAvailability } from "./hooks/useBuddyAvailability.js";
 import {
   buildRealisationDraft,
   buildRealisationPayload,
@@ -181,6 +183,11 @@ function App() {
     [canAccessAdminTabs]
   );
   const currentPageLabel = TABS.find((item) => item.key === tab)?.label || "";
+  const buddyPreferencesByParticipantId = useBuddyAvailability({
+    useApi: USE_API,
+    authUser,
+    active: tab === "inscriptions",
+  });
 
   useEffect(() => {
     if (tab === "parametres") return;
@@ -1576,10 +1583,12 @@ async function handleThemePreferenceChange(nextTheme) {
               <option value="">
                 {availableParticipants.length === 0 ? "Aucune personne disponible" : "S'inscrire"}
               </option>
-              {sortParticipantsCurrentUserFirst(availableParticipants, authUser?.participantId)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>{fullName(p)}</option>
-                ))}
+              <AvailableParticipantOptions
+                participants={availableParticipants}
+                currentParticipantId={authUser?.participantId}
+                session={session}
+                preferencesByParticipantId={buddyPreferencesByParticipantId}
+              />
             </select>
           </div>
         </div>
