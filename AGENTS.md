@@ -70,6 +70,7 @@ Elles s'appliquent aux évolutions, corrections, refactorings, tests et déploie
 - Prévenir les doubles soumissions et doubles enregistrements.
 - Désactiver une action lorsqu'elle est déjà en cours ou momentanément impossible.
 - Après sauvegarde, l'interface doit refléter les données réellement enregistrées.
+- Toute saisie déclenchant un enregistrement doit fournir un acquittement visuel explicite : état en cours pendant l'opération, puis confirmation de succès ou message d'échec. Un rafraîchissement silencieux ne constitue pas un acquittement.
 
 ## 8. Sécurité
 
