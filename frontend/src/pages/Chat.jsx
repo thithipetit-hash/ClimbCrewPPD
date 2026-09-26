@@ -57,6 +57,7 @@ export default function Chat({ myParticipantId, participants = [] }) {
         method: "POST",
         body: JSON.stringify({ message, replyToId: replyTo?.id || null }),
       });
+      setReplyTo(null);
       await loadMessages();
     } catch (err) {
       setText(message);
