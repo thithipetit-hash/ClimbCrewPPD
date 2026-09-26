@@ -1,8 +1,8 @@
 # =============================================================================
 # Déploiement de production sur serveur Linux avec Docker Compose
 # =============================================================================
-# Ce fichier reste indépendant de render.yaml. Il orchestre localement la base,
-# l'API et le frontend derrière le reverse proxy HTTPS déjà présent sur le serveur.
+# Ce fichier orchestre localement la base, l'API et le frontend derrière le
+# reverse proxy HTTPS déjà présent sur le serveur Linux.
 
 services:
   # ---------------------------------------------------------------------------
