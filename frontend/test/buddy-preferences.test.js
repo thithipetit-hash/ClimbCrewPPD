@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buddyPreferenceKeyForSession,
   buddyPreferencesFromAvailability,
+  formatBuddyParticipantOptionLabel,
   formatBuddyPreferences,
   hasBuddyAvailabilityForSession,
   normalizeBuddyPreferences,
@@ -67,4 +68,10 @@ test("la disponibilité d'un participant correspond au jour et au créneau exact
     ),
     false,
   );
+});
+
+
+test("une disponibilité reste visible même si le navigateur ignore le soulignement CSS", () => {
+  assert.equal(formatBuddyParticipantOptionLabel("Camille Martin", true), "✓ Camille Martin");
+  assert.equal(formatBuddyParticipantOptionLabel("Camille Martin", false), "Camille Martin");
 });
