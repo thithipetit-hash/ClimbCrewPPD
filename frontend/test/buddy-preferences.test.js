@@ -4,6 +4,7 @@ import {
   buddyPreferenceKeyForSession,
   buddyPreferencesFromAvailability,
   formatBuddyPreferences,
+  hasBuddyAvailabilityForSession,
   normalizeBuddyPreferences,
 } from "../src/lib/buddy-preferences.js";
 
@@ -34,4 +35,36 @@ test("une date de séance produit la préférence Buddy jour-créneau correspond
   assert.equal(buddyPreferenceKeyForSession("2026-10-02", "matin"), "Ven:matin");
   assert.equal(buddyPreferenceKeyForSession("2026-09-27", "midi"), "");
   assert.equal(buddyPreferenceKeyForSession("2026-09-28", "nuit"), "");
+});
+
+
+test("la disponibilité d'un participant correspond au jour et au créneau exacts", () => {
+  const preferencesByParticipantId = {
+    "12": ["Lun:midi", "Mar:soir"],
+  };
+
+  assert.equal(
+    hasBuddyAvailabilityForSession(
+      preferencesByParticipantId,
+      12,
+      { date: "2026-09-28", slot: "midi" },
+    ),
+    true,
+  );
+  assert.equal(
+    hasBuddyAvailabilityForSession(
+      preferencesByParticipantId,
+      12,
+      { date: "2026-09-28", slot: "soir" },
+    ),
+    false,
+  );
+  assert.equal(
+    hasBuddyAvailabilityForSession(
+      preferencesByParticipantId,
+      99,
+      { date: "2026-09-28", slot: "midi" },
+    ),
+    false,
+  );
 });
