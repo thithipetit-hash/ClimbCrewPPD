@@ -21,7 +21,7 @@ export default function StatisticsSection({
   sessionStats,
   topRouteRankings,
   leadRealisationStats,
-  routeRealisationStats,
+  routeRealisationStats = [],
   formatRouteName,
   statsSortField,
   setStatsSortField,
