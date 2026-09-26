@@ -1592,7 +1592,8 @@ async function handleThemePreferenceChange(nextTheme) {
               <div
                 className={`participant-row passport-row ${session.status === "libre" && normalizePassport(p.passport) === "sans" ? "passport-warning-hatched" : ""}`}
                 key={p.id}
-                style={getPassportStyle(p)}
+                style={{ ...getPassportStyle(p), borderStyle: "solid" }}
+                title={p.cotisation ? "Cotisation payée" : "Cotisation non payée"}
                 data-passport={normalizePassport(p.passport)}
               >
                 <span className="participant-identity">
@@ -1742,7 +1743,6 @@ async function handleThemePreferenceChange(nextTheme) {
             deleteRoute={deleteRoute}
             savingRouteId={savingRouteId}
             participants={state.participants}
-            myRealisations={myRealisations}
           />
         )}
 

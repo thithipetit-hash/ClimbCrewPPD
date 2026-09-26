@@ -23,6 +23,13 @@ import {
   getRealisationMode,
 } from "../lib/realisation-mode.js";
 import { bestRealisationIds, realisationQualityScore } from "../lib/profile-physical.js";
+import {
+  BUDDY_DAYS,
+  BUDDY_SLOTS,
+  buddyPreferenceKey,
+  buddyPreferencesFromAvailability,
+  formatBuddyPreferences,
+} from "../lib/buddy-preferences.js";
 
 function sortParticipantsForProfile(participants, myParticipantId) {
   return [...participants].sort((a, b) => {
@@ -94,9 +101,10 @@ export default function Profil({
   const [theCragImportStatus, setTheCragImportStatus] = React.useState(null);
   const [theCragStartDate, setTheCragStartDate] = React.useState("");
   const [kudosPendingId, setKudosPendingId] = React.useState("");
-  const [buddyAvailability, setBuddyAvailability] = React.useState({ days: [], slots: [], note: "" });
+  const [buddyAvailability, setBuddyAvailability] = React.useState({ preferences: [], note: "" });
   const [buddyMatches, setBuddyMatches] = React.useState([]);
   const [buddySaving, setBuddySaving] = React.useState(false);
+  const [buddySaveStatus, setBuddySaveStatus] = React.useState("");
 
   async function toggleKudo(realisation) {
     if (!myParticipantId || kudosPendingId) return;
@@ -120,7 +128,7 @@ export default function Profil({
     if (!USE_API || !myParticipantId) return;
     Promise.all([apiFetch("/buddy/me"), apiFetch("/buddy")])
       .then(([mine, matches]) => {
-        setBuddyAvailability({ days: mine?.days || [], slots: mine?.slots || [], note: mine?.note || "" });
+        setBuddyAvailability({ preferences: buddyPreferencesFromAvailability(mine), note: mine?.note || "" });
         setBuddyMatches(Array.isArray(matches) ? matches : []);
       })
       .catch(() => {});
@@ -202,23 +210,27 @@ export default function Profil({
     }
   }
 
-  function toggleBuddyValue(field, value) {
+  function toggleBuddyPreference(day, slot) {
+    const preference = buddyPreferenceKey(day, slot);
+    setBuddySaveStatus("");
     setBuddyAvailability((current) => ({
       ...current,
-      [field]: current[field].includes(value)
-        ? current[field].filter((item) => item !== value)
-        : [...current[field], value],
+      preferences: current.preferences.includes(preference)
+        ? current.preferences.filter((item) => item !== preference)
+        : [...current.preferences, preference],
     }));
   }
 
   async function saveBuddyAvailability() {
     try {
       setBuddySaving(true);
+      setBuddySaveStatus("");
       setProfileError("");
       const saved = await apiFetch("/buddy/me", { method: "PUT", body: JSON.stringify(buddyAvailability) });
-      setBuddyAvailability({ days: saved.days || [], slots: saved.slots || [], note: saved.note || "" });
+      setBuddyAvailability({ preferences: buddyPreferencesFromAvailability(saved), note: saved.note || "" });
       const matches = await apiFetch("/buddy");
       setBuddyMatches(Array.isArray(matches) ? matches : []);
+      setBuddySaveStatus("Préférences enregistrées.");
     } catch (error) {
       setProfileError(String(error.message || error));
     } finally {
@@ -361,19 +373,27 @@ export default function Profil({
           {isOwnProfile && (
             <details className="card buddy-card">
               <summary className="card-header buddy-summary">
-                <div><h3 style={{ margin: 0 }}>Climb buddy</h3><div className="small">Indiquez quand vous êtes généralement disponible, sans vous inscrire à une séance.</div></div>
+                <div><h3 style={{ margin: 0 }}>Climb buddy</h3><div className="small">Définissez vos préférences habituelles pour chaque jour et chaque séance, sans vous inscrire.</div></div>
                 <span className="buddy-count">{buddyMatches.length} disponible{buddyMatches.length > 1 ? "s" : ""}</span>
               </summary>
               <div className="buddy-content">
-                <div><strong>Jours</strong><div className="buddy-options">
-                  {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map((day) => <button type="button" key={day} className={buddyAvailability.days.includes(day) ? "buddy-chip active" : "buddy-chip"} onClick={() => toggleBuddyValue("days", day)}>{day}</button>)}
-                </div></div>
-                <div><strong>Créneaux</strong><div className="buddy-options">
-                  {[["matin","Matin"],["midi","Midi"],["soir","Soir"]].map(([value,label]) => <button type="button" key={value} className={buddyAvailability.slots.includes(value) ? "buddy-chip active" : "buddy-chip"} onClick={() => toggleBuddyValue("slots", value)}>{label}</button>)}
-                </div></div>
-                <label>Précision facultative<input maxLength={240} value={buddyAvailability.note} onChange={(event) => setBuddyAvailability((current) => ({ ...current, note: event.target.value }))} placeholder="Ex. plutôt après 18 h, prévenir la veille…" /></label>
-                <div className="buddy-actions"><Button type="button" variant="secondary" disabled={buddySaving} onClick={saveBuddyAvailability}>{buddySaving ? "Enregistrement…" : "Enregistrer mes disponibilités"}</Button></div>
-                {buddyMatches.length > 0 && <div className="buddy-match-list"><strong>Grimpeurs disponibles</strong>{buddyMatches.map((buddy) => <div className="buddy-match" key={buddy.participantId}><span><strong>{buddy.name}</strong><span className="small"> · {buddy.days.join(", ")} · {buddy.slots.map((slot) => slot === "soir" ? "Soir" : slot === "midi" ? "Midi" : "Matin").join(", ")}</span></span>{buddy.note && <span className="small">{buddy.note}</span>}</div>)}</div>}
+                <div className="buddy-preference-grid" role="group" aria-label="Préférences par jour et séance">
+                  <div className="buddy-preference-header" aria-hidden="true"><span>Jour</span>{BUDDY_SLOTS.map((slot) => <span key={slot.value}>{slot.label}</span>)}</div>
+                  {BUDDY_DAYS.map((day) => (
+                    <div className="buddy-preference-row" key={day.value}>
+                      <strong>{day.label}</strong>
+                      {BUDDY_SLOTS.map((slot) => {
+                        const preference = buddyPreferenceKey(day.value, slot.value);
+                        const selected = buddyAvailability.preferences.includes(preference);
+                        return <button type="button" key={preference} className={selected ? "buddy-session-toggle active" : "buddy-session-toggle"} aria-pressed={selected} aria-label={`${day.label} ${slot.label}`} onClick={() => toggleBuddyPreference(day.value, slot.value)}>{selected ? "✓" : "—"}</button>;
+                      })}
+                    </div>
+                  ))}
+                </div>
+                <label>Précision facultative<input maxLength={240} value={buddyAvailability.note} onChange={(event) => { setBuddySaveStatus(""); setBuddyAvailability((current) => ({ ...current, note: event.target.value })); }} placeholder="Ex. plutôt après 18 h, prévenir la veille…" /></label>
+                <div className="buddy-actions"><Button type="button" variant="secondary" disabled={buddySaving} onClick={saveBuddyAvailability}>{buddySaving ? "Enregistrement…" : "Enregistrer mes préférences"}</Button></div>
+                {buddySaveStatus && <div className="small success" role="status">{buddySaveStatus}</div>}
+                {buddyMatches.length > 0 && <div className="buddy-match-list"><strong>Grimpeurs disponibles</strong>{buddyMatches.map((buddy) => <div className="buddy-match" key={buddy.participantId}><span><strong>{buddy.name}</strong><span className="small"> · {formatBuddyPreferences(buddy)}</span></span>{buddy.note && <span className="small">{buddy.note}</span>}</div>)}</div>}
               </div>
             </details>
           )}

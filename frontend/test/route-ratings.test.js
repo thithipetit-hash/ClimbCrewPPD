@@ -14,7 +14,8 @@ test("la note de une à cinq étoiles est saisie avec la réalisation", async ()
   assert.match(modal, /\? "★" : "☆"/);
   assert.match(source, /routeRatingsById/);
   assert.match(voies, /routeRating\.average\.toFixed\(1\)/);
-  assert.match(voies, /Pas encore notée \(0 réalisation\)/);
+  assert.match(voies, /Pas encore notée/);
+  assert.doesNotMatch(voies, /0 réalisation|routeRating\.count\} réalisation/);
 });
 
 test("les étoiles sélectionnées sont affichées en jaune", async () => {
