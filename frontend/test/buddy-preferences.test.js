@@ -8,14 +8,14 @@ import {
 
 test("les préférences distinguent chaque couple jour et séance", () => {
   assert.deepEqual(
-    normalizeBuddyPreferences(["Lun:matin", "Lun:soir", "Lun:matin", "invalide"]),
+    normalizeBuddyPreferences(["Lun:matin", "Lun:soir", "Lun:matin", "Sam:midi", "Dim:soir", "invalide"]),
     ["Lun:matin", "Lun:soir"],
   );
 });
 
 test("les anciennes disponibilités jours/créneaux restent compatibles", () => {
   assert.deepEqual(
-    buddyPreferencesFromAvailability({ days: ["Lun", "Mer"], slots: ["midi", "soir"] }),
+    buddyPreferencesFromAvailability({ days: ["Lun", "Mer", "Sam", "Dim"], slots: ["midi", "soir"] }),
     ["Lun:midi", "Lun:soir", "Mer:midi", "Mer:soir"],
   );
 });
