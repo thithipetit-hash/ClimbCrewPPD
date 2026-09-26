@@ -2,7 +2,7 @@ function participantIdFromRequest(req) {
   return req.auth?.user?.participantId || req.enhancementAuth?.user?.participantId || null;
 }
 
-const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
 const SLOTS = ["matin", "midi", "soir"];
 const DAY_SET = new Set(DAYS);
 const SLOT_SET = new Set(SLOTS);
