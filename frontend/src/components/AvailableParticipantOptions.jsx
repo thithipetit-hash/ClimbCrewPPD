@@ -1,6 +1,9 @@
 import React from "react";
 import { fullName, sortParticipantsCurrentUserFirst } from "../lib/domain.js";
-import { buddyPreferenceKeyForSession } from "../lib/buddy-preferences.js";
+import {
+  formatBuddyParticipantOptionLabel,
+  hasBuddyAvailabilityForSession,
+} from "../lib/buddy-preferences.js";
 
 export default function AvailableParticipantOptions({
   participants,
@@ -8,12 +11,11 @@ export default function AvailableParticipantOptions({
   session,
   preferencesByParticipantId,
 }) {
-  const sessionPreference = buddyPreferenceKeyForSession(session?.date, session?.slot);
-
   return sortParticipantsCurrentUserFirst(participants, currentParticipantId).map((participant) => {
-    const hasDeclaredAvailability = Boolean(
-      sessionPreference
-      && (preferencesByParticipantId[String(participant.id)] || []).includes(sessionPreference)
+    const hasDeclaredAvailability = hasBuddyAvailabilityForSession(
+      preferencesByParticipantId,
+      participant.id,
+      session,
     );
 
     return (
@@ -22,7 +24,7 @@ export default function AvailableParticipantOptions({
         value={participant.id}
         style={hasDeclaredAvailability ? { textDecoration: "underline" } : undefined}
       >
-        {fullName(participant)}
+        {formatBuddyParticipantOptionLabel(fullName(participant), hasDeclaredAvailability)}
       </option>
     );
   });

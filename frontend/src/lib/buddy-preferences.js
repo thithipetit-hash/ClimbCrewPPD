@@ -41,6 +41,19 @@ export function buddyPreferenceKeyForSession(date, slot) {
   return buddyDay ? buddyPreferenceKey(buddyDay, normalizedSlot) : "";
 }
 
+export function hasBuddyAvailabilityForSession(preferencesByParticipantId, participantId, session) {
+  const sessionPreference = buddyPreferenceKeyForSession(session?.date, session?.slot);
+  if (!sessionPreference) return false;
+
+  const participantPreferences = preferencesByParticipantId?.[String(participantId)];
+  return Array.isArray(participantPreferences) && participantPreferences.includes(sessionPreference);
+}
+
+export function formatBuddyParticipantOptionLabel(name, hasDeclaredAvailability) {
+  const participantName = String(name || "");
+  return hasDeclaredAvailability ? `✓ ${participantName}` : participantName;
+}
+
 export function normalizeBuddyPreferences(preferences) {
   return [...new Set((Array.isArray(preferences) ? preferences : []).map(String).filter((value) => VALID_PREFERENCES.has(value)))];
 }
