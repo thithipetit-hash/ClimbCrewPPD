@@ -49,6 +49,11 @@ export function hasBuddyAvailabilityForSession(preferencesByParticipantId, parti
   return Array.isArray(participantPreferences) && participantPreferences.includes(sessionPreference);
 }
 
+export function formatBuddyParticipantOptionLabel(name, hasDeclaredAvailability) {
+  const participantName = String(name || "");
+  return hasDeclaredAvailability ? `✓ ${participantName}` : participantName;
+}
+
 export function normalizeBuddyPreferences(preferences) {
   return [...new Set((Array.isArray(preferences) ? preferences : []).map(String).filter((value) => VALID_PREFERENCES.has(value)))];
 }
