@@ -1,6 +1,9 @@
 import React from "react";
 import { fullName, sortParticipantsCurrentUserFirst } from "../lib/domain.js";
-import { hasBuddyAvailabilityForSession } from "../lib/buddy-preferences.js";
+import {
+  formatBuddyParticipantOptionLabel,
+  hasBuddyAvailabilityForSession,
+} from "../lib/buddy-preferences.js";
 
 export default function AvailableParticipantOptions({
   participants,
@@ -21,7 +24,7 @@ export default function AvailableParticipantOptions({
         value={participant.id}
         style={hasDeclaredAvailability ? { textDecoration: "underline" } : undefined}
       >
-        {fullName(participant)}
+        {formatBuddyParticipantOptionLabel(fullName(participant), hasDeclaredAvailability)}
       </option>
     );
   });
