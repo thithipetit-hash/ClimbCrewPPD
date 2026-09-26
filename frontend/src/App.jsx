@@ -1871,6 +1871,8 @@ async function handleThemePreferenceChange(nextTheme) {
             sessionStats={sessionStats}
             topRouteRankings={topRouteRankings}
             leadRealisationStats={leadRealisationStats}
+            routes={state.routes}
+            realisations={state.realisations}
             formatRouteName={formatRouteName}
             statsSortField={statsSortField}
             setStatsSortField={setStatsSortField}

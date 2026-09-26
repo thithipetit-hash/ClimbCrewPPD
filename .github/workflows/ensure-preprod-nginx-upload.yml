@@ -41,7 +41,7 @@ jobs:
             exit 1
           fi
 
-          if ! printf '%s\n' "$NGINX_DUMP" | grep -qE 'server_name[[:space:]]+pre-climbcrew\.dip-tcs\.com[[:space:]]*;'; then
+          if ! printf '%s\n' "$NGINX_DUMP" | grep -qE 'server_name[[:space:]]+[^;]*pre-climbcrew\.dip-tcs\.com[^;]*;'; then
             echo "ERROR: le domaine PPD n'est pas présent dans la configuration Nginx active."
             exit 1
           fi

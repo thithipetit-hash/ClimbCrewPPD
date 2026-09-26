@@ -1,4 +1,12 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
+import { normalizeRopeNumber } from "../lib/domain.js";
+import {
+  REALISATION_CRITERIA,
+  REALISATION_CRITERION_LABELS,
+  REALISATION_MODES,
+  REALISATION_MODE_LABELS,
+} from "../lib/realisation-mode.js";
+import { filterRouteRealisationStatistics } from "../lib/route-realisation-statistics.js";
 
 const PASSPORT_STATISTICS = [
   ["sans", "Sans"],
@@ -13,6 +21,7 @@ export default function StatisticsSection({
   sessionStats,
   topRouteRankings,
   leadRealisationStats,
+  routeRealisationStats = [],
   formatRouteName,
   statsSortField,
   setStatsSortField,
@@ -23,6 +32,20 @@ export default function StatisticsSection({
   normalizePassport,
   getPassportDotStyle,
 }) {
+  const [realisationModeFilter, setRealisationModeFilter] = useState("all");
+  const [realisationCriterionFilter, setRealisationCriterionFilter] = useState("all");
+
+  const displayedRouteRealisationStats = useMemo(
+    () => filterRouteRealisationStatistics(routeRealisationStats, {
+      mode: realisationModeFilter,
+      criterion: realisationCriterionFilter,
+    }).sort((left, right) => (
+      normalizeRopeNumber(left.route.numeroCorde) - normalizeRopeNumber(right.route.numeroCorde)
+      || formatRouteName(left.route).localeCompare(formatRouteName(right.route), "fr")
+    )),
+    [routeRealisationStats, realisationModeFilter, realisationCriterionFilter, formatRouteName],
+  );
+
   return (
     <>
       <div className="stats-grid">
@@ -88,6 +111,112 @@ export default function StatisticsSection({
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <h2>Réalisations par voie</h2>
+            <div className="small">Nombre de réalisations par mode et par critère.</div>
+          </div>
+          <span className="badge">
+            {displayedRouteRealisationStats.length}/{routeRealisationStats.length} voie{routeRealisationStats.length > 1 ? "s" : ""}
+          </span>
+        </div>
+
+        <div className="group" style={{ marginBottom: 12, alignItems: "end", flexWrap: "wrap" }}>
+          <div>
+            <label htmlFor="statistics-realisation-mode">Mode</label>
+            <select
+              id="statistics-realisation-mode"
+              value={realisationModeFilter}
+              onChange={(event) => setRealisationModeFilter(event.target.value)}
+              style={{ minWidth: 150 }}
+            >
+              <option value="all">Tous les modes</option>
+              {REALISATION_MODES.map((mode) => (
+                <option key={mode} value={mode}>{REALISATION_MODE_LABELS[mode]}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="statistics-realisation-criterion">Critère</label>
+            <select
+              id="statistics-realisation-criterion"
+              value={realisationCriterionFilter}
+              onChange={(event) => setRealisationCriterionFilter(event.target.value)}
+              style={{ minWidth: 180 }}
+            >
+              <option value="all">Tous les critères</option>
+              {REALISATION_CRITERIA.map((criterion) => (
+                <option key={criterion} value={criterion}>{REALISATION_CRITERION_LABELS[criterion]}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            disabled={realisationModeFilter === "all" && realisationCriterionFilter === "all"}
+            onClick={() => {
+              setRealisationModeFilter("all");
+              setRealisationCriterionFilter("all");
+            }}
+          >
+            Effacer les filtres
+          </button>
+        </div>
+
+        <div style={{ overflowX: "auto", border: "1px solid var(--border, #bbb)", borderRadius: 8 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 1180, background: "var(--surface, white)", fontSize: "clamp(.72rem, .8vw, .86rem)" }}>
+            <thead style={{ background: "var(--card-bg, #eee)" }}>
+              <tr>
+                {["Corde", "Voie", "Cotation", "Total", "En tête", "Moulinette", "À vue", "Flash", "Travaillée", "Avec repos", "Projet", "Non enchaînée", "Essai / test", "Historique"].map((label) => (
+                  <th key={label} style={{ padding: "7px 6px", border: "1px solid #bbb", textAlign: label === "Voie" ? "left" : "center", whiteSpace: "nowrap" }}>
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {displayedRouteRealisationStats.length === 0 ? (
+                <tr>
+                  <td colSpan={14} style={{ padding: 12, textAlign: "center", border: "1px solid #ccc" }}>
+                    Aucune voie ne correspond aux filtres sélectionnés.
+                  </td>
+                </tr>
+              ) : displayedRouteRealisationStats.map((entry) => (
+                <tr key={entry.route.id}>
+                  <td style={{ padding: 6, textAlign: "center", border: "1px solid #ccc", whiteSpace: "nowrap" }}>
+                    {normalizeRopeNumber(entry.route.numeroCorde)}
+                  </td>
+                  <td style={{ padding: 6, border: "1px solid #ccc", minWidth: 180 }}>
+                    {formatRouteName(entry.route)}
+                    {entry.route.moulinetteOnly && <span className="small"> · Moulinette uniquement</span>}
+                  </td>
+                  <td style={{ padding: 6, textAlign: "center", border: "1px solid #ccc", whiteSpace: "nowrap" }}>
+                    {entry.route.cotationAjustee || entry.route.cotationReference || "nc"}
+                  </td>
+                  {[
+                    entry.total,
+                    entry.modeCounts.en_tete,
+                    entry.modeCounts.moulinette,
+                    entry.criterionCounts.a_vue,
+                    entry.criterionCounts.flash,
+                    entry.criterionCounts.travaillee,
+                    entry.criterionCounts.avec_repos,
+                    entry.criterionCounts.projet,
+                    entry.criterionCounts.non_enchainee,
+                    entry.criterionCounts.test,
+                    entry.historicalCriterionCount,
+                  ].map((count, index) => (
+                    <td key={index} style={{ padding: 6, textAlign: "center", border: "1px solid #ccc", fontVariantNumeric: "tabular-nums" }}>
+                      {count}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
