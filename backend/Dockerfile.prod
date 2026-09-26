@@ -1,8 +1,7 @@
 # =============================================================================
 # Image de production du backend pour le serveur Linux
 # =============================================================================
-# Render utilise le runtime Node défini dans render.yaml. Ce Dockerfile reste
-# dédié au déploiement Docker Compose sur Linux et conserve donc son comportement.
+# Ce Dockerfile est dédié au déploiement Docker Compose sur le serveur Linux.
 # Son contexte Docker est maintenant la racine du dépôt afin d'embarquer les
 # règles métier communes placées dans /shared.
 
