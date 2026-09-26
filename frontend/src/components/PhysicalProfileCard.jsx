@@ -1,5 +1,6 @@
 import React from "react";
 import { calculateBmi, physicalConsistencyWarnings } from "../lib/profile-physical.js";
+import SaveFeedback from "./SaveFeedback.jsx";
 
 const MORPHOLOGY_FIELDS = [
   ["heightCm", "Taille", "cm"],
@@ -24,7 +25,7 @@ function normalizeNumericInput(value) {
 
 export default function PhysicalProfileCard({ participant, editable, onUpdate }) {
   const [draft, setDraft] = React.useState(() => Object.fromEntries(KEYS.map((key) => [key, participant?.[key] ?? ""])));
-  const [saveMessage, setSaveMessage] = React.useState("");
+  const [saveFeedback, setSaveFeedback] = React.useState({ status: "idle", message: "" });
 
   React.useEffect(() => {
     setDraft(Object.fromEntries(KEYS.map((key) => [key, participant?.[key] ?? ""])));
@@ -43,14 +44,19 @@ export default function PhysicalProfileCard({ participant, editable, onUpdate })
     const raw = draft[key];
     const value = raw === "" ? "" : Number(raw);
     if (raw !== "" && !Number.isFinite(value)) {
-      setSaveMessage("Valeur numérique invalide.");
+      setSaveFeedback({ status: "error", message: "Valeur numérique invalide." });
       return;
     }
+    const normalizedValue = raw === "" ? "" : value;
+    const currentValue = participant?.[key] ?? "";
+    if (String(normalizedValue) === String(currentValue)) return;
+
+    setSaveFeedback({ status: "saving", message: "Enregistrement…" });
     try {
-      await onUpdate({ [key]: raw === "" ? "" : value });
-      setSaveMessage("Valeur enregistrée.");
+      await onUpdate({ [key]: normalizedValue });
+      setSaveFeedback({ status: "success", message: "✓ Enregistré" });
     } catch (error) {
-      setSaveMessage(String(error?.message || error));
+      setSaveFeedback({ status: "error", message: `Enregistrement impossible : ${String(error?.message || error)}` });
     }
   }
 
@@ -63,7 +69,10 @@ export default function PhysicalProfileCard({ participant, editable, onUpdate })
         inputMode={key === "strictPullups" ? "numeric" : "decimal"}
         value={draft[key] ?? ""}
         disabled={!editable}
-        onChange={(event) => setDraft((current) => ({ ...current, [key]: normalizeNumericInput(event.target.value) }))}
+        onChange={(event) => {
+          setDraft((current) => ({ ...current, [key]: normalizeNumericInput(event.target.value) }));
+          setSaveFeedback({ status: "dirty", message: "Modification non enregistrée" });
+        }}
         onBlur={() => void save(key)}
         onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
         autoComplete="off"
@@ -87,7 +96,7 @@ export default function PhysicalProfileCard({ participant, editable, onUpdate })
     <div className="grid four">{TEST_FIELDS.map(field)}</div>
     {editable && <div className="small" style={{ marginTop: 8 }}>
       Saisie au clavier. La valeur est enregistrée en quittant le champ ou avec Entrée. Les données restent facultatives.
-      {saveMessage && <> · {saveMessage}</>}
+      <SaveFeedback status={saveFeedback.status} message={saveFeedback.message} />
     </div>}
   </div>;
 }
