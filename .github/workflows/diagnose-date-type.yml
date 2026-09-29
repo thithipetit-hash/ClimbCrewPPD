@@ -1,0 +1,43 @@
+name: Diagnose PPD session date type
+
+on:
+  push:
+    branches:
+      - diagnose/date-type
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: self-hosted
+    timeout-minutes: 5
+    steps:
+      - name: Inspecter le type JavaScript de sessions.date
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec -i climbcrew-backend node --input-type=module <<'NODE'
+          import { Pool } from "pg";
+          const pool = new Pool({
+            connectionString: process.env.DATABASE_URL,
+            ssl: String(process.env.PG_SSL || "").toLowerCase() === "true"
+              ? { rejectUnauthorized: false }
+              : false,
+          });
+          try {
+            const result = await pool.query(
+              "select date, slot from sessions order by date desc limit 1"
+            );
+            const row = result.rows[0];
+            console.log(JSON.stringify({
+              value: row?.date ?? null,
+              type: typeof row?.date,
+              isDate: row?.date instanceof Date,
+              slot: row?.slot ?? null,
+              slotType: typeof row?.slot,
+            }));
+          } finally {
+            await pool.end();
+          }
+          NODE
