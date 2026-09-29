@@ -25,7 +25,107 @@ jobs:
           returning id::text || '|' || can_encadrer::text || '|' || can_referer::text;
           SQL
           )"
-          printf '%s\n' "$RESULT" | grep -Eq '^[0-9]+\|t\|t$' || {
+          printf '%s\n' "$RESULT" | grep -Eq '^[0-9]+\|true\|true || {
+            echo "::error::Le compte de test n'a pas pu être qualifié correctement."
+            exit 1
+          }
+          echo "Compte de test qualifié Encadrant + Référent sur la PPD."
+
+      - name: Tester l'auto-affectation réelle via l'API PPD
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          USER_ID=47
+          BASE_URL="https://pre-climbcrew.dip-tcs.com/api"
+          TEST_DATE="2026-09-29"
+          SESSION_ID="e2e-role-$(date +%s)-$$"
+          COOKIE_JAR="$(mktemp)"
+          LOGIN_BODY="$(mktemp)"
+          RESPONSE_BODY="$(mktemp)"
+
+          OLD_HASH="$(docker exec climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "select password_hash from users where id = 47"')"
+          EMAIL="$(docker exec climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "select email from users where id = 47"')"
+          PARTICIPANT_ID="$(docker exec climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "select participant_id::text from users where id = 47"')"
+          SESSION_MARKER="$(docker exec climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "select coalesce(max(id),0)::text from user_sessions where user_id = 47"')"
+
+          test -n "$OLD_HASH"
+          test -n "$EMAIL"
+          test -n "$PARTICIPANT_ID"
+          test -n "$SESSION_MARKER"
+
+          cleanup() {
+            set +e
+            printf "update users set password_hash = '%s' where id = %s;\n" "$OLD_HASH" "$USER_ID"               | docker exec -i climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' >/dev/null
+            printf "delete from user_sessions where user_id = %s and id > %s;\n" "$USER_ID" "$SESSION_MARKER"               | docker exec -i climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' >/dev/null
+            printf "delete from sessions where id = '%s';\n" "$SESSION_ID"               | docker exec -i climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' >/dev/null
+            rm -f "$COOKIE_JAR" "$LOGIN_BODY" "$RESPONSE_BODY"
+          }
+          trap cleanup EXIT
+
+          TEMP_PASSWORD="CcT!9$(openssl rand -hex 12)"
+          TEMP_HASH="$(docker exec -e TEMP_PASSWORD="$TEMP_PASSWORD" climbcrew-backend node -e 'const bcrypt=require("bcryptjs"); bcrypt.hash(process.env.TEMP_PASSWORD,10).then(h=>process.stdout.write(h)).catch(e=>{console.error(e);process.exit(1)})')"
+          test -n "$TEMP_HASH"
+
+          printf "update users set password_hash = '%s' where id = %s;\n" "$TEMP_HASH" "$USER_ID"             | docker exec -i climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' >/dev/null
+
+          LOGIN_PAYLOAD="$(printf '{"email":"%s","password":"%s"}' "$EMAIL" "$TEMP_PASSWORD")"
+          LOGIN_STATUS="$(curl --silent --show-error --location             --cookie-jar "$COOKIE_JAR"             --output "$LOGIN_BODY"             --write-out '%{http_code}'             --header 'Content-Type: application/json'             --data "$LOGIN_PAYLOAD"             "$BASE_URL/auth/login")"
+          if [ "$LOGIN_STATUS" != "200" ]; then
+            echo "::error::Connexion du compte de test refusée (HTTP $LOGIN_STATUS)."
+            cat "$LOGIN_BODY"
+            exit 1
+          fi
+
+          CSRF_TOKEN="$(awk '$6=="climbcrew_csrf"{print $7}' "$COOKIE_JAR" | tail -n 1)"
+          test -n "$CSRF_TOKEN" || {
+            echo "::error::Cookie CSRF absent après connexion."
+            exit 1
+          }
+
+          api_put_session() {
+            local payload="$1"
+            local expected_description="$2"
+            local status
+            status="$(curl --silent --show-error --location               --cookie "$COOKIE_JAR"               --cookie-jar "$COOKIE_JAR"               --output "$RESPONSE_BODY"               --write-out '%{http_code}'               --request PUT               --header 'Content-Type: application/json'               --header "x-csrf-token: $CSRF_TOKEN"               --data "$payload"               "$BASE_URL/sessions/$SESSION_ID")"
+            if [ "$status" != "200" ]; then
+              echo "::error::$expected_description refusé (HTTP $status)."
+              cat "$RESPONSE_BODY"
+              exit 1
+            fi
+          }
+
+          CREATE_PAYLOAD="$(printf '{"id":"%s","date":"%s","slot":"soir","status":"encadree","encadrantId":"%s","referentId":null,"participantIds":[]}' "$SESSION_ID" "$TEST_DATE" "$PARTICIPANT_ID")"
+          api_put_session "$CREATE_PAYLOAD" "Auto-affectation encadrant"
+
+          STATE="$(printf "select status || '|' || coalesce(encadrant_id::text,'') || '|' || coalesce(referent_id::text,'') from sessions where id = '%s';\n" "$SESSION_ID"             | docker exec -i climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At')"
+          [ "$STATE" = "encadree|$PARTICIPANT_ID|" ] || {
+            echo "::error::L'encadrant n'est pas persisté correctement en PostgreSQL."
+            exit 1
+          }
+          echo "OK : auto-affectation encadrant persistée."
+
+          REFERENT_PAYLOAD="$(printf '{"id":"%s","date":"%s","slot":"soir","status":"libre","encadrantId":null,"referentId":"%s","participantIds":[]}' "$SESSION_ID" "$TEST_DATE" "$PARTICIPANT_ID")"
+          api_put_session "$REFERENT_PAYLOAD" "Passage encadrant vers référent"
+
+          STATE="$(printf "select status || '|' || coalesce(encadrant_id::text,'') || '|' || coalesce(referent_id::text,'') from sessions where id = '%s';\n" "$SESSION_ID"             | docker exec -i climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At')"
+          [ "$STATE" = "libre||$PARTICIPANT_ID" ] || {
+            echo "::error::Le référent n'est pas persisté correctement en PostgreSQL."
+            exit 1
+          }
+          echo "OK : passage en séance libre + auto-affectation référent persistés."
+
+          REMOVE_PAYLOAD="$(printf '{"id":"%s","date":"%s","slot":"soir","status":"libre","encadrantId":null,"referentId":null,"participantIds":[]}' "$SESSION_ID" "$TEST_DATE")"
+          api_put_session "$REMOVE_PAYLOAD" "Retrait du référent"
+
+          STATE="$(printf "select status || '|' || coalesce(encadrant_id::text,'') || '|' || coalesce(referent_id::text,'') from sessions where id = '%s';\n" "$SESSION_ID"             | docker exec -i climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At')"
+          [ "$STATE" = "libre||" ] || {
+            echo "::error::Le retrait du référent n'est pas persisté correctement en PostgreSQL."
+            exit 1
+          }
+          echo "OK : retrait du référent persisté."
+          echo "TEST E2E ROLE ASSIGNMENT: SUCCESS"
+ || {
             echo "::error::Le compte de test n'a pas pu être qualifié correctement."
             exit 1
           }
