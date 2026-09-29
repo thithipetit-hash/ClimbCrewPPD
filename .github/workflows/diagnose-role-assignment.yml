@@ -35,7 +35,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker exec climbcrew-backend node --input-type=module <<'NODE'
+          docker exec -i climbcrew-backend node --input-type=module <<'NODE'
           import { Pool } from "pg";
           import { setPool } from "./admin-users/database.js";
           import { updateSessionWithAuthorization } from "./admin-users/session-authorization-service.js";
