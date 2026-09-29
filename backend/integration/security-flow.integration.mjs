@@ -103,6 +103,7 @@ async function verifyClimbingFlow({ admin, member, participantId }) {
   const sessionId = `integration-session-${suffix}`;
   const realisationId = `integration-realisation-${suffix}`;
   const sessionDate = "2026-08-24";
+  await pool.query("insert into ropes (numero_corde, actif, couleur_corde) values (1, true, 'Bleu') on conflict do nothing");
   const route = {
     id: routeId,
     numeroVoieUnique: routeId,
