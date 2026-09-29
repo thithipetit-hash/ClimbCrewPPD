@@ -1,0 +1,58 @@
+name: Diagnose role assignment PPD
+
+on:
+  push:
+    branches:
+      - diagnose/role-assignment
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: self-hosted
+    timeout-minutes: 5
+    steps:
+      - name: Vérifier les associations comptes / participants qualifiés
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec -i climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -P pager=off -F "|" -A' <<'SQL'
+          select
+            p.id as participant_id,
+            coalesce(u.id::text, 'none') as user_id,
+            coalesce(u.status, 'none') as user_status,
+            coalesce(u.role, 'none') as user_role,
+            p.can_encadrer,
+            p.can_referer,
+            case
+              when u.id is null then false
+              else lower(trim(coalesce(u.email,''))) = lower(trim(coalesce(nullif(p.login_email,''), p.email, '')))
+            end as email_match,
+            case
+              when u.id is null then false
+              else lower(trim(coalesce(u.prenom,''))) = lower(trim(coalesce(p.prenom,'')))
+               and lower(trim(coalesce(u.nom,''))) = lower(trim(coalesce(p.nom,'')))
+            end as name_match
+          from participants p
+          left join users u on u.participant_id = p.id
+          where p.can_encadrer = true or p.can_referer = true
+          order by p.id, u.id;
+
+          select
+            'active_without_participant' as check_name,
+            count(*)::text as value
+          from users
+          where status = 'active' and participant_id is null
+          union all
+          select
+            'duplicate_participant_links',
+            count(*)::text
+          from (
+            select participant_id
+            from users
+            where participant_id is not null
+            group by participant_id
+            having count(*) > 1
+          ) duplicates;
+          SQL
