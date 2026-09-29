@@ -164,7 +164,7 @@ test("un référent ne peut pas inscrire un autre grimpeur lors de la création"
   assert.match(result.error, /inscrire que lui-même/i);
 });
 
-test("un encadrant non administrateur ne peut pas affecter les rôles lors de la création", () => {
+test("un encadrant non administrateur ne peut pas affecter un autre encadrant lors de la création", () => {
   const result = evaluateSessionMutation({
     existingSession: null,
     requestedSession: requestedSession({
@@ -179,7 +179,77 @@ test("un encadrant non administrateur ne peut pas affecter les rôles lors de la
 
   assert.equal(result.allowed, false);
   assert.equal(result.status, 403);
-  assert.match(result.error, /affectés que par un administrateur/i);
+  assert.match(result.error, /uniquement s’affecter lui-même/i);
+});
+
+test("un encadrant peut s'affecter lui-même lors de la création", () => {
+  const result = evaluateSessionMutation({
+    existingSession: null,
+    requestedSession: requestedSession({
+      status: "encadree",
+      participantIds: [],
+      encadrantId: "42",
+    }),
+    previousParticipantIds: [],
+    actorParticipantId: "42",
+    canEncadrer: true,
+  });
+
+  assert.equal(result.allowed, true);
+  assert.equal(result.encadrantChanged, true);
+  assert.equal(result.canManageOwnEncadrant, true);
+});
+
+test("un encadrant peut s'affecter puis se retirer lui-même sur une séance existante", () => {
+  const assignment = evaluateSessionMutation({
+    existingSession: baseSession({ status: "encadree" }),
+    requestedSession: requestedSession({
+      status: "encadree",
+      participantIds: [],
+      encadrantId: "42",
+    }),
+    previousParticipantIds: [],
+    actorParticipantId: "42",
+    canEncadrer: true,
+  });
+
+  assert.equal(assignment.allowed, true);
+  assert.equal(assignment.encadrantChanged, true);
+  assert.equal(assignment.canManageOwnEncadrant, true);
+
+  const removal = evaluateSessionMutation({
+    existingSession: baseSession({ status: "encadree", encadrant_id: "42" }),
+    requestedSession: requestedSession({
+      status: "encadree",
+      participantIds: [],
+      encadrantId: null,
+    }),
+    previousParticipantIds: [],
+    actorParticipantId: "42",
+    canEncadrer: true,
+  });
+
+  assert.equal(removal.allowed, true);
+  assert.equal(removal.encadrantChanged, true);
+  assert.equal(removal.canManageOwnEncadrant, true);
+});
+
+test("un encadrant ne peut pas remplacer un autre encadrant", () => {
+  const result = evaluateSessionMutation({
+    existingSession: baseSession({ status: "encadree", encadrant_id: "99" }),
+    requestedSession: requestedSession({
+      status: "encadree",
+      participantIds: [],
+      encadrantId: "42",
+    }),
+    previousParticipantIds: [],
+    actorParticipantId: "42",
+    canEncadrer: true,
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.status, 403);
+  assert.match(result.error, /uniquement s’affecter ou se retirer lui-même/i);
 });
 
 test("un encadrant peut créer une séance et s'inscrire lui-même si elle n'est pas fermée", () => {
