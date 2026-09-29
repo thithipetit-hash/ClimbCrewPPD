@@ -78,7 +78,7 @@ function symmetricDifference(left, right) {
  *
  * - administrateur : gestion complète de la séance hors changement de statut, qui reste soumis aux qualifications métier ;
  * - référent : peut uniquement passer une séance au statut libre ;
- * - encadrant : peut passer une séance à libre ou à tout autre statut ;
+ * - encadrant : peut passer une séance à libre ou à tout autre statut et s'affecter/se retirer lui-même comme encadrant ;
  * - membre standard : peut uniquement s'inscrire ou se désinscrire lui-même ;
  * - une séance fermée refuse toute nouvelle inscription non administrateur ;
  * - création d'une séance : administrateur, ou référent/encadrant selon le statut demandé.
@@ -125,19 +125,24 @@ export function evaluateSessionMutation({
       };
     }
 
-    if (requestedSession.encadrantId || requestedSession.referentId) {
-      return {
-        allowed: false,
-        status: 403,
-        error: "L’encadrant et le référent ne peuvent être affectés que par un administrateur.",
-      };
-    }
-
     if (!actorId) {
       return {
         allowed: false,
         status: 403,
         error: "Le compte doit être associé à un grimpeur pour créer une séance.",
+      };
+    }
+
+    const requestedEncadrantId = normalizedId(requestedSession.encadrantId);
+    const requestedReferentId = normalizedId(requestedSession.referentId);
+    const canAssignSelfAsEncadrant = Boolean(
+      canEncadrer && requestedEncadrantId && requestedEncadrantId === actorId,
+    );
+    if (requestedReferentId || (requestedEncadrantId && !canAssignSelfAsEncadrant)) {
+      return {
+        allowed: false,
+        status: 403,
+        error: "Un encadrant peut uniquement s’affecter lui-même ; l’affectation des autres rôles reste réservée à un administrateur.",
       };
     }
 
@@ -164,6 +169,8 @@ export function evaluateSessionMutation({
       canManageAll: false,
       canChangeStatus: true,
       statusChanged: true,
+      encadrantChanged: Boolean(requestedEncadrantId),
+      canManageOwnEncadrant: canAssignSelfAsEncadrant,
       actorJoins,
       actorLeaves: false,
     };
@@ -194,24 +201,36 @@ export function evaluateSessionMutation({
     };
   }
 
-  if (
-    requestedSession.date !== existingSession.date
-    || requestedSession.slot !== existingSession.slot
-    || !sameId(requestedSession.encadrantId, existingSession.encadrant_id)
-    || !sameId(requestedSession.referentId, existingSession.referent_id)
-  ) {
-    return {
-      allowed: false,
-      status: 403,
-      error: "La date, le créneau, l’encadrant et le référent ne peuvent être modifiés que par un administrateur.",
-    };
-  }
-
   if (!actorId) {
     return {
       allowed: false,
       status: 403,
       error: "Le compte doit être associé à un grimpeur pour modifier une inscription.",
+    };
+  }
+
+  const existingEncadrantId = normalizedId(existingSession.encadrant_id ?? existingSession.encadrantId);
+  const requestedEncadrantId = normalizedId(requestedSession.encadrantId);
+  const encadrantChanged = existingEncadrantId !== requestedEncadrantId;
+  const canManageOwnEncadrant = Boolean(
+    encadrantChanged
+    && canEncadrer
+    && [existingEncadrantId, requestedEncadrantId].every(
+      (encadrantId) => encadrantId === null || encadrantId === actorId,
+    ),
+  );
+  const referentChanged = !sameId(requestedSession.referentId, existingSession.referent_id);
+
+  if (
+    requestedSession.date !== existingSession.date
+    || requestedSession.slot !== existingSession.slot
+    || referentChanged
+    || (encadrantChanged && !canManageOwnEncadrant)
+  ) {
+    return {
+      allowed: false,
+      status: 403,
+      error: "Un encadrant peut uniquement s’affecter ou se retirer lui-même ; les autres modifications de rôle restent réservées à un administrateur.",
     };
   }
 
@@ -239,6 +258,8 @@ export function evaluateSessionMutation({
     canManageAll: false,
     canChangeStatus: canChangeRequestedStatus,
     statusChanged,
+    encadrantChanged,
+    canManageOwnEncadrant,
     actorJoins,
     actorLeaves,
   };
@@ -622,15 +643,28 @@ export async function updateSessionWithAuthorization(req, res) {
       if (!existing) {
         const result = await client.query(
           `insert into sessions (id, date, slot, status, encadrant_id, referent_id)
-           values ($1,$2,$3,$4,null,null)
+           values ($1,$2,$3,$4,$5,null)
            returning id, date, slot, status, encadrant_id, referent_id`,
-          [requested.id, requested.date, requested.slot, resolvedStatus],
+          [
+            requested.id,
+            requested.date,
+            requested.slot,
+            resolvedStatus,
+            policy.canManageOwnEncadrant ? requested.encadrantId || null : null,
+          ],
         );
         sessionRow = result.rows[0];
-      } else if (policy.statusChanged) {
+      } else if (policy.statusChanged || policy.encadrantChanged) {
         const result = await client.query(
-          `update sessions set status = $2, updated_at = now() where id = $1 returning id, date, slot, status, encadrant_id, referent_id`,
-          [requested.id, resolvedStatus],
+          `update sessions
+           set status = $2, encadrant_id = $3, updated_at = now()
+           where id = $1
+           returning id, date, slot, status, encadrant_id, referent_id`,
+          [
+            requested.id,
+            resolvedStatus,
+            policy.encadrantChanged ? requested.encadrantId || null : existing.encadrant_id,
+          ],
         );
         sessionRow = result.rows[0];
       } else {
