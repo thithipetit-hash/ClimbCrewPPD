@@ -97,7 +97,8 @@ jobs:
           from sessions s
           left join participants pe on pe.id = s.encadrant_id
           left join participants pr on pr.id = s.referent_id
-          where s.date >= current_date - interval '7 days'
+          where s.date >= current_date - interval '30 days'
+            and (s.encadrant_id is not null or s.referent_id is not null)
           order by s.date desc, s.slot, s.id
           limit 100;
 
