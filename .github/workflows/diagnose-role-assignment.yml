@@ -128,6 +128,29 @@ jobs:
           left join participants p on p.id = u.participant_id
           where u.id in (47);
 
+          with target_user as (
+            select id, participant_id, email, prenom, nom
+            from users
+            where id = 47
+          )
+          select
+            p.id as candidate_participant_id,
+            p.can_encadrer,
+            p.can_referer,
+            p.can_admin,
+            lower(trim(coalesce(nullif(p.login_email,''), p.email, ''))) = lower(trim(t.email)) as email_match,
+            lower(trim(coalesce(p.prenom,''))) = lower(trim(coalesce(t.prenom,'')))
+              and lower(trim(coalesce(p.nom,''))) = lower(trim(coalesce(t.nom,''))) as name_match,
+            p.id = t.participant_id as currently_linked
+          from target_user t
+          join participants p on
+            lower(trim(coalesce(nullif(p.login_email,''), p.email, ''))) = lower(trim(t.email))
+            or (
+              lower(trim(coalesce(p.prenom,''))) = lower(trim(coalesce(t.prenom,'')))
+              and lower(trim(coalesce(p.nom,''))) = lower(trim(coalesce(t.nom,'')))
+            )
+          order by p.id;
+
           select
             'active_without_participant' as check_name,
             count(*)::text as value
