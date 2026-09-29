@@ -103,6 +103,20 @@ jobs:
           limit 100;
 
           select
+            id,
+            coalesce(user_id::text, 'none') as user_id,
+            event_type,
+            success,
+            created_at,
+            coalesce(details->>'path', '') as path,
+            coalesce(details->>'status_code', '') as status_code,
+            coalesce(details->>'request_id', '') as request_id
+          from access_logs
+          where created_at >= now() - interval '2 hours'
+          order by created_at desc
+          limit 100;
+
+          select
             'active_without_participant' as check_name,
             count(*)::text as value
           from users
