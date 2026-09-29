@@ -189,6 +189,38 @@ async function run() {
   );
   assert.equal(closedRows.rowCount, 0, "l'inscription refusée a malgré tout été persistée");
 
+  // Régression planning : un encadrant doit pouvoir s'affecter lui-même et
+  // l'affectation doit survivre à la relecture PostgreSQL.
+  await pool.query(
+    `update participants set can_encadrer = true where id = $1`,
+    [participantId],
+  );
+  const selfAssignEncadrant = await jsonRequest(`/sessions/${sessionId}`, {
+    method: "PUT",
+    cookies: member.cookies,
+    csrf: member.csrf,
+    body: {
+      ...sessionPayload,
+      status: "encadree",
+      encadrantId: participantId,
+    },
+  });
+  assert.equal(
+    selfAssignEncadrant.response.status,
+    200,
+    JSON.stringify(selfAssignEncadrant.payload),
+  );
+  assert.equal(String(selfAssignEncadrant.payload.encadrantId), participantId);
+  const persistedEncadrant = await pool.query(
+    `select encadrant_id from sessions where id = $1`,
+    [sessionId],
+  );
+  assert.equal(
+    String(persistedEncadrant.rows[0].encadrant_id),
+    participantId,
+    "l'auto-affectation de l'encadrant n'a pas été persistée",
+  );
+
   const unverifiedEmail = `unverified-${Date.now()}@integration.test`;
   const requestAccess = await jsonRequest("/auth/request-access", {
     method: "POST",
