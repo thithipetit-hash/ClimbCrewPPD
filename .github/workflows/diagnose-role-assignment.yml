@@ -117,6 +117,18 @@ jobs:
           limit 100;
 
           select
+            u.id as user_id,
+            coalesce(u.participant_id::text, 'none') as participant_id,
+            u.status,
+            u.role,
+            coalesce(p.can_encadrer::text, 'none') as can_encadrer,
+            coalesce(p.can_referer::text, 'none') as can_referer,
+            coalesce(p.can_admin::text, 'none') as can_admin
+          from users u
+          left join participants p on p.id = u.participant_id
+          where u.id in (47);
+
+          select
             'active_without_participant' as check_name,
             count(*)::text as value
           from users
