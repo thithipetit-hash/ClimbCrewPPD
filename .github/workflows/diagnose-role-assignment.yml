@@ -81,6 +81,27 @@ jobs:
           order by u.id;
 
           select
+            s.id,
+            s.date,
+            s.slot,
+            s.status,
+            coalesce(s.encadrant_id::text, 'none') as encadrant_id,
+            coalesce(s.referent_id::text, 'none') as referent_id,
+            coalesce(pe.can_encadrer::text, 'none') as encadrant_qualified,
+            coalesce(pr.can_referer::text, 'none') as referent_qualified,
+            case
+              when s.status = 'encadree' then s.referent_id is not null
+              when s.status = 'libre' then s.encadrant_id is not null
+              else s.encadrant_id is not null or s.referent_id is not null
+            end as hidden_role_present
+          from sessions s
+          left join participants pe on pe.id = s.encadrant_id
+          left join participants pr on pr.id = s.referent_id
+          where s.date >= current_date - interval '7 days'
+          order by s.date desc, s.slot, s.id
+          limit 100;
+
+          select
             'active_without_participant' as check_name,
             count(*)::text as value
           from users
