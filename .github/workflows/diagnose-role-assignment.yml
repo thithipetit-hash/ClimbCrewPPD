@@ -40,6 +40,47 @@ jobs:
           order by p.id, u.id;
 
           select
+            'duplicate_qualified_name' as issue,
+            string_agg(p.id::text, ',' order by p.id) as participant_ids,
+            count(*)::text as count
+          from participants p
+          where p.can_encadrer = true or p.can_referer = true
+          group by lower(trim(coalesce(p.prenom,''))), lower(trim(coalesce(p.nom,'')))
+          having count(*) > 1
+          union all
+          select
+            'duplicate_qualified_email' as issue,
+            string_agg(p.id::text, ',' order by p.id) as participant_ids,
+            count(*)::text as count
+          from participants p
+          where (p.can_encadrer = true or p.can_referer = true)
+            and trim(coalesce(nullif(p.login_email,''), p.email, '')) <> ''
+          group by lower(trim(coalesce(nullif(p.login_email,''), p.email, '')))
+          having count(*) > 1;
+
+          select
+            u.id as user_id,
+            u.participant_id as linked_participant_id,
+            string_agg(other.id::text, ',' order by other.id) as alternative_qualified_participant_ids
+          from users u
+          join participants linked on linked.id = u.participant_id
+          join participants other on other.id <> linked.id
+            and (other.can_encadrer = true or other.can_referer = true)
+            and (
+              (
+                trim(coalesce(u.email,'')) <> ''
+                and lower(trim(coalesce(nullif(other.login_email,''), other.email, ''))) = lower(trim(u.email))
+              )
+              or (
+                lower(trim(coalesce(other.prenom,''))) = lower(trim(coalesce(u.prenom,'')))
+                and lower(trim(coalesce(other.nom,''))) = lower(trim(coalesce(u.nom,'')))
+              )
+            )
+          where u.status = 'active'
+          group by u.id, u.participant_id
+          order by u.id;
+
+          select
             'active_without_participant' as check_name,
             count(*)::text as value
           from users
