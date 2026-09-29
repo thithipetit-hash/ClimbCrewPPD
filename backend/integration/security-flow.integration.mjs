@@ -96,6 +96,133 @@ async function login(email, password) {
   return { cookies, csrf, user: payload.user };
 }
 
+
+async function verifyClimbingFlow({ admin, member, participantId }) {
+  const suffix = Date.now();
+  const routeId = `integration-route-${suffix}`;
+  const sessionId = `integration-session-${suffix}`;
+  const realisationId = `integration-realisation-${suffix}`;
+  const sessionDate = "2026-08-24";
+  await pool.query("insert into ropes (numero_corde, actif, couleur_corde) values (1, true, 'Bleu') on conflict do nothing");
+  const route = {
+    id: routeId,
+    numeroVoieUnique: routeId,
+    numeroCorde: 1,
+    couleurPrises: "Bleu",
+    cotationReference: "5c",
+    cotationAjustee: "5c",
+    nomVoie: "Voie test intégration",
+    nomOuvreur: "Integration",
+    moulinetteOnly: false,
+    active: true,
+    dateCreation: sessionDate,
+    tags: [],
+  };
+
+  const forbiddenRoute = await jsonRequest("/routes", {
+    method: "POST", cookies: member.cookies, csrf: member.csrf, body: route,
+  });
+  assert.equal(forbiddenRoute.response.status, 403, "un membre a pu créer une voie");
+
+  const createRoute = await jsonRequest("/routes", {
+    method: "POST", cookies: admin.cookies, csrf: admin.csrf, body: route,
+  });
+  assert.equal(createRoute.response.status, 201, JSON.stringify(createRoute.payload));
+
+  const updateRoute = await jsonRequest(`/routes/${routeId}`, {
+    method: "PUT", cookies: admin.cookies, csrf: admin.csrf,
+    body: { cotationAjustee: "6a" },
+  });
+  assert.equal(updateRoute.response.status, 200, JSON.stringify(updateRoute.payload));
+  assert.equal(updateRoute.payload.cotationAjustee, "6a");
+
+  const session = {
+    id: sessionId, date: sessionDate, slot: "soir", status: "encadree",
+    encadrantId: null, referentId: null, participantIds: [],
+  };
+  const createSession = await jsonRequest(`/sessions/${sessionId}`, {
+    method: "PUT", cookies: admin.cookies, csrf: admin.csrf, body: session,
+  });
+  assert.equal(createSession.response.status, 200, JSON.stringify(createSession.payload));
+
+  const realisation = {
+    id: realisationId, participantId, sessionId, voieId: routeId,
+    dateRealisation: `${sessionDate}T12:00:00`, styleRealisation: "a_vue",
+    modeRealisation: "en_tete", cotationProposee: "6a",
+    commentaire: "Test intégration", chute: false, assureurId: "",
+  };
+  const beforeRegistration = await jsonRequest("/realisations", {
+    method: "POST", cookies: member.cookies, csrf: member.csrf, body: realisation,
+  });
+  assert.equal(beforeRegistration.response.status, 400, "réalisation acceptée avant inscription");
+
+  const registrationPath = `/sessions/${sessionId}/participants/${participantId}`;
+  const register = await jsonRequest(registrationPath, {
+    method: "POST", cookies: member.cookies, csrf: member.csrf,
+  });
+  assert.equal(register.response.status, 200, JSON.stringify(register.payload));
+  assert.equal(register.payload.changed, true);
+
+  const repeatRegistration = await jsonRequest(registrationPath, {
+    method: "POST", cookies: member.cookies, csrf: member.csrf,
+  });
+  assert.equal(repeatRegistration.response.status, 200, JSON.stringify(repeatRegistration.payload));
+  assert.equal(repeatRegistration.payload.changed, false, "inscription dupliquée");
+
+  const registeredSessions = await jsonRequest(`/sessions?from=${sessionDate}&to=${sessionDate}`, {
+    cookies: member.cookies,
+  });
+  assert.equal(registeredSessions.response.status, 200);
+  const registeredSession = registeredSessions.payload.find((item) => item.id === sessionId);
+  assert.ok(registeredSession?.participantIds.includes(participantId), "inscription non persistée");
+
+  const createRealisation = await jsonRequest("/realisations", {
+    method: "POST", cookies: member.cookies, csrf: member.csrf, body: realisation,
+  });
+  assert.equal(createRealisation.response.status, 200, JSON.stringify(createRealisation.payload));
+
+  const persisted = await pool.query(
+    "select commentaire, cotation_proposee from realisations where id = $1",
+    [realisationId],
+  );
+  assert.equal(persisted.rowCount, 1);
+  assert.equal(persisted.rows[0].cotation_proposee, "6a");
+  const event = await pool.query(
+    "select message from chat_messages where event_type = 'realisation' and event_ref = $1",
+    [realisationId],
+  );
+  assert.equal(event.rowCount, 1, "annonce Chat de la réalisation absente");
+  assert.match(event.rows[0].message, /6a.*en tête/);
+
+  const updateRealisation = await jsonRequest(`/realisations/${realisationId}`, {
+    method: "PUT", cookies: member.cookies, csrf: member.csrf,
+    body: { commentaire: "Réalisation validée" },
+  });
+  assert.equal(updateRealisation.response.status, 200, JSON.stringify(updateRealisation.payload));
+  const updated = await pool.query(
+    "select commentaire from realisations where id = $1", [realisationId],
+  );
+  assert.equal(updated.rows[0].commentaire, "Réalisation validée");
+
+  const removeRealisation = await jsonRequest(`/realisations/${realisationId}`, {
+    method: "DELETE", cookies: member.cookies, csrf: member.csrf,
+  });
+  assert.equal(removeRealisation.response.status, 200, JSON.stringify(removeRealisation.payload));
+
+  const unregister = await jsonRequest(registrationPath, {
+    method: "DELETE", cookies: member.cookies, csrf: member.csrf,
+  });
+  assert.equal(unregister.response.status, 200, JSON.stringify(unregister.payload));
+  assert.equal(unregister.payload.changed, true);
+  const remaining = await pool.query(
+    "select 1 from session_participants where session_id = $1 and participant_id = $2",
+    [sessionId, participantId],
+  );
+  assert.equal(remaining.rowCount, 0, "désinscription non persistée");
+
+  console.log("Parcours inscription, voie et réalisation : OK");
+}
+
 async function run() {
   await waitForServer();
 
@@ -139,6 +266,7 @@ async function run() {
     [participantId, memberEmail, memberHash],
   );
   const member = await login(memberEmail, memberPassword);
+  await verifyClimbingFlow({ admin, member, participantId });
 
   // Régression profil : une modification partielle ne doit jamais réinitialiser
   // un sexe ou une confidentialité déjà enregistrés.
