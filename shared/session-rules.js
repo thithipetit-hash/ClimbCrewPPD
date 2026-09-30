@@ -4,10 +4,32 @@ function normalizeSessionPersonId(value) {
   return value === null || value === undefined || value === "" ? null : String(value);
 }
 
+export function isSessionManager({ canEncadrer = false, canReferer = false } = {}) {
+  return Boolean(canEncadrer || canReferer);
+}
+
+export function getSessionSupervisorRole(status) {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  if (normalizedStatus === "libre") return "referent";
+  if (normalizedStatus === "encadree") return "encadrant";
+  return null;
+}
+
+export function isQualifiedSessionSupervisor(participant, status) {
+  const role = getSessionSupervisorRole(status);
+  if (role === "referent") return Boolean(participant?.canReferer);
+  if (role === "encadrant") return Boolean(participant?.canEncadrer);
+  return false;
+}
+
 export function getSessionAttendanceIds(session) {
   const participantIds = (session?.participantIds || []).map(String);
-  const encadrantId = normalizeSessionPersonId(session?.encadrantId ?? session?.encadrant_id);
-  const referentId = normalizeSessionPersonId(session?.referentId ?? session?.referent_id);
+  const role = getSessionSupervisorRole(session?.status);
+  const supervisorId = role === "encadrant"
+    ? normalizeSessionPersonId(session?.encadrantId ?? session?.encadrant_id)
+    : role === "referent"
+      ? normalizeSessionPersonId(session?.referentId ?? session?.referent_id)
+      : null;
 
-  return [...new Set([...participantIds, encadrantId, referentId].filter(Boolean))];
+  return [...new Set([...participantIds, supervisorId].filter(Boolean))];
 }
