@@ -80,6 +80,7 @@ import {
   isManagedSession,
   resolveSessionIdForRealisation,
 } from "./lib/realisation-workflow.js";
+import { normalizeSessionRoles } from "../../shared/session-rules.js";
 
 const ADMIN_CODE = import.meta.env.VITE_LEGACY_ADMIN_CODE || "";
 
@@ -656,7 +657,7 @@ function App() {
   function updateSession(sessionId, patch) {
     const existingSession = state.sessions.find((session) => session.id === sessionId);
     const currentSession = existingSession || buildDefaultSession(sessionId);
-    const patchedSession = { ...currentSession, ...patch };
+    const patchedSession = normalizeSessionRoles({ ...currentSession, ...patch });
     const updatedSession = {
       ...patchedSession,
       participantIds: [...new Set((patchedSession.participantIds || []).map(String))],
@@ -1185,6 +1186,7 @@ async function handleThemePreferenceChange(nextTheme) {
         participantsById={participantsById}
         alphabeticalParticipants={alphabeticalParticipants}
         currentParticipantId={authUser?.participantId}
+        isAdmin={authUser?.role === "admin"}
         preferencesByParticipantId={buddyPreferencesByParticipantId}
         onUpdate={updateSession}
         onAddParticipant={addParticipantToSession}
