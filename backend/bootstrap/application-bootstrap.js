@@ -85,7 +85,6 @@ export async function startApplication({
     if (
       errorRecord.path === "/auth/request-access"
       || String(errorRecord.diagnosticStage || "").startsWith("request_access.")
-      || String(errorRecord.diagnosticStage || "").startsWith("http.")
     ) {
       writeRuntimeDiagnosticLog({
         req,
