@@ -1,7 +1,7 @@
 import { getPool } from "./database.js";
 import { validateSessionPayload } from "../validation.js";
 import { getDefaultSessionStatus } from "../../shared/session-default-status.js";
-import { getSessionAttendanceIds, getSessionSupervisorRole, isSessionManager, MAX_SESSION_PARTICIPANTS } from "../../shared/session-rules.js";
+import { getSessionAttendanceIds, getSessionSupervisorRole, isSessionManager, normalizeSessionRoles, MAX_SESSION_PARTICIPANTS } from "../../shared/session-rules.js";
 
 function normalizedId(value) {
   return value === null || value === undefined || value === "" ? null : String(value);
@@ -425,6 +425,11 @@ async function mutateSessionParticipant(req, res, { remove = false } = {}) {
 
       const resolvedStatus = requestedSession.status
         || getDefaultSessionStatus(requestedSession.date, requestedSession.slot);
+      const roleSelection = normalizeSessionRoles({
+        ...requestedSession,
+        status: resolvedStatus,
+      });
+      await assertSessionSupervisorEligibility(client, roleSelection);
       const createdSession = await client.query(
         `insert into sessions (id, date, slot, status, encadrant_id, referent_id)
          values ($1,$2,$3,$4,$5,$6)
@@ -434,8 +439,12 @@ async function mutateSessionParticipant(req, res, { remove = false } = {}) {
           requestedSession.date,
           requestedSession.slot,
           resolvedStatus,
-          creationPolicy.canManageAll ? requestedSession.encadrantId || null : null,
-          creationPolicy.canManageAll ? requestedSession.referentId || null : null,
+          creationPolicy.canManageAll || creationPolicy.canManageRoles
+            ? roleSelection.encadrantId
+            : null,
+          creationPolicy.canManageAll || creationPolicy.canManageRoles
+            ? roleSelection.referentId
+            : null,
         ],
       );
       session = createdSession.rows[0];
@@ -558,10 +567,17 @@ export async function updateSessionWithAuthorization(req, res) {
     )];
 
     const privileges = await loadActorPrivileges(client, actorParticipantId);
+    const resolvedStatus = requested.status
+      || existing?.status
+      || getDefaultSessionStatus(requested.date, requested.slot);
+    const canonicalRequestedSession = normalizeSessionRoles({
+      ...requested,
+      status: resolvedStatus,
+    });
     const preserveParticipants = Boolean(existing && req.body?.participantMode === "preserve");
     const policyRequestedSession = preserveParticipants
-      ? { ...requested, participantIds: previousParticipantIds }
-      : requested;
+      ? { ...canonicalRequestedSession, participantIds: previousParticipantIds }
+      : canonicalRequestedSession;
 
     if (existing && isAdmin && !preserveParticipants) {
       const participantChanges = symmetricDifference(
@@ -590,14 +606,11 @@ export async function updateSessionWithAuthorization(req, res) {
       return res.status(policy.status || 403).json({ error: policy.error || "Action non autorisée" });
     }
 
+    await assertSessionSupervisorEligibility(client, policyRequestedSession);
     const normalizedRequestedParticipantIds = assertSessionCapacity(
       policyRequestedSession.participantIds,
       policyRequestedSession,
     );
-
-    const resolvedStatus = requested.status
-      || existing?.status
-      || getDefaultSessionStatus(requested.date, requested.slot);
 
     let sessionRow;
     if (policy.canManageAll) {
@@ -619,8 +632,8 @@ export async function updateSessionWithAuthorization(req, res) {
           requested.date,
           requested.slot,
           resolvedStatus,
-          requested.encadrantId || null,
-          requested.referentId || null,
+          policyRequestedSession.encadrantId,
+          policyRequestedSession.referentId,
         ],
       );
       sessionRow = result.rows[0];
@@ -661,8 +674,8 @@ export async function updateSessionWithAuthorization(req, res) {
             requested.date,
             requested.slot,
             resolvedStatus,
-            policy.canManageOwnEncadrant ? requested.encadrantId || null : null,
-            policy.canManageOwnReferent ? requested.referentId || null : null,
+            policy.canManageRoles ? policyRequestedSession.encadrantId : null,
+            policy.canManageRoles ? policyRequestedSession.referentId : null,
           ],
         );
         sessionRow = result.rows[0];
@@ -675,8 +688,8 @@ export async function updateSessionWithAuthorization(req, res) {
           [
             requested.id,
             resolvedStatus,
-            policy.encadrantChanged ? requested.encadrantId || null : existing.encadrant_id,
-            policy.referentChanged ? requested.referentId || null : existing.referent_id,
+            policy.encadrantChanged ? policyRequestedSession.encadrantId : existing.encadrant_id,
+            policy.referentChanged ? policyRequestedSession.referentId : existing.referent_id,
           ],
         );
         sessionRow = result.rows[0];
