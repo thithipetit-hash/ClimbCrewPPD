@@ -8,7 +8,7 @@ function sortLogsByNewest(logs) {
 
 export function installAdminAccessLogRoutes(app, { requireAuth, requireAdmin, pool }) {
   app.get("/admin/auth/logs", requireAuth, requireAdmin, async (req, res) => {
-    const limit = Math.min(Math.max(Number(req.query.limit || 200), 1), 500);
+    const limit = Math.min(Number(req.query.limit || 200), 500);
     const runtimeLogs = getRuntimeDiagnosticLogs(limit);
 
     try {
