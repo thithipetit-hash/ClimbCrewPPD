@@ -5,6 +5,7 @@ import { getPool } from "./database.js";
 import { writeAccessLog } from "./access-log-service.js";
 import { cleanEmail, hashToken, isStrongPassword } from "./security.js";
 import { sendAccountRequestConfirmation } from "./email-service.js";
+import { writeRuntimeDiagnosticLog } from "../runtime-diagnostic-log-service.js";
 
 const EMAIL_VERIFICATION_DURATION_MS = 1000 * 60 * 60 * 24 * 7;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -61,10 +62,21 @@ function traceAccountRequest({ req, stage, email, userId = null, transactionComm
       stack: error?.stack || null,
     });
     console.error(JSON.stringify(record));
+    writeRuntimeDiagnosticLog({
+      req,
+      eventType: "account_creation_error",
+      success: false,
+      details: record,
+    });
     return;
   }
 
   console.info(JSON.stringify(record));
+  writeRuntimeDiagnosticLog({
+    req,
+    eventType: "account_creation_trace",
+    details: record,
+  });
 }
 
 async function traceAccountRequestSchema(req, client) {
@@ -90,18 +102,32 @@ async function traceAccountRequestSchema(req, client) {
         ) as verification_token_hash
     `);
 
-    console.error(JSON.stringify({
+    const record = {
       event: "account_request_schema_diagnostics",
       requestId: req?.requestId || null,
       ...diagnostic.rows[0],
-    }));
+    };
+    console.error(JSON.stringify(record));
+    writeRuntimeDiagnosticLog({
+      req,
+      eventType: "account_creation_schema",
+      success: false,
+      details: record,
+    });
   } catch (error) {
-    console.error(JSON.stringify({
+    const record = {
       event: "account_request_schema_diagnostics_failed",
       requestId: req?.requestId || null,
       errorCode: error?.code || null,
       message: error?.message || String(error),
-    }));
+    };
+    console.error(JSON.stringify(record));
+    writeRuntimeDiagnosticLog({
+      req,
+      eventType: "account_creation_schema_error",
+      success: false,
+      details: record,
+    });
   }
 }
 
