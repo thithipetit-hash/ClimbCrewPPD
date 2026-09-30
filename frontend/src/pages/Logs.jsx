@@ -34,7 +34,15 @@ function ServerSection({ title, summary, children }) {
   );
 }
 
-export default function Logs({ USE_API, canManageAccountsAndLogs, adminAccessLogs, exportAllData, importJsonFile, importMessage }) {
+export default function Logs({
+  USE_API,
+  canManageAccountsAndLogs,
+  adminAccessLogs,
+  onRefreshLogs,
+  exportAllData,
+  importJsonFile,
+  importMessage,
+}) {
   const [backups, setBackups] = useState([]);
   const [backupConfig, setBackupConfig] = useState(null);
   const [backupStatus, setBackupStatus] = useState("");
@@ -44,6 +52,11 @@ export default function Logs({ USE_API, canManageAccountsAndLogs, adminAccessLog
   const [broadcastSending, setBroadcastSending] = useState(false);
   const [resetting, setResetting] = useState("");
   const [resetStatus, setResetStatus] = useState("");
+  const [accountLogsOnly, setAccountLogsOnly] = useState(true);
+
+  const displayedLogs = accountLogsOnly
+    ? adminAccessLogs.filter((log) => String(log.event_type || "").startsWith("account_creation"))
+    : adminAccessLogs;
 
   async function resetData(type, label) {
     const safetyMessage = type === "statistiques"
@@ -235,12 +248,23 @@ export default function Logs({ USE_API, canManageAccountsAndLogs, adminAccessLog
         {importMessage && <div className="success" style={{ marginTop: 10 }}>{importMessage}</div>}
       </ServerSection>
 
-      <ServerSection title="Logs" summary={`${adminAccessLogs.length} événement${adminAccessLogs.length > 1 ? "s" : ""}`}>
+      <ServerSection title="Logs" summary={`${displayedLogs.length} événement${displayedLogs.length > 1 ? "s" : ""} affiché${displayedLogs.length > 1 ? "s" : ""}`}>
+        <div className="group" style={{ marginBottom: 12 }}>
+          <Button variant="secondary" onClick={onRefreshLogs}>Actualiser les logs</Button>
+          <Button variant="secondary" onClick={() => setAccountLogsOnly((value) => !value)}>
+            {accountLogsOnly ? "Afficher tous les logs" : "Création de compte uniquement"}
+          </Button>
+        </div>
+        <div className="small" style={{ marginBottom: 12 }}>
+          Les diagnostics de création de compte affichent le requestId, l’étape atteinte et les détails techniques utiles, sans mot de passe ni token.
+        </div>
         <div className="stack" style={{ minWidth: 0, maxWidth: "100%" }}>
-          {adminAccessLogs.length === 0 ? (
-            <div className="muted-box">Aucun log disponible.</div>
+          {displayedLogs.length === 0 ? (
+            <div className="muted-box">
+              {accountLogsOnly ? "Aucun diagnostic récent de création de compte." : "Aucun log disponible."}
+            </div>
           ) : (
-            adminAccessLogs.map((log) => (
+            displayedLogs.map((log) => (
               <div
                 className="subcard"
                 key={log.id}
@@ -261,6 +285,14 @@ export default function Logs({ USE_API, canManageAccountsAndLogs, adminAccessLog
                 <div className="small" style={logTextStyle}>
                   {log.ip_address || "IP inconnue"} · {log.user_agent || "navigateur inconnu"}
                 </div>
+                {log.details?.requestId && (
+                  <div className="small" style={logTextStyle}><strong>Request ID :</strong> {log.details.requestId}</div>
+                )}
+                {(log.details?.stage || log.details?.diagnosticStage) && (
+                  <div className="small" style={logTextStyle}>
+                    <strong>Étape :</strong> {log.details.stage || log.details.diagnosticStage}
+                  </div>
+                )}
                 {log.details_text && <div className="small" style={logTextStyle}>Détails : {log.details_text}</div>}
               </div>
             ))
