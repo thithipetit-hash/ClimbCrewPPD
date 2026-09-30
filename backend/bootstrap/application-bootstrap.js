@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { runDatabaseMigrations } from "../database/migrate.js";
+import { writeRuntimeDiagnosticLog } from "../runtime-diagnostic-log-service.js";
 
 async function cleanupExpiredSecurityData(pool) {
   await pool.query("update user_sessions set revoked_at = now() where revoked_at is null and expires_at <= now()");
@@ -56,7 +57,7 @@ export async function startApplication({
   // Placé après l'enregistrement de toutes les routes : les handlers async
   // sécurisés pour Express 4 transmettent ici leurs Promise rejetées.
   app.use((error, req, res, next) => {
-    console.error(JSON.stringify({
+    const errorRecord = {
       event: "http_unhandled_error",
       requestId: req.requestId || null,
       diagnosticStage: req.requestDiagnosticStage || null,
@@ -79,7 +80,20 @@ export async function startApplication({
       causeName: error?.cause?.name || null,
       causeCode: error?.cause?.code || null,
       causeMessage: error?.cause?.message || null,
-    }));
+    };
+    console.error(JSON.stringify(errorRecord));
+    if (
+      errorRecord.path === "/auth/request-access"
+      || String(errorRecord.diagnosticStage || "").startsWith("request_access.")
+      || String(errorRecord.diagnosticStage || "").startsWith("http.")
+    ) {
+      writeRuntimeDiagnosticLog({
+        req,
+        eventType: "account_creation_unhandled_error",
+        success: false,
+        details: errorRecord,
+      });
+    }
     if (res.headersSent) return next(error);
 
     const requestedStatus = Number(error?.status);
