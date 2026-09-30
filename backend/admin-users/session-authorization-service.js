@@ -81,12 +81,12 @@ function symmetricDifference(left, right) {
 /**
  * Politique d'autorisation indépendante de PostgreSQL, afin d'être testable.
  *
- * - administrateur : gestion complète de la séance hors changement de statut, qui reste soumis aux qualifications métier ;
- * - référent : peut passer une séance au statut libre et s'affecter/se retirer lui-même comme référent ;
- * - encadrant : peut passer une séance à libre ou à tout autre statut et s'affecter/se retirer lui-même comme encadrant ;
+ * - encadrant ou référent : peut changer le type de séance et sélectionner un responsable qualifié ;
+ * - séance libre : le responsable sélectionné doit être référent ;
+ * - séance encadrée : le responsable sélectionné doit être encadrant ;
+ * - administrateur : peut gérer les données de séance, mais un changement de type reste réservé à un encadrant/référent ;
  * - membre standard : peut uniquement s'inscrire ou se désinscrire lui-même ;
- * - une séance fermée refuse toute nouvelle inscription non administrateur ;
- * - création d'une séance : administrateur, ou référent/encadrant selon le statut demandé.
+ * - une séance fermée refuse toute nouvelle inscription non administrateur.
  */
 export function evaluateSessionMutation({
   existingSession,
