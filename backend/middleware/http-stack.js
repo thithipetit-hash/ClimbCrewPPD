@@ -6,6 +6,7 @@ import { sanitizeMalformedCookieHeader } from "../admin-users/cookie-hardening.j
 import { preBodyRequestGuard } from "../admin-users/prebody-rate-limit.js";
 import { trustedClientIpMiddleware } from "../admin-users/client-ip-hardening.js";
 import { rateLimitLogMiddleware } from "../admin-users/rate-limit-log-integration.js";
+import { writeRuntimeDiagnosticLog } from "../runtime-diagnostic-log-service.js";
 
 const EXPRESS4_ASYNC_WRAPPED = Symbol("climbcrew.express4AsyncWrapped");
 const EXPRESS_REGISTRATION_METHODS = ["use", "all", "get", "post", "put", "patch", "delete", "options", "head"];
@@ -118,7 +119,17 @@ function isAccountRequest(req) {
 
 function markAccountRequestStage(stage) {
   return (req, _res, next) => {
-    if (isAccountRequest(req)) req.requestDiagnosticStage = stage;
+    if (isAccountRequest(req)) {
+      req.requestDiagnosticStage = stage;
+      writeRuntimeDiagnosticLog({
+        req,
+        eventType: "account_creation_trace",
+        details: {
+          requestId: req.requestId || null,
+          stage,
+        },
+      });
+    }
     next();
   };
 }
@@ -131,7 +142,7 @@ function installAccountRequestDiagnosticSummary(req, res, next) {
       ? Object.keys(req.body).sort()
       : [];
 
-    console.info(JSON.stringify({
+    const summary = {
       event: "account_request_http_summary",
       requestId: req.requestId || null,
       status: Number(res.statusCode) || 0,
@@ -140,7 +151,21 @@ function installAccountRequestDiagnosticSummary(req, res, next) {
       contentLength: req.headers["content-length"] || null,
       bodyParsed: Boolean(req.body && typeof req.body === "object"),
       bodyKeys,
-    }));
+    };
+    console.info(JSON.stringify(summary));
+    writeRuntimeDiagnosticLog({
+      req,
+      eventType: "account_creation_result",
+      success: summary.status < 400,
+      details: {
+        requestId: summary.requestId,
+        stage: summary.diagnosticStage,
+        status: summary.status,
+        contentType: summary.contentType,
+        contentLength: summary.contentLength,
+        bodyParsed: summary.bodyParsed,
+      },
+    });
   });
   next();
 }
@@ -196,6 +221,16 @@ export function installHttpStack(app, config, { isSafeMethod, getClientIp }) {
   app.use((req, res, next) => {
     req.requestId = crypto.randomUUID();
     req.requestDiagnosticStage = "http.request_received";
+    if (isAccountRequest(req)) {
+      writeRuntimeDiagnosticLog({
+        req,
+        eventType: "account_creation_trace",
+        details: {
+          requestId: req.requestId,
+          stage: req.requestDiagnosticStage,
+        },
+      });
+    }
     installOutboundErrorSanitizer(req, res);
     res.setHeader("X-Request-Id", req.requestId);
     res.setHeader("X-Content-Type-Options", "nosniff");
