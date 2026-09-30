@@ -67,6 +67,44 @@ function traceAccountRequest({ req, stage, email, userId = null, transactionComm
   console.info(JSON.stringify(record));
 }
 
+async function traceAccountRequestSchema(req, client) {
+  if (!client) return;
+
+  try {
+    const diagnostic = await client.query(`
+      select
+        to_regprocedure('climbcrew_normalize_email(text)') is not null as normalize_email_function,
+        to_regclass('public.users') is not null as users_table,
+        to_regclass('public.email_verification_tokens') is not null as verification_tokens_table,
+        exists(
+          select 1 from information_schema.columns
+          where table_schema = 'public' and table_name = 'users' and column_name = 'participant_id'
+        ) as users_participant_id,
+        exists(
+          select 1 from information_schema.columns
+          where table_schema = 'public' and table_name = 'users' and column_name = 'status'
+        ) as users_status,
+        exists(
+          select 1 from information_schema.columns
+          where table_schema = 'public' and table_name = 'email_verification_tokens' and column_name = 'token_hash'
+        ) as verification_token_hash
+    `);
+
+    console.error(JSON.stringify({
+      event: "account_request_schema_diagnostics",
+      requestId: req?.requestId || null,
+      ...diagnostic.rows[0],
+    }));
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: "account_request_schema_diagnostics_failed",
+      requestId: req?.requestId || null,
+      errorCode: error?.code || null,
+      message: error?.message || String(error),
+    }));
+  }
+}
+
 function validatePublicRequestIdentity({ prenom, nom, email }) {
   if (!prenom || !nom || !email) {
     return "Prénom, nom et email sont requis";
@@ -141,6 +179,7 @@ export async function findParticipantByEmailOnly(client, { email, userId = null 
  * existe déjà ou non afin d'empêcher l'énumération des membres du club.
  */
 export async function requestAccessByEmailOnly(req, res) {
+  req.requestDiagnosticStage = "request_access.controller_entered";
   const prenom = String(req.body?.prenom || "").trim();
   const nom = String(req.body?.nom || "").trim();
   const email = cleanEmail(req.body?.email);
@@ -148,7 +187,10 @@ export async function requestAccessByEmailOnly(req, res) {
   const acceptTerms = Boolean(req.body?.acceptTerms);
 
   const identityError = validatePublicRequestIdentity({ prenom, nom, email });
-  if (identityError) return res.status(400).json({ error: identityError });
+  if (identityError) {
+    req.requestDiagnosticStage = "request_access.identity_validation_failed";
+    return res.status(400).json({ error: identityError });
+  }
   if (!acceptTerms) {
     return res.status(400).json({ error: "Les conditions d’utilisation doivent être acceptées" });
   }
@@ -160,6 +202,11 @@ export async function requestAccessByEmailOnly(req, res) {
 
   let client = null;
   let stage = "database_connect";
+  const setStage = (nextStage) => {
+    stage = nextStage;
+    req.requestDiagnosticStage = `request_access.${nextStage}`;
+  };
+  setStage(stage);
   let transactionStarted = false;
   let transactionCommitted = false;
   let userId = null;
@@ -169,17 +216,17 @@ export async function requestAccessByEmailOnly(req, res) {
   try {
     client = await getPool().connect();
 
-    stage = "transaction_begin";
+    setStage("transaction_begin");
     await client.query("begin");
     transactionStarted = true;
 
-    stage = "existing_account_lookup";
+    setStage("existing_account_lookup");
     const existing = await client.query(
       `select id from users where climbcrew_normalize_email(email) = climbcrew_normalize_email($1) limit 1`,
       [email],
     );
     if (existing.rowCount) {
-      stage = "existing_account_rollback";
+      setStage("existing_account_rollback");
       await client.query("rollback");
       transactionStarted = false;
       userId = existing.rows[0].id;
@@ -199,7 +246,7 @@ export async function requestAccessByEmailOnly(req, res) {
     // associer dès l'inscription permettait à un compte jamais vérifié de
     // verrouiller indéfiniment une fiche, sans qu'un administrateur ne puisse
     // même le voir pour le corriger.
-    stage = "password_hash";
+    setStage("password_hash");
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const verificationToken = crypto.randomBytes(24).toString("hex");
     const verificationTokenHash = hashToken(verificationToken);
@@ -207,7 +254,7 @@ export async function requestAccessByEmailOnly(req, res) {
       Date.now() + EMAIL_VERIFICATION_DURATION_MS,
     ).toISOString();
 
-    stage = "user_insert";
+    setStage("user_insert");
     const userResult = await client.query(
       `
         insert into users (
@@ -221,7 +268,7 @@ export async function requestAccessByEmailOnly(req, res) {
     const user = userResult.rows[0];
     userId = user.id;
 
-    stage = "verification_token_insert";
+    setStage("verification_token_insert");
     await client.query(
       `
         insert into email_verification_tokens (user_id, token_hash, expires_at)
@@ -230,7 +277,7 @@ export async function requestAccessByEmailOnly(req, res) {
       [user.id, verificationTokenHash, verificationExpiresAt],
     );
 
-    stage = "transaction_commit";
+    setStage("transaction_commit");
     await client.query("commit");
     transactionStarted = false;
     transactionCommitted = true;
@@ -242,7 +289,7 @@ export async function requestAccessByEmailOnly(req, res) {
       transactionCommitted,
     });
 
-    stage = "access_log_write";
+    setStage("access_log_write");
     await writeAccessLog({
       userId: user.id,
       eventType: "request_access",
@@ -255,7 +302,7 @@ export async function requestAccessByEmailOnly(req, res) {
       },
     });
 
-    stage = "confirmation_email_send";
+    setStage("confirmation_email_send");
     try {
       const emailResult = await sendAccountRequestConfirmation({
         email,
@@ -333,6 +380,7 @@ export async function requestAccessByEmailOnly(req, res) {
       transactionCommitted,
       error,
     });
+    await traceAccountRequestSchema(req, client);
     return res.status(500).json({ error: "Création de compte momentanément impossible" });
   } finally {
     client?.release();
