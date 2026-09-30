@@ -255,6 +255,103 @@ async function run() {
     "l'auto-affectation du référent n'a pas été persistée",
   );
 
+  // La gestion d'une séance appartient aux encadrants/référents. Une personne
+  // habilitée peut sélectionner dans la liste un autre responsable qualifié.
+  const supervisorTarget = await jsonRequest("/participants", {
+    method: "POST",
+    cookies: admin.cookies,
+    csrf: admin.csrf,
+    body: {
+      nom: "Responsable",
+      prenom: "Cible",
+      email: `responsable-cible-${Date.now()}@integration.test`,
+      passport: "vert",
+      sexe: "",
+      cotisation: true,
+      ffme: false,
+      canEncadrer: true,
+      canReferer: true,
+      canAdmin: false,
+      avatarId: "gecko",
+      crestId: "cristal",
+      profilePublic: true,
+    },
+  });
+  assert.equal(supervisorTarget.response.status, 201, JSON.stringify(supervisorTarget.payload));
+  const supervisorTargetId = String(supervisorTarget.payload.id);
+
+  await pool.query(
+    `update participants set can_encadrer = false, can_referer = true where id = $1`,
+    [participantId],
+  );
+  const referentChangesToEncadree = await jsonRequest(`/sessions/${sessionId}`, {
+    method: "PUT",
+    cookies: member.cookies,
+    csrf: member.csrf,
+    body: {
+      ...sessionPayload,
+      status: "encadree",
+      encadrantId: supervisorTargetId,
+      referentId: null,
+    },
+  });
+  assert.equal(
+    referentChangesToEncadree.response.status,
+    200,
+    JSON.stringify(referentChangesToEncadree.payload),
+  );
+  assert.equal(String(referentChangesToEncadree.payload.encadrantId), supervisorTargetId);
+  assert.equal(referentChangesToEncadree.payload.referentId, null);
+
+  const targetAsReferent = await jsonRequest(`/sessions/${sessionId}`, {
+    method: "PUT",
+    cookies: member.cookies,
+    csrf: member.csrf,
+    body: {
+      ...sessionPayload,
+      status: "libre",
+      encadrantId: null,
+      referentId: supervisorTargetId,
+    },
+  });
+  assert.equal(targetAsReferent.response.status, 200, JSON.stringify(targetAsReferent.payload));
+  assert.equal(String(targetAsReferent.payload.referentId), supervisorTargetId);
+
+  const unqualifiedTarget = await jsonRequest("/participants", {
+    method: "POST",
+    cookies: admin.cookies,
+    csrf: admin.csrf,
+    body: {
+      nom: "Responsable",
+      prenom: "NonQualifie",
+      email: `responsable-non-qualifie-${Date.now()}@integration.test`,
+      passport: "vert",
+      sexe: "",
+      cotisation: true,
+      ffme: false,
+      canEncadrer: false,
+      canReferer: false,
+      canAdmin: false,
+      avatarId: "gecko",
+      crestId: "cristal",
+      profilePublic: true,
+    },
+  });
+  assert.equal(unqualifiedTarget.response.status, 201, JSON.stringify(unqualifiedTarget.payload));
+  const invalidSupervisor = await jsonRequest(`/sessions/${sessionId}`, {
+    method: "PUT",
+    cookies: member.cookies,
+    csrf: member.csrf,
+    body: {
+      ...sessionPayload,
+      status: "libre",
+      encadrantId: null,
+      referentId: String(unqualifiedTarget.payload.id),
+    },
+  });
+  assert.equal(invalidSupervisor.response.status, 400);
+  assert.match(String(invalidSupervisor.payload?.error || ""), /pas habilité comme référent/i);
+
   const unverifiedEmail = `unverified-${Date.now()}@integration.test`;
   const requestAccess = await jsonRequest("/auth/request-access", {
     method: "POST",
