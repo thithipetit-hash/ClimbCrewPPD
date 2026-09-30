@@ -33,8 +33,8 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
             select 1 from session_participants sp
             where sp.session_id = s.id and sp.participant_id::text = $2
           )
-          or s.encadrant_id::text = $2
-          or s.referent_id::text = $2
+          or (s.status = 'encadree' and s.encadrant_id::text = $2)
+          or (s.status = 'libre' and s.referent_id::text = $2)
         )
       limit 1
     `,
@@ -82,8 +82,8 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
             select 1 from session_participants sp
             where sp.session_id = s.id and sp.participant_id::text = $2
           )
-          or s.encadrant_id::text = $2
-          or s.referent_id::text = $2
+          or (s.status = 'encadree' and s.encadrant_id::text = $2)
+          or (s.status = 'libre' and s.referent_id::text = $2)
         )
       limit 1
     `,
