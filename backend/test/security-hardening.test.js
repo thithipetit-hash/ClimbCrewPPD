@@ -111,7 +111,7 @@ test("un membre standard ne peut pas créer ou restructurer une séance, un gest
 
   const managerCreate = evaluateSessionMutation({
     existingSession: null,
-    requestedSession: requested(),
+    requestedSession: requested({ participantIds: [] }),
     previousParticipantIds: [],
     actorParticipantId: "20",
     canReferer: true,
