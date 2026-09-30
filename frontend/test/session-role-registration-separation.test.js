@@ -108,3 +108,13 @@ test("le rôle actif vaut une présence unique pour l'effectif", () => {
     ["p1", "r1"],
   );
 });
+
+
+test("les statistiques de participation utilisent le même effectif que le planning", () => {
+  const statisticsBlock = appSource.slice(
+    appSource.indexOf("const sessionStats = useMemo"),
+    appSource.indexOf("const alphabeticalParticipants"),
+  );
+
+  assert.match(statisticsBlock, /getSessionAttendanceIds\(session\)/);
+});
