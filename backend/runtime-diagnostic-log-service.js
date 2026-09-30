@@ -1,5 +1,5 @@
 const MAX_RUNTIME_DIAGNOSTIC_LOGS = 500;
-const SENSITIVE_KEY_PATTERN = /(password|token|authorization|cookie|secret)/i;
+const SENSITIVE_KEY_PATTERN = /password|authorization|cookie|secret|verificationToken|(^|_)token($|_)/i;
 
 let nextRuntimeLogId = 1;
 const runtimeDiagnosticLogs = [];
