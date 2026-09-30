@@ -15,6 +15,10 @@ const HELP_ITEMS = [
     content: "Dans Voies, le bouton Réalisation ouvre la saisie. Depuis son propre profil, Nouvelle réalisation permet aussi d'enregistrer une voie. Le mode En tête ou Moulinette et le critère À vue, Flash, Travaillée, Avec repos, Projet, Non enchaînée ou Essai/test sont indépendants. Une voie moulinette uniquement impose automatiquement Moulinette.",
   },
   {
+    title: "Que signifient les critères de réalisation ?",
+    content: "À vue : voie enchaînée dès le premier essai, sans chute ni repos sur la corde et sans information préalable sur la méthode. Flash : voie enchaînée au premier essai, sans chute ni repos, mais après avoir observé un autre grimpeur ou reçu des indications. Travaillée : voie enchaînée sans chute ni repos après un ou plusieurs essais précédents. Avec repos : voie parcourue avec un ou plusieurs repos en charge sur la corde ; elle n'est pas considérée comme une réussite. Projet : voie en cours de travail, pas encore enchaînée. Non enchaînée : tentative qui ne permet pas de réaliser toute la voie d'une traite. Essai / test : passage exploratoire pour essayer la voie, les mouvements ou les prises. Dans les statistiques de réussite, seuls À vue, Flash et Travaillée sont comptés comme des réussites.",
+  },
+  {
     title: "Quel grimpeur est affiché par défaut dans Profil ?",
     content: "Le profil associé au compte connecté est sélectionné automatiquement et placé en tête de la liste. Les actions personnelles restent disponibles uniquement lorsque son propre profil est affiché.",
   },
