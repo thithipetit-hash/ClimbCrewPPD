@@ -44,6 +44,8 @@ test("la validation reste compatible avec session_participants.participant_id en
 
   const sessionSql = pool.queries.find((sql) => sql.includes("select s.date, p.cotisation"));
   assert.match(sessionSql, /sp\.participant_id::text = \$2/);
+  assert.match(sessionSql, /s\.status = 'encadree' and s\.encadrant_id::text = \$2/);
+  assert.match(sessionSql, /s\.status = 'libre' and s\.referent_id::text = \$2/);
   assert.doesNotMatch(sessionSql, /p\.id::text\s*=\s*sp\.participant_id/);
 });
 
@@ -70,4 +72,6 @@ test("un vol exige un assureur distinct inscrit à la même séance", async () =
   );
   const belayerSql = pool.queries.find((sql) => sql.includes("select 1") && sql.includes("session_participants"));
   assert.match(belayerSql, /sp\.participant_id::text = \$2/);
+  assert.match(belayerSql, /s\.status = 'encadree' and s\.encadrant_id::text = \$2/);
+  assert.match(belayerSql, /s\.status = 'libre' and s\.referent_id::text = \$2/);
 });
