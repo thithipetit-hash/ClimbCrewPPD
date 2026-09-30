@@ -118,7 +118,7 @@ test("l'état des schedulers expose explicitement un mode dégradé", () => {
 });
 
 
-test("un encadrant peut créer une séance libre ou encadrée et un référent une séance libre", () => {
+test("un encadrant ou référent peut créer et typer une séance", () => {
   const base = {
     existingSession: null,
     previousParticipantIds: [],
@@ -152,5 +152,5 @@ test("un encadrant peut créer une séance libre ou encadrée et un référent u
     requestedSession: { id: "2026-09-29-soir", date: "2026-09-29", slot: "soir", status: "encadree", participantIds: [] },
     canEncadrer: false,
     canReferer: true,
-  }).allowed, false);
+  }).allowed, true);
 });
