@@ -10,6 +10,11 @@ import {
 } from "../lib/domain.js";
 import { hasBuddyAvailabilityForSession } from "../lib/buddy-preferences.js";
 import { getSessionAttendanceIds, getSessionParticipantIds } from "../lib/realisation-workflow.js";
+import {
+  isQualifiedSessionSupervisor,
+  isSessionManager,
+  normalizeSessionRoles,
+} from "../../../shared/session-rules.js";
 
 export default function SessionCard({
   session,
@@ -18,6 +23,7 @@ export default function SessionCard({
   participantsById,
   alphabeticalParticipants,
   currentParticipantId,
+  isAdmin = false,
   preferencesByParticipantId,
   onUpdate,
   onAddParticipant,
@@ -35,11 +41,18 @@ export default function SessionCard({
   const occupied = sessionAttendanceIds.length;
   const missingSupervisor = (session.status === "encadree" && !session.encadrantId)
     || (session.status === "libre" && !session.referentId);
+  const currentParticipant = participantsById[String(currentParticipantId || "")] || null;
+  const canManageSession = isSessionManager(currentParticipant);
+  const canManageSupervisor = Boolean(isAdmin || canManageSession);
   const freeSessionPassports = new Set(["jaune", "orange", "vert", "bleu"]);
   const availableParticipants = participants.filter((participant) => (
-    !sessionAttendanceIds.includes(String(participant.id))
+    (isAdmin || String(participant.id) === String(currentParticipantId || ""))
+    && !sessionAttendanceIds.includes(String(participant.id))
     && (session.status !== "libre" || freeSessionPassports.has(normalizePassport(participant.passport)))
   ));
+  const eligibleSupervisors = alphabeticalParticipants.filter((participant) =>
+    isQualifiedSessionSupervisor(participant, session.status)
+  );
 
   return (
     <div className={`card session-card session-status-${String(session.status || "fermee").trim().toLowerCase()} ${missingSupervisor ? "session-card-missing-supervisor" : ""} ${compact ? "session-card-compact" : ""}`}>
@@ -53,12 +66,17 @@ export default function SessionCard({
           <label>Statut</label>
           <select
             value={session.status}
+            disabled={!canManageSession}
+            title={canManageSession ? undefined : "Seuls les encadrants et référents peuvent changer le type de séance."}
             onChange={(event) => {
-              const value = event.target.value;
+              const normalized = normalizeSessionRoles({
+                ...session,
+                status: event.target.value,
+              });
               onUpdate(session.id, {
-                status: value,
-                ...(value !== "encadree" ? { encadrantId: null } : {}),
-                ...(value !== "libre" ? { referentId: null } : {}),
+                status: normalized.status,
+                encadrantId: normalized.encadrantId,
+                referentId: normalized.referentId,
               });
             }}
           >
@@ -76,10 +94,11 @@ export default function SessionCard({
             <label>Encadrant</label>
             <select
               value={session.encadrantId || ""}
+              disabled={!canManageSupervisor}
               onChange={(event) => onUpdate(session.id, { encadrantId: event.target.value || null })}
             >
               <option value="">Aucun</option>
-              {alphabeticalParticipants.filter((participant) => participant.canEncadrer).map((participant) => (
+              {eligibleSupervisors.map((participant) => (
                 <option key={participant.id} value={participant.id}>{fullName(participant)}</option>
               ))}
             </select>
@@ -91,10 +110,11 @@ export default function SessionCard({
             <label>RÉFÉRENT</label>
             <select
               value={session.referentId || ""}
+              disabled={!canManageSupervisor}
               onChange={(event) => onUpdate(session.id, { referentId: event.target.value || null })}
             >
               <option value="">Aucun</option>
-              {alphabeticalParticipants.filter((participant) => participant.canReferer).map((participant) => (
+              {eligibleSupervisors.map((participant) => (
                 <option key={participant.id} value={participant.id}>{fullName(participant)}</option>
               ))}
             </select>
@@ -149,7 +169,9 @@ export default function SessionCard({
                   {fullName(participant)}
                 </span>
               </span>
-              <Button variant="remove" onClick={() => onRemoveParticipant(session.id, participant.id)} aria-label="Retirer">×</Button>
+              {(isAdmin || String(participant.id) === String(currentParticipantId || "")) && (
+                <Button variant="remove" onClick={() => onRemoveParticipant(session.id, participant.id)} aria-label="Retirer">×</Button>
+              )}
             </div>
           ))
         )}
