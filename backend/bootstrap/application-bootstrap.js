@@ -56,7 +56,30 @@ export async function startApplication({
   // Placé après l'enregistrement de toutes les routes : les handlers async
   // sécurisés pour Express 4 transmettent ici leurs Promise rejetées.
   app.use((error, req, res, next) => {
-    console.error("Erreur HTTP non gérée :", error);
+    console.error(JSON.stringify({
+      event: "http_unhandled_error",
+      requestId: req.requestId || null,
+      diagnosticStage: req.requestDiagnosticStage || null,
+      method: req.method || null,
+      path: String(req.url || "/").split("?", 1)[0],
+      errorName: error?.name || null,
+      errorCode: error?.code || null,
+      errorType: error?.type || null,
+      status: error?.status || error?.statusCode || null,
+      severity: error?.severity || null,
+      detail: error?.detail || null,
+      hint: error?.hint || null,
+      schema: error?.schema || null,
+      table: error?.table || null,
+      column: error?.column || null,
+      constraint: error?.constraint || null,
+      routine: error?.routine || null,
+      message: error?.message || String(error),
+      stack: error?.stack || null,
+      causeName: error?.cause?.name || null,
+      causeCode: error?.cause?.code || null,
+      causeMessage: error?.cause?.message || null,
+    }));
     if (res.headersSent) return next(error);
 
     const requestedStatus = Number(error?.status);
