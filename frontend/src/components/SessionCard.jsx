@@ -47,8 +47,7 @@ export default function SessionCard({
   const canManageSupervisor = Boolean(isAdmin || canManageSession);
   const freeSessionPassports = new Set(["jaune", "orange", "vert", "bleu"]);
   const availableParticipants = participants.filter((participant) => (
-    (isAdmin || String(participant.id) === String(currentParticipantId || ""))
-    && !sessionAttendanceIds.includes(String(participant.id))
+    !sessionAttendanceIds.includes(String(participant.id))
     && (session.status !== "libre" || freeSessionPassports.has(normalizePassport(participant.passport)))
   ));
   const eligibleSupervisors = alphabeticalParticipants.filter((participant) =>
