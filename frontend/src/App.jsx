@@ -1460,6 +1460,7 @@ async function handleThemePreferenceChange(nextTheme) {
             USE_API={USE_API}
             canManageAccountsAndLogs={canManageAccountsAndLogs}
             adminAccessLogs={adminAccessLogs}
+            onRefreshLogs={loadAdminAccessData}
             exportAllData={exportAllData}
             importJsonFile={importJsonFile}
             importMessage={importMessage}
