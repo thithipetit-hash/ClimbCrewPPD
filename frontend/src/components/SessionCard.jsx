@@ -29,10 +29,11 @@ export default function SessionCard({
   onAddParticipant,
   onRemoveParticipant,
 }) {
+  const normalizedSession = normalizeSessionRoles(session);
   const sessionParticipantIds = getSessionParticipantIds(session);
-  const sessionAttendanceIds = getSessionAttendanceIds(session);
+  const sessionAttendanceIds = getSessionAttendanceIds(normalizedSession);
   const roleParticipantIds = new Set(
-    [session.encadrantId, session.referentId].filter(Boolean).map(String),
+    [normalizedSession.encadrantId, normalizedSession.referentId].filter(Boolean).map(String),
   );
   const inscrits = sessionParticipantIds
     .filter((id) => !roleParticipantIds.has(String(id)))
