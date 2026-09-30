@@ -83,7 +83,7 @@ export async function startApplication({
     };
     console.error(JSON.stringify(errorRecord));
     if (
-      errorRecord.path === "/auth/request-access"
+      ["/auth/request-access", "/api/auth/request-access", "/v1/auth/request-access"].includes(errorRecord.path)
       || String(errorRecord.diagnosticStage || "").startsWith("request_access.")
     ) {
       writeRuntimeDiagnosticLog({
