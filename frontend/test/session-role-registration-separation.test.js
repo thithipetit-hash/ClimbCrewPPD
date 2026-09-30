@@ -34,7 +34,7 @@ test("la désinscription d'un participant ne retire pas son rôle de séance", (
 });
 
 test("les rôles comptent dans l'effectif sans apparaître dans la liste des inscrits", () => {
-  assert.match(sessionCardSource, /const sessionAttendanceIds = getSessionAttendanceIds\(session\)/);
+  assert.match(sessionCardSource, /const sessionAttendanceIds = getSessionAttendanceIds\(normalizedSession\)/);
   assert.match(sessionCardSource, /const occupied = sessionAttendanceIds\.length/);
   assert.match(sessionCardSource, /\.filter\(\(id\) => !roleParticipantIds\.has\(String\(id\)\)\)/);
   assert.match(sessionCardSource, /!sessionAttendanceIds\.includes\(String\(participant\.id\)\)/);
