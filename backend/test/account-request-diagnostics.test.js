@@ -18,7 +18,11 @@ test("la création de compte journalise l’étape, le schéma et les diagnostic
     "verification_token_insert",
     "transaction_commit",
   ]) {
-    assert.match(serviceSource, new RegExp(`(?:stage =|setStage\\() ["']?${stage}`.replace(") ", ")")));
+    assert.ok(
+      serviceSource.includes(`stage = "${stage}"`)
+        || serviceSource.includes(`setStage("${stage}")`),
+      `étape absente : ${stage}`,
+    );
   }
 
   for (const field of [
