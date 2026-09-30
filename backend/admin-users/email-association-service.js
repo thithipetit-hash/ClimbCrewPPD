@@ -34,6 +34,39 @@ function emailLogDetails(result, email) {
   };
 }
 
+function traceAccountRequest({ req, stage, email, userId = null, transactionCommitted = false, error = null }) {
+  const emailDomain = String(email || "").split("@")[1]?.toLowerCase() || null;
+  const record = {
+    event: "account_request_trace",
+    requestId: req?.requestId || null,
+    stage,
+    userId,
+    emailDomain,
+    transactionCommitted: Boolean(transactionCommitted),
+  };
+
+  if (error) {
+    Object.assign(record, {
+      errorName: error?.name || null,
+      errorCode: error?.code || null,
+      severity: error?.severity || null,
+      detail: error?.detail || null,
+      hint: error?.hint || null,
+      schema: error?.schema || null,
+      table: error?.table || null,
+      column: error?.column || null,
+      constraint: error?.constraint || null,
+      routine: error?.routine || null,
+      message: error?.message || String(error),
+      stack: error?.stack || null,
+    });
+    console.error(JSON.stringify(record));
+    return;
+  }
+
+  console.info(JSON.stringify(record));
+}
+
 function validatePublicRequestIdentity({ prenom, nom, email }) {
   if (!prenom || !nom || !email) {
     return "Prénom, nom et email sont requis";
@@ -125,18 +158,34 @@ export async function requestAccessByEmailOnly(req, res) {
     });
   }
 
-  const client = await getPool().connect();
-  try {
-    await client.query("begin");
+  let client = null;
+  let stage = "database_connect";
+  let transactionStarted = false;
+  let transactionCommitted = false;
+  let userId = null;
 
+  traceAccountRequest({ req, stage: "request_validated", email });
+
+  try {
+    client = await getPool().connect();
+
+    stage = "transaction_begin";
+    await client.query("begin");
+    transactionStarted = true;
+
+    stage = "existing_account_lookup";
     const existing = await client.query(
       `select id from users where climbcrew_normalize_email(email) = climbcrew_normalize_email($1) limit 1`,
       [email],
     );
     if (existing.rowCount) {
+      stage = "existing_account_rollback";
       await client.query("rollback");
+      transactionStarted = false;
+      userId = existing.rows[0].id;
+      traceAccountRequest({ req, stage: "existing_account", email, userId });
       await writeAccessLog({
-        userId: existing.rows[0].id,
+        userId,
         eventType: "request_access_existing_email",
         success: false,
         req,
@@ -150,6 +199,7 @@ export async function requestAccessByEmailOnly(req, res) {
     // associer dès l'inscription permettait à un compte jamais vérifié de
     // verrouiller indéfiniment une fiche, sans qu'un administrateur ne puisse
     // même le voir pour le corriger.
+    stage = "password_hash";
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const verificationToken = crypto.randomBytes(24).toString("hex");
     const verificationTokenHash = hashToken(verificationToken);
@@ -157,6 +207,7 @@ export async function requestAccessByEmailOnly(req, res) {
       Date.now() + EMAIL_VERIFICATION_DURATION_MS,
     ).toISOString();
 
+    stage = "user_insert";
     const userResult = await client.query(
       `
         insert into users (
@@ -168,7 +219,9 @@ export async function requestAccessByEmailOnly(req, res) {
       [email, prenom, nom, passwordHash],
     );
     const user = userResult.rows[0];
+    userId = user.id;
 
+    stage = "verification_token_insert";
     await client.query(
       `
         insert into email_verification_tokens (user_id, token_hash, expires_at)
@@ -177,8 +230,19 @@ export async function requestAccessByEmailOnly(req, res) {
       [user.id, verificationTokenHash, verificationExpiresAt],
     );
 
+    stage = "transaction_commit";
     await client.query("commit");
+    transactionStarted = false;
+    transactionCommitted = true;
+    traceAccountRequest({
+      req,
+      stage: "database_committed",
+      email,
+      userId,
+      transactionCommitted,
+    });
 
+    stage = "access_log_write";
     await writeAccessLog({
       userId: user.id,
       eventType: "request_access",
@@ -191,12 +255,20 @@ export async function requestAccessByEmailOnly(req, res) {
       },
     });
 
+    stage = "confirmation_email_send";
     try {
       const emailResult = await sendAccountRequestConfirmation({
         email,
         prenom,
         nom,
         verificationUrl: buildEmailVerificationUrl(verificationToken),
+      });
+      traceAccountRequest({
+        req,
+        stage: emailResult.sent ? "confirmation_email_sent" : "confirmation_email_skipped",
+        email,
+        userId,
+        transactionCommitted,
       });
       await writeAccessLog({
         userId: user.id,
@@ -211,7 +283,14 @@ export async function requestAccessByEmailOnly(req, res) {
         },
       });
     } catch (error) {
-      console.error("Envoi de la confirmation de création de compte impossible :", error);
+      traceAccountRequest({
+        req,
+        stage: "confirmation_email_failed",
+        email,
+        userId,
+        transactionCommitted,
+        error,
+      });
       await writeAccessLog({
         userId: user.id,
         eventType: "account_request_confirmation_email_failed",
@@ -221,12 +300,42 @@ export async function requestAccessByEmailOnly(req, res) {
       });
     }
 
+    traceAccountRequest({
+      req,
+      stage: "request_completed",
+      email,
+      userId,
+      transactionCommitted,
+    });
     return publicRequestResponse(res);
   } catch (error) {
-    await client.query("rollback").catch(() => undefined);
-    console.error("Création de compte impossible :", error);
+    if (client && transactionStarted && !transactionCommitted) {
+      try {
+        await client.query("rollback");
+        transactionStarted = false;
+      } catch (rollbackError) {
+        traceAccountRequest({
+          req,
+          stage: "transaction_rollback_failed",
+          email,
+          userId,
+          transactionCommitted,
+          error: rollbackError,
+        });
+      }
+    }
+
+    traceAccountRequest({
+      req,
+      stage,
+      email,
+      userId,
+      transactionCommitted,
+      error,
+    });
     return res.status(500).json({ error: "Création de compte momentanément impossible" });
   } finally {
-    client.release();
+    client?.release();
   }
 }
+
