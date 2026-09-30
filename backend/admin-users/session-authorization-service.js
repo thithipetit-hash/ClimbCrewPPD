@@ -382,9 +382,15 @@ async function mutateSessionParticipant(req, res, { remove = false } = {}) {
     const actorParticipantId = normalizedId(req.auth?.user?.participantId);
     const isAdmin = req.auth?.user?.role === "admin";
 
-    if (!isAdmin && targetParticipantId !== actorParticipantId) {
+    if (!isAdmin && !actorParticipantId) {
       return res.status(403).json({
-        error: "Un utilisateur ne peut modifier que sa propre inscription à une séance.",
+        error: "Le compte doit être associé à un grimpeur pour modifier les inscriptions.",
+      });
+    }
+
+    if (remove && !isAdmin && targetParticipantId !== actorParticipantId) {
+      return res.status(403).json({
+        error: "Un utilisateur ne peut retirer que sa propre inscription à une séance.",
       });
     }
 
@@ -405,31 +411,47 @@ async function mutateSessionParticipant(req, res, { remove = false } = {}) {
 
       const requestedSession = validateSessionPayload(req.body?.session || {}, req.params.id);
       const privileges = await loadActorPrivileges(client, actorParticipantId);
-      const creationPolicy = evaluateSessionMutation({
-        existingSession: null,
-        requestedSession: {
-          ...requestedSession,
-          participantIds: [targetParticipantId],
-        },
-        previousParticipantIds: [],
-        actorParticipantId,
-        isAdmin,
-        ...privileges,
-      });
-      if (!creationPolicy.allowed) {
-        await client.query("rollback");
-        return res.status(creationPolicy.status || 403).json({
-          error: creationPolicy.error || "Création de la séance non autorisée",
-        });
-      }
-
-      const resolvedStatus = requestedSession.status
-        || getDefaultSessionStatus(requestedSession.date, requestedSession.slot);
+      const canManageSession = isSessionManager(privileges);
+      const defaultStatus = getDefaultSessionStatus(requestedSession.date, requestedSession.slot);
+      const resolvedStatus = requestedSession.status || defaultStatus;
       const roleSelection = normalizeSessionRoles({
         ...requestedSession,
         status: resolvedStatus,
       });
-      await assertSessionSupervisorEligibility(client, roleSelection);
+
+      let canConfigureSession = isAdmin || canManageSession;
+      if (!canConfigureSession) {
+        const requestsNonDefaultStatus = resolvedStatus !== defaultStatus;
+        const requestsSupervisor = Boolean(roleSelection.encadrantId || roleSelection.referentId);
+        if (requestsNonDefaultStatus || requestsSupervisor) {
+          await client.query("rollback");
+          return res.status(403).json({
+            error: "Seuls les encadrants ou référents peuvent changer le type ou le responsable d’une séance.",
+          });
+        }
+      } else {
+        const creationPolicy = evaluateSessionMutation({
+          existingSession: null,
+          requestedSession: {
+            ...requestedSession,
+            participantIds: [],
+          },
+          previousParticipantIds: [],
+          actorParticipantId,
+          isAdmin,
+          ...privileges,
+        });
+        if (!creationPolicy.allowed) {
+          await client.query("rollback");
+          return res.status(creationPolicy.status || 403).json({
+            error: creationPolicy.error || "Création de la séance non autorisée",
+          });
+        }
+      }
+
+      if (canConfigureSession) {
+        await assertSessionSupervisorEligibility(client, roleSelection);
+      }
       const createdSession = await client.query(
         `insert into sessions (id, date, slot, status, encadrant_id, referent_id)
          values ($1,$2,$3,$4,$5,$6)
@@ -438,13 +460,9 @@ async function mutateSessionParticipant(req, res, { remove = false } = {}) {
           requestedSession.id,
           requestedSession.date,
           requestedSession.slot,
-          resolvedStatus,
-          creationPolicy.canManageAll || creationPolicy.canManageRoles
-            ? roleSelection.encadrantId
-            : null,
-          creationPolicy.canManageAll || creationPolicy.canManageRoles
-            ? roleSelection.referentId
-            : null,
+          canConfigureSession ? resolvedStatus : defaultStatus,
+          canConfigureSession ? roleSelection.encadrantId : null,
+          canConfigureSession ? roleSelection.referentId : null,
         ],
       );
       session = createdSession.rows[0];
