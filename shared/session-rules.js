@@ -22,6 +22,19 @@ export function isQualifiedSessionSupervisor(participant, status) {
   return false;
 }
 
+export function normalizeSessionRoles(session) {
+  const role = getSessionSupervisorRole(session?.status);
+  return {
+    ...session,
+    encadrantId: role === "encadrant"
+      ? normalizeSessionPersonId(session?.encadrantId ?? session?.encadrant_id)
+      : null,
+    referentId: role === "referent"
+      ? normalizeSessionPersonId(session?.referentId ?? session?.referent_id)
+      : null,
+  };
+}
+
 export function getSessionAttendanceIds(session) {
   const participantIds = (session?.participantIds || []).map(String);
   const role = getSessionSupervisorRole(session?.status);
