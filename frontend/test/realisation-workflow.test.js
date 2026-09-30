@@ -31,8 +31,21 @@ test("le payload transporte explicitement modeRealisation", () => {
   assert.equal("participantId" in payload, false);
 });
 
-test("participantIds reste explicite tandis que l'effectif inclut les rôles sans doublon", () => {
-  const session = { participantIds:["p1","e1"], encadrantId:"e1", referentId:"r1" };
-  assert.deepEqual(getSessionParticipantIds(session), ["p1","e1"]);
-  assert.deepEqual(getSessionAttendanceIds(session), ["p1","e1","r1"]);
+test("participantIds reste explicite tandis que l'effectif inclut seulement le rôle actif sans doublon", () => {
+  const encadree = {
+    status: "encadree",
+    participantIds:["p1","e1"],
+    encadrantId:"e1",
+    referentId:"r1",
+  };
+  const libre = {
+    status: "libre",
+    participantIds:["p1"],
+    encadrantId:"e1",
+    referentId:"r1",
+  };
+
+  assert.deepEqual(getSessionParticipantIds(encadree), ["p1","e1"]);
+  assert.deepEqual(getSessionAttendanceIds(encadree), ["p1","e1"]);
+  assert.deepEqual(getSessionAttendanceIds(libre), ["p1","r1"]);
 });
