@@ -76,7 +76,8 @@ export function buildAccountRequestConfirmation({ prenom, nom, publicUrl, verifi
     normalizedVerificationUrl
       ? "Pour confirmer que tu es bien propriétaire de cette adresse, clique sur le lien de confirmation reçu dans ce message."
       : "Pour confirmer que tu es bien propriétaire de cette adresse, réponds à ce message ou contacte un administrateur du club.",
-    "Dès que ton adresse e-mail sera confirmée, ton compte sera activé automatiquement.",
+    "Après confirmation de ton adresse e-mail, ton compte restera en attente.",
+    "Un administrateur devra l’associer à une fiche grimpeur puis l’approuver avant que tu puisses te connecter.",
     normalizedVerificationUrl ? `Confirmer ma demande : ${normalizedVerificationUrl}` : "",
     normalizedUrl ? `ClimbCrew : ${normalizedUrl}` : "",
   ].filter(Boolean).join("\n");
@@ -89,8 +90,8 @@ export function buildAccountRequestConfirmation({ prenom, nom, publicUrl, verifi
       <p style="margin:0 0 14px;">Ta demande de création de compte ClimbCrew a bien été enregistrée.</p>
       <p style="margin:0 0 14px;">Pour confirmer que tu es bien propriétaire de cette adresse e-mail, clique sur le bouton ci-dessous.</p>
       ${verifyLink}
-      <p style="margin:18px 0 14px;">Dès que ton adresse e-mail sera confirmée, ton compte sera activé automatiquement.</p>
-      <p style="margin:0;">Tu pourras alors te connecter sans attendre une approbation manuelle supplémentaire.</p>
+      <p style="margin:18px 0 14px;">Après confirmation de ton adresse e-mail, ton compte restera en attente.</p>
+      <p style="margin:0;">Un administrateur devra l’associer à une fiche grimpeur puis l’approuver avant que tu puisses te connecter.</p>
       ${loginLink}
     `,
   });
@@ -112,19 +113,19 @@ export function buildAdminAccountRequestReadyEmail({ prenom, nom, email, publicU
     "Bonjour,",
     "",
     `La demande de compte de ${displayName} a été confirmée par le propriétaire de l’adresse ${safeEmail}.`,
-    "Le compte a été activé automatiquement après cette vérification.",
-    "Vous pouvez toujours le consulter et intervenir manuellement dans l’administration si nécessaire.",
+    "L’adresse e-mail est confirmée, mais le compte reste en attente.",
+    "Associez-le à une fiche grimpeur puis approuvez-le depuis l’administration.",
     normalizedUrl ? `ClimbCrew : ${normalizedUrl}` : "",
   ].filter(Boolean).join("\n");
 
   const html = layout({
     title: "Demande confirmée par e-mail",
-    preview: "Une demande de compte a été confirmée par e-mail puis activée automatiquement.",
+    preview: "Une demande de compte a été confirmée par e-mail et attend une association puis une approbation.",
     content: `
       <p style="margin:0 0 16px;">Bonjour,</p>
       <p style="margin:0 0 14px;">La demande de compte de <strong>${safeName}</strong> a été confirmée par le propriétaire de l’adresse <strong>${safeEmail}</strong>.</p>
-      <p style="margin:0 0 14px;">Le compte a été activé automatiquement après cette vérification.</p>
-      <p style="margin:0;">Vous pouvez toujours le consulter et intervenir manuellement dans l’administration si nécessaire.</p>
+      <p style="margin:0 0 14px;">L’adresse e-mail est confirmée, mais le compte reste en attente.</p>
+      <p style="margin:0;">Associez-le à une fiche grimpeur puis approuvez-le depuis l’administration.</p>
       ${adminLink}
     `,
   });
