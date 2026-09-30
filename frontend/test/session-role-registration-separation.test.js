@@ -118,3 +118,15 @@ test("les statistiques de participation utilisent le même effectif que le plann
 
   assert.match(statisticsBlock, /getSessionAttendanceIds\(session\)/);
 });
+
+
+test("la liste Inscriptions propose tous les grimpeurs éligibles et pas seulement le compte courant", () => {
+  const availableBlock = sessionCardSource.slice(
+    sessionCardSource.indexOf("const availableParticipants"),
+    sessionCardSource.indexOf("const eligibleSupervisors"),
+  );
+
+  assert.match(availableBlock, /participants\.filter/);
+  assert.doesNotMatch(availableBlock, /isAdmin \|\| String\(participant\.id\)/);
+  assert.doesNotMatch(availableBlock, /String\(participant\.id\) === String\(currentParticipantId/);
+});
