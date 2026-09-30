@@ -189,6 +189,87 @@ async function run() {
   );
   assert.equal(closedRows.rowCount, 0, "l'inscription refusée a malgré tout été persistée");
 
+  // Régression planning : la liste Inscriptions permet à un membre connecté
+  // d'inscrire un autre utilisateur sans lui accorder le droit de changer le type.
+  const registrationTarget = await jsonRequest("/participants", {
+    method: "POST",
+    cookies: admin.cookies,
+    csrf: admin.csrf,
+    body: {
+      nom: "Inscription",
+      prenom: "Cible",
+      email: `inscription-cible-${Date.now()}@integration.test`,
+      passport: "vert",
+      sexe: "",
+      cotisation: true,
+      ffme: false,
+      canEncadrer: false,
+      canReferer: false,
+      canAdmin: false,
+      avatarId: "gecko",
+      crestId: "cristal",
+      profilePublic: true,
+    },
+  });
+  assert.equal(registrationTarget.response.status, 201, JSON.stringify(registrationTarget.payload));
+  const registrationTargetId = String(registrationTarget.payload.id);
+  const registrationSessionId = `registration-${Date.now()}`;
+  const registrationSession = {
+    id: registrationSessionId,
+    date: "2026-08-26",
+    slot: "soir",
+    status: "libre",
+    encadrantId: null,
+    referentId: null,
+    participantIds: [],
+  };
+  const registerOtherMember = await jsonRequest(
+    `/sessions/${registrationSessionId}/participants/${registrationTargetId}`,
+    {
+      method: "POST",
+      cookies: member.cookies,
+      csrf: member.csrf,
+      body: { session: registrationSession },
+    },
+  );
+  assert.equal(
+    registerOtherMember.response.status,
+    200,
+    JSON.stringify(registerOtherMember.payload),
+  );
+  assert.ok(registerOtherMember.payload.participantIds.includes(registrationTargetId));
+  const persistedOtherRegistration = await pool.query(
+    `select 1 from session_participants where session_id = $1 and participant_id = $2`,
+    [registrationSessionId, registrationTargetId],
+  );
+  assert.equal(
+    persistedOtherRegistration.rowCount,
+    1,
+    "l'inscription d'un autre utilisateur n'a pas été persistée",
+  );
+
+  const forbiddenTypeSessionId = `registration-type-${Date.now()}`;
+  const forbiddenTypeChange = await jsonRequest(
+    `/sessions/${forbiddenTypeSessionId}/participants/${registrationTargetId}`,
+    {
+      method: "POST",
+      cookies: member.cookies,
+      csrf: member.csrf,
+      body: {
+        session: {
+          ...registrationSession,
+          id: forbiddenTypeSessionId,
+          status: "encadree",
+        },
+      },
+    },
+  );
+  assert.equal(
+    forbiddenTypeChange.response.status,
+    403,
+    "un membre standard a pu changer le type d'une séance lors d'une inscription",
+  );
+
   // Régression planning : un encadrant doit pouvoir s'affecter lui-même et
   // l'affectation doit survivre à la relecture PostgreSQL.
   await pool.query(
