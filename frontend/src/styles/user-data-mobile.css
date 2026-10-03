@@ -13,6 +13,19 @@
   font-size: inherit;
 }
 
+.user-data-desktop-table th:last-child,
+.user-data-desktop-table td:last-child {
+  width: 96px !important;
+  min-width: 96px;
+}
+
+.user-data-desktop-table th:last-child button,
+.user-data-desktop-table td:last-child button {
+  width: 100% !important;
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .user-data-mobile-controls,
 .user-data-mobile-list {
   display: none;
