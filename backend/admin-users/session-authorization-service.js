@@ -1,3 +1,5 @@
+[Reading 758 lines from start (total: 758 lines, 0 remaining)]
+
 import { getPool } from "./database.js";
 import { validateSessionPayload } from "../validation.js";
 import { getDefaultSessionStatus } from "../../shared/session-default-status.js";
@@ -634,7 +636,7 @@ export async function updateSessionWithAuthorization(req, res) {
       );
       sessionRow = result.rows[0];
 
-      if (!existing) {
+      {
         const nextParticipantIds = normalizedRequestedParticipantIds;
         const previousParticipantSet = new Set(previousParticipantIds);
         const nextParticipantSet = new Set(nextParticipantIds);
@@ -756,3 +758,5 @@ export async function updateSessionWithAuthorization(req, res) {
     client.release();
   }
 }
+
+[executed on device: DESKTOP-SCHOOL (d7b4195b-b1d9-44f3-9da7-10f512c97422)]
