@@ -446,28 +446,6 @@ function App() {
   });
 
 
-  const {
-    addParticipant,
-    updateParticipant,
-    updateMyProfile,
-    deleteParticipant,
-    getParticipantSessions,
-  } = useParticipantManagement({
-    useApi: USE_API,
-    state,
-    setState,
-    newParticipant,
-    setNewParticipant,
-    myParticipant,
-    myParticipantId,
-    setIsSyncing,
-    setRecentlyAddedParticipantIds,
-    setSyncMessage,
-    setConfirmationMessage,
-    requestConfirmation,
-  });
-
-
   const myRealisations = useMemo(() => {
     if (!myParticipantId) return [];
     return state.realisations
