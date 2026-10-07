@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-test("la note de une à cinq étoiles est saisie avec la réalisation", async () => {
+test("la note de une à cinq étoiles est saisie avec la réalisation sans surcharger la vue condensée", async () => {
   const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const modal = await readFile(new URL("../src/components/RealisationModal.jsx", import.meta.url), "utf8");
   const voies = await readFile(new URL("../src/pages/Voies.jsx", import.meta.url), "utf8");
@@ -13,8 +13,8 @@ test("la note de une à cinq étoiles est saisie avec la réalisation", async ()
   assert.match(modal, /rating <= newRealisation\.rating/);
   assert.match(modal, /\? "★" : "☆"/);
   assert.match(source, /routeRatingsById/);
-  assert.match(voies, /routeRating\.average\.toFixed\(1\)/);
-  assert.match(voies, /Pas encore notée/);
+  assert.doesNotMatch(voies, /routeRating\.average\.toFixed\(1\)/);
+  assert.doesNotMatch(voies, /Pas encore notée/);
   assert.doesNotMatch(voies, /0 réalisation|routeRating\.count\} réalisation/);
 });
 

@@ -22,7 +22,7 @@ test("les lignes sombres des classements utilisent un texte clair", async () => 
   assert.match(styles, /\.app \.card \.lead-grade-row > span[\s\S]*-webkit-text-fill-color:#ffffff!important/);
 });
 
-test("les caractéristiques sont associées à la voie à sa création et à sa modification", async () => {
+test("les caractéristiques restent associées à la création et à la modification sans surcharger la vue condensée", async () => {
   const source = await readFile(new URL("../src/hooks/useRouteManagement.js", import.meta.url), "utf8");
   const uiConfig = await readFile(new URL("../src/lib/ui-config.js", import.meta.url), "utf8");
   const voies = await readFile(new URL("../src/pages/Voies.jsx", import.meta.url), "utf8");
@@ -31,14 +31,14 @@ test("les caractéristiques sont associées à la voie à sa création et à sa 
   assert.match(source, /tags: newRoute\.tags/);
   assert.match(source, /tags: routeEditDraft\.tags/);
   assert.doesNotMatch(source, /newRealisation\.tags/);
-  assert.match(voies, /className="route-meta-line"/);
-  assert.match(voies, /Sans caractéristique/);
-  assert.match(voies, /className="route-characteristic"/);
+  assert.match(voies, /Modifier les caractéristiques de la voie/);
   assert.match(voies, /prev\.tags\.filter/);
   assert.match(voies, /\.\.\.prev\.tags/);
   assert.match(voies, /aria-pressed=\{selected\}/);
   assert.match(voies, /newRoute\.tags\.length >= 3/);
   assert.match(voies, /disabled=\{!selected && limitReached\}/);
+  assert.doesNotMatch(voies, /Sans caractéristique/);
+  assert.doesNotMatch(voies, /className="route-characteristic"/);
 });
 
 test("la création d'une voie démarre vide et utilise une case moulinette", async () => {

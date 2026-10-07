@@ -184,7 +184,7 @@ export default function Challenges({ isAdmin = false }) {
         <div className="card-header">
           <div>
             <h2 style={{ margin: 0 }}>Challenges</h2>
-            <div className="small">Les réalisations antérieures à la date de début ne comptent pas. Une même voie ne compte qu’une fois.</div>
+            <div className="small">Toute réalisation pendant la période compte, y compris un essai. Une même voie ne compte qu’une fois.</div>
           </div>
         </div>
         {badges.length > 0 && (
@@ -307,7 +307,7 @@ export default function Challenges({ isAdmin = false }) {
           <section className="card">
             <div className="card-header"><h3 style={{ margin: 0 }}>Classement</h3></div>
             {detail.ranking.length === 0 ? (
-              <div className="muted-box">Aucune réalisation qualifiante depuis le début du challenge.</div>
+              <div className="muted-box">Aucune réalisation depuis le début du challenge.</div>
             ) : (
               <div style={{ overflowX: "auto" }}>
                 <table className="table">

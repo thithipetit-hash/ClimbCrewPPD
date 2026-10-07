@@ -48,7 +48,7 @@ test("challengeBadgeDistinction différencie podium et participation", () => {
   assert.equal(challengeBadgeDistinction(4), "participation");
 });
 
-test("calculateChallengeRanking compte chaque voie réussie une seule fois et départage par date", async () => {
+test("calculateChallengeRanking compte toute voie essayée une seule fois et départage par date", async () => {
   const calls = [];
   const db = {
     async query(sql, values) {
@@ -69,8 +69,10 @@ test("calculateChallengeRanking compte chaque voie réussie une seule fois et d�
   assert.deepEqual(ranking.map(({ participantId, score, rank, finalScoringAt }) => ({ participantId, score, rank, finalScoringAt })), [
     { participantId: "2", score: 2, rank: 1, finalScoringAt: "2026-10-03" },
     { participantId: "1", score: 2, rank: 2, finalScoringAt: "2026-10-04" },
+    { participantId: "3", score: 1, rank: 3, finalScoringAt: "2026-10-02" },
   ]);
   assert.deepEqual(ranking[1].completedRouteIds.sort(), ["r1", "r2"]);
+  assert.deepEqual(ranking[2].completedRouteIds, ["r1"]);
 });
 
 test("calculateChallengeRanking transmet la date de début qui exclut l'historique", async () => {
