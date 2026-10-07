@@ -126,9 +126,13 @@ export function getPassportStyle(participant) {
 
 export function getPassportDotStyle(participant) {
   const baseStyle = PASSPORT_STYLES[getPassportColor(participant?.passport)] || PASSPORT_STYLES.sans;
+  const hasFfmeLicence = Boolean(participant?.ffme);
 
   return {
-    backgroundColor: baseStyle.backgroundColor,
+    backgroundColor: hasFfmeLicence ? baseStyle.backgroundColor : "transparent",
+    backgroundImage: hasFfmeLicence
+      ? "none"
+      : `linear-gradient(to right, ${baseStyle.backgroundColor} 0 50%, transparent 50% 100%)`,
     color: "#000000",
   };
 }
