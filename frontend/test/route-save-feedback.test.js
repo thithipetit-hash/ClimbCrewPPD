@@ -24,11 +24,14 @@ test("les vidéos d'une voie sont gérées depuis Modifier et restent accessible
   assert.match(voies, /apiUpload/);
 });
 
-test("la vue condensée ne conserve que cotation, couleur et réalisation personnelle", async () => {
+test("la vue condensée conserve cotation, couleur et réalisation personnelle avant dépliage", async () => {
   const voies = await readFile(new URL("../src/pages/Voies.jsx", import.meta.url), "utf8");
-  assert.match(voies, /className="route-primary-line">\{route\.cotationAjustee \|\| route\.cotationReference \|\| "nc"\} · \{route\.couleurPrises \|\| "Sans couleur"\}/);
+  assert.match(voies, /className="route-primary-line"/);
+  assert.match(voies, /\{route\.cotationAjustee \|\| route\.cotationReference \|\| "nc"\} · \{route\.couleurPrises \|\| "Sans couleur"\}/);
   assert.match(voies, /aria-label="Réalisation du grimpeur connecté"/);
   assert.match(voies, /formatRouteProgress\(myRouteProgress, route\)/);
+  assert.match(voies, /\{isExpanded && \(/);
+  assert.match(voies, /aria-label="Détails complets de la voie"/);
   assert.match(voies, /id="route-realisation-filter"/);
   assert.match(voies, /ROUTE_REALISATION_FILTER_OPTIONS/);
   assert.doesNotMatch(voies, /Consensus \{routeAggregatesById/);
