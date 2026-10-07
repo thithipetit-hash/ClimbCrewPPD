@@ -1,0 +1,180 @@
+name: Apply route expand collapse
+
+on:
+  push:
+    branches:
+      - feature-route-expand-collapse-261007
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature-route-expand-collapse-261007
+          fetch-depth: 0
+
+      - name: Apply route expand/collapse change
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("frontend/src/pages/Voies.jsx")
+          text = path.read_text()
+
+          state_needle = '  const [routeProgressError, setRouteProgressError] = React.useState("");\n'
+          state_replacement = state_needle + '  const [expandedRouteIds, setExpandedRouteIds] = React.useState(() => new Set());\n'
+          if state_needle not in text:
+              raise SystemExit("route progress state anchor not found")
+          text = text.replace(state_needle, state_replacement, 1)
+
+          function_needle = '  function effectiveVideoUrls(route) {\n'
+          function_replacement = '''  function toggleRouteDetails(routeId) {
+            const key = String(routeId);
+            setExpandedRouteIds((current) => {
+              const next = new Set(current);
+              if (next.has(key)) next.delete(key);
+              else next.add(key);
+              return next;
+            });
+          }
+
+          function handleRouteSummaryKeyDown(event, routeId) {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            toggleRouteDetails(routeId);
+          }
+
+          function effectiveVideoUrls(route) {
+          '''
+          if function_needle not in text:
+              raise SystemExit("effectiveVideoUrls anchor not found")
+          text = text.replace(function_needle, function_replacement, 1)
+
+          map_needle = '''                    const videoCount = effectiveVideoUrls(route).length;
+                    const videoInputId = `route-video-upload-${route.id}`;
+                    const myRouteProgress = realisationsByRoute.get(String(route.id)) || [];
+          '''
+          map_replacement = '''                    const routeRating = routeRatingsById[route.id] || { average: 0, count: 0 };
+                    const videoCount = effectiveVideoUrls(route).length;
+                    const videoInputId = `route-video-upload-${route.id}`;
+                    const myRouteProgress = realisationsByRoute.get(String(route.id)) || [];
+                    const isExpanded = expandedRouteIds.has(String(route.id));
+          '''
+          if map_needle not in text:
+              raise SystemExit("route map anchor not found")
+          text = text.replace(map_needle, map_replacement, 1)
+
+          compact_needle = '''                        ) : (
+                          <div className="card-header">
+                            <div className="route-summary">
+                              <strong className="route-primary-line">{route.cotationAjustee || route.cotationReference || "nc"} · {route.couleurPrises || "Sans couleur"}</strong>
+                              <div className="route-meta-line" aria-label="Réalisation du grimpeur connecté">{formatRouteProgress(myRouteProgress, route)}</div>
+                            </div>
+                            <div className="group">
+                              <Button variant="secondary" onClick={() => openRealisationModal(route.id, selectedParticipantProgress)}>Réalisation</Button>
+                              {videoCount > 0 && <Button variant="secondary" onClick={() => setVideoRouteId(route.id)}>Vidéos · {videoCount}</Button>}
+                              {adminUnlocked && <Button variant="secondary" onClick={() => setQrRouteId(route.id)}>QR code</Button>}
+                              {adminUnlocked && <Button variant="secondary" onClick={() => startRouteEdition(route)}>Modifier</Button>}
+                            </div>
+                          </div>
+                        )}
+          '''
+          expanded_replacement = '''                        ) : (
+                          <div className="card-header">
+                            <div
+                              className="route-summary"
+                              role="button"
+                              tabIndex={0}
+                              aria-expanded={isExpanded}
+                              aria-label={`${isExpanded ? "Masquer" : "Afficher"} les détails de ${formatRouteName(route)}`}
+                              onClick={() => toggleRouteDetails(route.id)}
+                              onKeyDown={(event) => handleRouteSummaryKeyDown(event, route.id)}
+                              style={{ cursor: "pointer", flex: 1 }}
+                            >
+                              <strong className="route-primary-line">
+                                {route.cotationAjustee || route.cotationReference || "nc"} · {route.couleurPrises || "Sans couleur"}
+                                <span className="small" aria-hidden="true" style={{ marginLeft: 8 }}>{isExpanded ? "▴" : "▾"}</span>
+                              </strong>
+                              <div className="route-meta-line" aria-label="Réalisation du grimpeur connecté">{formatRouteProgress(myRouteProgress, route)}</div>
+                              {isExpanded && (
+                                <div
+                                  className="route-expanded-details"
+                                  aria-label="Détails complets de la voie"
+                                  style={{ marginTop: 10, display: "grid", gap: 4 }}
+                                >
+                                  <div><strong>Nom :</strong> {route.nomVoie || "Sans nom"}</div>
+                                  <div><strong>Corde :</strong> {normalizeRopeNumber(route.numeroCorde)}</div>
+                                  <div><strong>Couleur :</strong> {route.couleurPrises || "Sans couleur"}</div>
+                                  <div><strong>Ouvreur :</strong> {route.nomOuvreur || "Non renseigné"}</div>
+                                  <div><strong>Cotation de référence :</strong> {route.cotationReference || "nc"}</div>
+                                  <div><strong>Cotation ajustée :</strong> {route.cotationAjustee || route.cotationReference || "nc"}</div>
+                                  <div><strong>Consensus :</strong> {routeAggregatesById[route.id]?.consensusGrade || "nc"}</div>
+                                  <div><strong>Type :</strong> {route.moulinetteOnly ? "Moulinette uniquement" : "En tête / Moulinette"}</div>
+                                  <div><strong>Caractéristiques :</strong> {route.tags?.length > 0 ? route.tags.map((tag) => ROUTE_TAGS.find((item) => item.value === tag)?.label || tag).join(", ") : "Aucune"}</div>
+                                  <div><strong>Note :</strong> {routeRating.count ? `★ ${Number(routeRating.average || 0).toFixed(1)} · ${routeRating.count} avis` : "Aucun avis"}</div>
+                                  <div><strong>Vidéos :</strong> {videoCount}</div>
+                                </div>
+                              )}
+                            </div>
+                            <div className="group">
+                              <Button variant="secondary" onClick={() => openRealisationModal(route.id, selectedParticipantProgress)}>Réalisation</Button>
+                              {videoCount > 0 && <Button variant="secondary" onClick={() => setVideoRouteId(route.id)}>Vidéos · {videoCount}</Button>}
+                              {adminUnlocked && <Button variant="secondary" onClick={() => setQrRouteId(route.id)}>QR code</Button>}
+                              {adminUnlocked && <Button variant="secondary" onClick={() => startRouteEdition(route)}>Modifier</Button>}
+                            </div>
+                          </div>
+                        )}
+          '''
+          if compact_needle not in text:
+              raise SystemExit("compact route block not found")
+          text = text.replace(compact_needle, expanded_replacement, 1)
+          path.write_text(text)
+
+          Path("VERSION").write_text("261007.003\n")
+
+          Path("frontend/test/route-expand-collapse.test.js").write_text('''import test from "node:test";
+          import assert from "node:assert/strict";
+          import { readFile } from "node:fs/promises";
+
+          test("chaque voie peut afficher puis masquer tous ses détails", async () => {
+            const voies = await readFile(new URL("../src/pages/Voies.jsx", import.meta.url), "utf8");
+
+            assert.match(voies, /expandedRouteIds/);
+            assert.match(voies, /toggleRouteDetails\(routeId\)/);
+            assert.match(voies, /aria-expanded=\{isExpanded\}/);
+            assert.match(voies, /onClick=\{\(\) => toggleRouteDetails\(route\.id\)\}/);
+            assert.match(voies, /event\.key !== "Enter" && event\.key !== " "/);
+            assert.match(voies, /Détails complets de la voie/);
+            for (const label of [
+              "Nom :",
+              "Corde :",
+              "Couleur :",
+              "Ouvreur :",
+              "Cotation de référence :",
+              "Cotation ajustée :",
+              "Consensus :",
+              "Type :",
+              "Caractéristiques :",
+              "Note :",
+              "Vidéos :",
+            ]) {
+              assert.match(voies, new RegExp(label));
+            }
+            assert.match(voies, /formatRouteProgress\(myRouteProgress, route\)/);
+          });
+          ''')
+          PY
+
+          rm .github/workflows/apply-route-expand-collapse.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VERSION frontend/src/pages/Voies.jsx frontend/test/route-expand-collapse.test.js .github/workflows/apply-route-expand-collapse.yml
+          git commit -m "feat: expand route details on click"
+          git push origin HEAD:feature-route-expand-collapse-261007
