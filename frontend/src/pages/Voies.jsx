@@ -79,6 +79,7 @@ export default function Voies({
   const [currentParticipantId, setCurrentParticipantId] = React.useState("");
   const [myRouteRealisations, setMyRouteRealisations] = React.useState([]);
   const [routeProgressError, setRouteProgressError] = React.useState("");
+  const [expandedRouteIds, setExpandedRouteIds] = React.useState(() => new Set());
 
   const allRoutes = routeDisplayGroups.flatMap((group) => group.routes);
   const videoRoute = allRoutes.find((route) => String(route.id) === String(videoRouteId)) || null;
@@ -132,6 +133,22 @@ export default function Voies({
     setComparisonOpen(false);
     setVideoSaveStatus("");
   }, [videoRouteId]);
+
+  function toggleRouteDetails(routeId) {
+  const key = String(routeId);
+  setExpandedRouteIds((current) => {
+    const next = new Set(current);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
+}
+
+function handleRouteSummaryKeyDown(event, routeId) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  toggleRouteDetails(routeId);
+}
 
   function effectiveVideoUrls(route) {
     const local = videoDraftByRouteId[route.id];
@@ -444,9 +461,11 @@ export default function Voies({
               {group.routes.length === 0 ? <div className="small">Aucune voie.</div> : (
                 <div className="stack">
                   {group.routes.map((route) => {
+                    const routeRating = routeRatingsById[route.id] || { average: 0, count: 0 };
                     const videoCount = effectiveVideoUrls(route).length;
                     const videoInputId = `route-video-upload-${route.id}`;
                     const myRouteProgress = realisationsByRoute.get(String(route.id)) || [];
+                    const isExpanded = expandedRouteIds.has(String(route.id));
                     return (
                       <div className={`route-card ${route.moulinetteOnly ? "moulinette-only" : ""}`} key={route.id} style={getRouteCardStyle(route.couleurPrises)}>
                         {adminUnlocked && editingRouteId === route.id && routeEditDraft ? (
@@ -482,9 +501,40 @@ export default function Voies({
                           </>
                         ) : (
                           <div className="card-header">
-                            <div className="route-summary">
-                              <strong className="route-primary-line">{route.cotationAjustee || route.cotationReference || "nc"} · {route.couleurPrises || "Sans couleur"}</strong>
+                            <div
+                    className="route-summary"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    aria-label={`${isExpanded ? "Masquer" : "Afficher"} les détails de ${formatRouteName(route)}`}
+                    onClick={() => toggleRouteDetails(route.id)}
+                    onKeyDown={(event) => handleRouteSummaryKeyDown(event, route.id)}
+                    style={{ cursor: "pointer", flex: 1 }}
+                  >
+                              <strong className="route-primary-line">
+                      {route.cotationAjustee || route.cotationReference || "nc"} · {route.couleurPrises || "Sans couleur"}
+                      <span className="small" aria-hidden="true" style={{ marginLeft: 8 }}>{isExpanded ? "▴" : "▾"}</span>
+                    </strong>
                               <div className="route-meta-line" aria-label="Réalisation du grimpeur connecté">{formatRouteProgress(myRouteProgress, route)}</div>
+                    {isExpanded && (
+                      <div
+                        className="route-expanded-details"
+                        aria-label="Détails complets de la voie"
+                        style={{ marginTop: 10, display: "grid", gap: 4 }}
+                      >
+                        <div><strong>Nom :</strong> {route.nomVoie || "Sans nom"}</div>
+                        <div><strong>Corde :</strong> {normalizeRopeNumber(route.numeroCorde)}</div>
+                        <div><strong>Couleur :</strong> {route.couleurPrises || "Sans couleur"}</div>
+                        <div><strong>Ouvreur :</strong> {route.nomOuvreur || "Non renseigné"}</div>
+                        <div><strong>Cotation de référence :</strong> {route.cotationReference || "nc"}</div>
+                        <div><strong>Cotation ajustée :</strong> {route.cotationAjustee || route.cotationReference || "nc"}</div>
+                        <div><strong>Consensus :</strong> {routeAggregatesById[route.id]?.consensusGrade || "nc"}</div>
+                        <div><strong>Type :</strong> {route.moulinetteOnly ? "Moulinette uniquement" : "En tête / Moulinette"}</div>
+                        <div><strong>Caractéristiques :</strong> {route.tags?.length > 0 ? route.tags.map((tag) => ROUTE_TAGS.find((item) => item.value === tag)?.label || tag).join(", ") : "Aucune"}</div>
+                        <div><strong>Note :</strong> {routeRating.count ? `★ ${Number(routeRating.average || 0).toFixed(1)} · ${routeRating.count} avis` : "Aucun avis"}</div>
+                        <div><strong>Vidéos :</strong> {videoCount}</div>
+                      </div>
+                    )}
                             </div>
                             <div className="group">
                               <Button variant="secondary" onClick={() => openRealisationModal(route.id, selectedParticipantProgress)}>Réalisation</Button>
