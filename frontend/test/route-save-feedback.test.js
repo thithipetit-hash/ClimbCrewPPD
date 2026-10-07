@@ -12,25 +12,27 @@ test("le bouton indique l'enregistrement d'une voie en cours", async () => {
   assert.match(voies, /"Enregistrement…" : "Enregistrer"/);
 });
 
-test("les vidéos d'une voie sont gérées depuis Modifier et accessibles par le titre", async () => {
+test("les vidéos d'une voie sont gérées depuis Modifier et restent accessibles depuis la vue condensée", async () => {
   const voies = await readFile(new URL("../src/pages/Voies.jsx", import.meta.url), "utf8");
   assert.match(voies, /Vidéos de la voie/);
   assert.match(voies, /Une URL externe par ligne/);
   assert.match(voies, /videoUrls/);
-  assert.match(voies, /Voir les vidéos de cette voie/);
+  assert.match(voies, /Vidéos · \{videoCount\}/);
   assert.match(voies, /Voir la vidéo/);
   assert.match(voies, /<video/);
   assert.match(voies, /videoUploadingRouteId/);
   assert.match(voies, /apiUpload/);
 });
 
-test("la voie est présentée de façon compacte sans répéter la corde", async () => {
+test("la vue condensée ne conserve que cotation, couleur et réalisation personnelle", async () => {
   const voies = await readFile(new URL("../src/pages/Voies.jsx", import.meta.url), "utf8");
-  assert.match(voies, /className="route-primary-line"/);
-  assert.match(voies, /className="route-meta-line"/);
-  assert.match(voies, /routeSortMode !== "corde"/);
-  assert.doesNotMatch(voies, /route-filter/);
-  assert.doesNotMatch(voies, /0 réalisation|routeRating\.count\} réalisation/);
+  assert.match(voies, /className="route-primary-line">\{route\.cotationAjustee \|\| route\.cotationReference \|\| "nc"\} · \{route\.couleurPrises \|\| "Sans couleur"\}/);
+  assert.match(voies, /aria-label="Réalisation du grimpeur connecté"/);
+  assert.match(voies, /formatRouteProgress\(myRouteProgress, route\)/);
+  assert.match(voies, /id="route-realisation-filter"/);
+  assert.match(voies, /ROUTE_REALISATION_FILTER_OPTIONS/);
+  assert.doesNotMatch(voies, /Consensus \{routeAggregatesById/);
+  assert.doesNotMatch(voies, /rating-average/);
 });
 
 test("les formulaires de réalisation présentent corde, couleur, cotation, ouvreur puis nom", async () => {
