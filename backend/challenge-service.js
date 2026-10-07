@@ -1,5 +1,3 @@
-import { isSuccessfulRealisation } from "../shared/realisation-mode.js";
-
 function isoDate(value) {
   if (!value) return null;
   if (typeof value === "string") return value.slice(0, 10);
@@ -145,7 +143,6 @@ export async function calculateChallengeRanking(db, challenge, targetRoutes) {
 
   result.rows.forEach((realisation) => {
     if (!routeIdSet.has(String(realisation.voieId))) return;
-    if (!isSuccessfulRealisation(realisation)) return;
 
     const participantId = String(realisation.participantId);
     const current = byParticipant.get(participantId) || {
