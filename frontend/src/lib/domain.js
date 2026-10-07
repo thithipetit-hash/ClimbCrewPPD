@@ -127,10 +127,15 @@ export function getPassportStyle(participant) {
 export function getPassportDotStyle(participant) {
   const baseStyle = PASSPORT_STYLES[getPassportColor(participant?.passport)] || PASSPORT_STYLES.sans;
   const hasFfmeLicence = Boolean(participant?.ffme);
+  const isDiscovery = hasPassportDiscoveryMark(
+    participant?.passport,
+    participant?.passportDecouverte,
+  );
+  const showFullDot = hasFfmeLicence || isDiscovery;
 
   return {
-    backgroundColor: hasFfmeLicence ? baseStyle.backgroundColor : "transparent",
-    backgroundImage: hasFfmeLicence
+    backgroundColor: showFullDot ? baseStyle.backgroundColor : "transparent",
+    backgroundImage: showFullDot
       ? "none"
       : `linear-gradient(to right, ${baseStyle.backgroundColor} 0 50%, transparent 50% 100%)`,
     color: "#000000",
