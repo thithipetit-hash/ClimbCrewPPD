@@ -28,14 +28,17 @@ jobs:
           path = Path("frontend/src/pages/Voies.jsx")
           text = path.read_text()
 
-          state_needle = '  const [routeProgressError, setRouteProgressError] = React.useState("");\n'
-          state_replacement = state_needle + '  const [expandedRouteIds, setExpandedRouteIds] = React.useState(() => new Set());\n'
-          if state_needle not in text:
+          state_line = '  const [routeProgressError, setRouteProgressError] = React.useState("");'
+          if state_line not in text:
               raise SystemExit("route progress state anchor not found")
-          text = text.replace(state_needle, state_replacement, 1)
+          text = text.replace(
+              state_line,
+              state_line + '\n  const [expandedRouteIds, setExpandedRouteIds] = React.useState(() => new Set());',
+              1,
+          )
 
-          function_needle = '  function effectiveVideoUrls(route) {\n'
-          function_replacement = '''  function toggleRouteDetails(routeId) {
+          function_line = '  function effectiveVideoUrls(route) {'
+          functions = '''  function toggleRouteDetails(routeId) {
             const key = String(routeId);
             setExpandedRouteIds((current) => {
               const next = new Set(current);
@@ -51,44 +54,31 @@ jobs:
             toggleRouteDetails(routeId);
           }
 
-          function effectiveVideoUrls(route) {
           '''
-          if function_needle not in text:
+          if function_line not in text:
               raise SystemExit("effectiveVideoUrls anchor not found")
-          text = text.replace(function_needle, function_replacement, 1)
+          text = text.replace(function_line, functions + function_line, 1)
 
-          map_needle = '''                    const videoCount = effectiveVideoUrls(route).length;
-                    const videoInputId = `route-video-upload-${route.id}`;
-                    const myRouteProgress = realisationsByRoute.get(String(route.id)) || [];
-          '''
-          map_replacement = '''                    const routeRating = routeRatingsById[route.id] || { average: 0, count: 0 };
-                    const videoCount = effectiveVideoUrls(route).length;
-                    const videoInputId = `route-video-upload-${route.id}`;
-                    const myRouteProgress = realisationsByRoute.get(String(route.id)) || [];
-                    const isExpanded = expandedRouteIds.has(String(route.id));
-          '''
-          if map_needle not in text:
-              raise SystemExit("route map anchor not found")
-          text = text.replace(map_needle, map_replacement, 1)
+          video_line = '                    const videoCount = effectiveVideoUrls(route).length;'
+          if video_line not in text:
+              raise SystemExit("video count anchor not found")
+          text = text.replace(
+              video_line,
+              '                    const routeRating = routeRatingsById[route.id] || { average: 0, count: 0 };\n' + video_line,
+              1,
+          )
 
-          compact_needle = '''                        ) : (
-                          <div className="card-header">
-                            <div className="route-summary">
-                              <strong className="route-primary-line">{route.cotationAjustee || route.cotationReference || "nc"} · {route.couleurPrises || "Sans couleur"}</strong>
-                              <div className="route-meta-line" aria-label="Réalisation du grimpeur connecté">{formatRouteProgress(myRouteProgress, route)}</div>
-                            </div>
-                            <div className="group">
-                              <Button variant="secondary" onClick={() => openRealisationModal(route.id, selectedParticipantProgress)}>Réalisation</Button>
-                              {videoCount > 0 && <Button variant="secondary" onClick={() => setVideoRouteId(route.id)}>Vidéos · {videoCount}</Button>}
-                              {adminUnlocked && <Button variant="secondary" onClick={() => setQrRouteId(route.id)}>QR code</Button>}
-                              {adminUnlocked && <Button variant="secondary" onClick={() => startRouteEdition(route)}>Modifier</Button>}
-                            </div>
-                          </div>
-                        )}
-          '''
-          expanded_replacement = '''                        ) : (
-                          <div className="card-header">
-                            <div
+          progress_line = '                    const myRouteProgress = realisationsByRoute.get(String(route.id)) || [];'
+          if progress_line not in text:
+              raise SystemExit("route progress anchor not found")
+          text = text.replace(
+              progress_line,
+              progress_line + '\n                    const isExpanded = expandedRouteIds.has(String(route.id));',
+              1,
+          )
+
+          summary_line = '                            <div className="route-summary">'
+          summary_replacement = '''                            <div
                               className="route-summary"
                               role="button"
                               tabIndex={0}
@@ -97,12 +87,22 @@ jobs:
                               onClick={() => toggleRouteDetails(route.id)}
                               onKeyDown={(event) => handleRouteSummaryKeyDown(event, route.id)}
                               style={{ cursor: "pointer", flex: 1 }}
-                            >
-                              <strong className="route-primary-line">
+                            >'''
+          if summary_line not in text:
+              raise SystemExit("route summary anchor not found")
+          text = text.replace(summary_line, summary_replacement, 1)
+
+          primary_line = '                              <strong className="route-primary-line">{route.cotationAjustee || route.cotationReference || "nc"} · {route.couleurPrises || "Sans couleur"}</strong>'
+          primary_replacement = '''                              <strong className="route-primary-line">
                                 {route.cotationAjustee || route.cotationReference || "nc"} · {route.couleurPrises || "Sans couleur"}
                                 <span className="small" aria-hidden="true" style={{ marginLeft: 8 }}>{isExpanded ? "▴" : "▾"}</span>
-                              </strong>
-                              <div className="route-meta-line" aria-label="Réalisation du grimpeur connecté">{formatRouteProgress(myRouteProgress, route)}</div>
+                              </strong>'''
+          if primary_line not in text:
+              raise SystemExit("route primary line anchor not found")
+          text = text.replace(primary_line, primary_replacement, 1)
+
+          progress_display = '                              <div className="route-meta-line" aria-label="Réalisation du grimpeur connecté">{formatRouteProgress(myRouteProgress, route)}</div>'
+          details = '''                              <div className="route-meta-line" aria-label="Réalisation du grimpeur connecté">{formatRouteProgress(myRouteProgress, route)}</div>
                               {isExpanded && (
                                 <div
                                   className="route-expanded-details"
@@ -121,25 +121,15 @@ jobs:
                                   <div><strong>Note :</strong> {routeRating.count ? `★ ${Number(routeRating.average || 0).toFixed(1)} · ${routeRating.count} avis` : "Aucun avis"}</div>
                                   <div><strong>Vidéos :</strong> {videoCount}</div>
                                 </div>
-                              )}
-                            </div>
-                            <div className="group">
-                              <Button variant="secondary" onClick={() => openRealisationModal(route.id, selectedParticipantProgress)}>Réalisation</Button>
-                              {videoCount > 0 && <Button variant="secondary" onClick={() => setVideoRouteId(route.id)}>Vidéos · {videoCount}</Button>}
-                              {adminUnlocked && <Button variant="secondary" onClick={() => setQrRouteId(route.id)}>QR code</Button>}
-                              {adminUnlocked && <Button variant="secondary" onClick={() => startRouteEdition(route)}>Modifier</Button>}
-                            </div>
-                          </div>
-                        )}
-          '''
-          if compact_needle not in text:
-              raise SystemExit("compact route block not found")
-          text = text.replace(compact_needle, expanded_replacement, 1)
+                              )}'''
+          if progress_display not in text:
+              raise SystemExit("route progress display anchor not found")
+          text = text.replace(progress_display, details, 1)
           path.write_text(text)
 
           Path("VERSION").write_text("261007.003\n")
 
-          Path("frontend/test/route-expand-collapse.test.js").write_text('''import test from "node:test";
+          Path("frontend/test/route-expand-collapse.test.js").write_text(r'''import test from "node:test";
           import assert from "node:assert/strict";
           import { readFile } from "node:fs/promises";
 
