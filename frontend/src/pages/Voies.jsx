@@ -3,7 +3,14 @@ import Button from "../components/Button.jsx";
 import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import RouteQrCode from "../components/RouteQrCode.jsx";
 import { API_BASE, apiFetch, apiUploadVideoInChunks } from "../lib/api.js";
+import { REALISATIONS_PAGE_SIZE, fetchPaginatedCollection } from "../lib/bootstrap-data.js";
 import { GRADES, formatRouteName, getRouteCardStyle, normalizeRopeNumber } from "../lib/domain.js";
+import {
+  ROUTE_REALISATION_FILTER_OPTIONS,
+  filterRouteDisplayGroups,
+  formatRouteProgress,
+  groupParticipantRealisationsByRoute,
+} from "../lib/route-progress.js";
 import { ROPE_NUMBERS, ROUTE_COLORS, ROUTE_TAGS } from "../lib/ui-config.js";
 
 function parseVideoUrls(text) {
@@ -68,12 +75,57 @@ export default function Voies({
   const [comparisonOpen, setComparisonOpen] = React.useState(false);
   const [videoDeleteCandidate, setVideoDeleteCandidate] = React.useState(null);
   const [qrRouteId, setQrRouteId] = React.useState("");
+  const [routeRealisationFilter, setRouteRealisationFilter] = React.useState("all");
+  const [currentParticipantId, setCurrentParticipantId] = React.useState("");
+  const [myRouteRealisations, setMyRouteRealisations] = React.useState([]);
+  const [routeProgressError, setRouteProgressError] = React.useState("");
 
   const allRoutes = routeDisplayGroups.flatMap((group) => group.routes);
   const videoRoute = allRoutes.find((route) => String(route.id) === String(videoRouteId)) || null;
   const qrRoute = adminUnlocked
     ? allRoutes.find((route) => String(route.id) === String(qrRouteId)) || null
     : null;
+  const realisationsByRoute = React.useMemo(
+    () => groupParticipantRealisationsByRoute(myRouteRealisations, currentParticipantId),
+    [myRouteRealisations, currentParticipantId],
+  );
+  const filteredRouteDisplayGroups = React.useMemo(
+    () => filterRouteDisplayGroups(routeDisplayGroups, realisationsByRoute, routeRealisationFilter),
+    [routeDisplayGroups, realisationsByRoute, routeRealisationFilter],
+  );
+
+  const loadMyRouteRealisations = React.useCallback(async () => {
+    try {
+      setRouteProgressError("");
+      const auth = await apiFetch("/auth/me");
+      const participantId = String(auth?.user?.participantId || "");
+      setCurrentParticipantId(participantId);
+      if (!participantId) {
+        setMyRouteRealisations([]);
+        return;
+      }
+      const allRealisations = await fetchPaginatedCollection(
+        ({ limit, offset }) => apiFetch(`/realisations?limit=${limit}&offset=${offset}`),
+        { pageSize: REALISATIONS_PAGE_SIZE },
+      );
+      setMyRouteRealisations(allRealisations.filter(
+        (realisation) => String(realisation?.participantId || "") === participantId,
+      ));
+    } catch (error) {
+      setRouteProgressError(error.message || "Impossible de charger vos réalisations.");
+      setMyRouteRealisations([]);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void loadMyRouteRealisations();
+  }, [loadMyRouteRealisations]);
+
+  React.useEffect(() => {
+    const refresh = () => void loadMyRouteRealisations();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [loadMyRouteRealisations]);
 
   React.useEffect(() => {
     setSelectedComparisonVideos([]);
@@ -375,18 +427,26 @@ export default function Voies({
       <div className="card">
         <div className="card-header">
           <h2>Tableau des voies</h2>
-          <div className="group"><label htmlFor="route-sort-mode">Trier par</label><select id="route-sort-mode" value={routeSortMode} onChange={(event) => setRouteSortMode(event.target.value)} style={{ width: "auto", minWidth: 150 }}><option value="corde">Corde</option><option value="cotation">Cotation</option></select></div>
+          <div className="group">
+            <label htmlFor="route-sort-mode">Trier par</label>
+            <select id="route-sort-mode" value={routeSortMode} onChange={(event) => setRouteSortMode(event.target.value)} style={{ width: "auto", minWidth: 130 }}><option value="corde">Corde</option><option value="cotation">Cotation</option></select>
+            <label htmlFor="route-realisation-filter">Réalisation</label>
+            <select id="route-realisation-filter" value={routeRealisationFilter} onChange={(event) => setRouteRealisationFilter(event.target.value)} style={{ width: "auto", minWidth: 150 }}>
+              {ROUTE_REALISATION_FILTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </div>
         </div>
+        {routeProgressError && <div className="small" role="status" style={{ marginBottom: 10 }}>{routeProgressError}</div>}
         <div className="stack">
-          {routeDisplayGroups.map((group) => (
+          {filteredRouteDisplayGroups.map((group) => (
             <div className="subcard" key={group.key}>
               <div className="card-header"><strong>{group.label}</strong><span className="badge">{group.routes.length} voie(s)</span></div>
               {group.routes.length === 0 ? <div className="small">Aucune voie.</div> : (
                 <div className="stack">
                   {group.routes.map((route) => {
-                    const routeRating = routeRatingsById[route.id] || { average: 0, count: 0 };
                     const videoCount = effectiveVideoUrls(route).length;
                     const videoInputId = `route-video-upload-${route.id}`;
+                    const myRouteProgress = realisationsByRoute.get(String(route.id)) || [];
                     return (
                       <div className={`route-card ${route.moulinetteOnly ? "moulinette-only" : ""}`} key={route.id} style={getRouteCardStyle(route.couleurPrises)}>
                         {adminUnlocked && editingRouteId === route.id && routeEditDraft ? (
@@ -423,14 +483,15 @@ export default function Voies({
                         ) : (
                           <div className="card-header">
                             <div className="route-summary">
-                              <strong className="route-primary-line">
-                                {routeSortMode !== "corde" && <>Corde {normalizeRopeNumber(route.numeroCorde)} · </>}{route.cotationAjustee} · {" "}
-                                <a href={`#voie-videos-${route.id}`} onClick={(event) => { event.preventDefault(); setVideoRouteId(route.id); }} style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }} title="Voir les vidéos de cette voie">{formatRouteName(route)}</a>
-                                {videoCount > 0 && <span className="small"> · 🎬 {videoCount}</span>}
-                              </strong>
-                              <div className="route-meta-line" aria-label="Détails de la voie"><span>Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}</span>{route.moulinetteOnly && <span className="pill moulinette-badge" title="Moulinette uniquement">Moulinette</span>}{route.tags?.length > 0 ? route.tags.map((tag) => <span className="route-characteristic" key={tag}>{ROUTE_TAGS.find((item) => item.value === tag)?.label || tag}</span>) : <span className="route-characteristics-empty">Sans caractéristique</span>}<span className="rating-average">{routeRating.count ? `★ ${routeRating.average.toFixed(1)}` : "Pas encore notée"}</span></div>
+                              <strong className="route-primary-line">{route.cotationAjustee || route.cotationReference || "nc"} · {route.couleurPrises || "Sans couleur"}</strong>
+                              <div className="route-meta-line" aria-label="Réalisation du grimpeur connecté">{formatRouteProgress(myRouteProgress, route)}</div>
                             </div>
-                            <div className="group"><Button variant="secondary" onClick={() => openRealisationModal(route.id, selectedParticipantProgress)}>Réalisation</Button>{adminUnlocked && <Button variant="secondary" onClick={() => setQrRouteId(route.id)}>QR code</Button>}{adminUnlocked && <Button variant="secondary" onClick={() => startRouteEdition(route)}>Modifier</Button>}</div>
+                            <div className="group">
+                              <Button variant="secondary" onClick={() => openRealisationModal(route.id, selectedParticipantProgress)}>Réalisation</Button>
+                              {videoCount > 0 && <Button variant="secondary" onClick={() => setVideoRouteId(route.id)}>Vidéos · {videoCount}</Button>}
+                              {adminUnlocked && <Button variant="secondary" onClick={() => setQrRouteId(route.id)}>QR code</Button>}
+                              {adminUnlocked && <Button variant="secondary" onClick={() => startRouteEdition(route)}>Modifier</Button>}
+                            </div>
                           </div>
                         )}
                       </div>
