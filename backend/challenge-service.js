@@ -1,3 +1,10 @@
+import {
+  REALISATION_CRITERION_WEIGHTS,
+  REALISATION_MODE_WEIGHTS,
+  getRealisationCriterion,
+  getRealisationMode,
+} from "../shared/realisation-mode.js";
+
 function isoDate(value) {
   if (!value) return null;
   if (typeof value === "string") return value.slice(0, 10);
@@ -25,6 +32,14 @@ function compareParticipantIds(a, b) {
   const bNumber = Number(b);
   if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return aNumber - bNumber;
   return String(a).localeCompare(String(b), "fr");
+}
+
+function challengeRealisationQuality(realisation) {
+  const criterion = getRealisationCriterion(realisation);
+  const mode = getRealisationMode(realisation);
+  const criterionWeight = REALISATION_CRITERION_WEIGHTS[criterion] ?? 0;
+  const modeWeight = REALISATION_MODE_WEIGHTS[mode] ?? 1;
+  return criterionWeight * modeWeight;
 }
 
 export function challengeBadgeDistinction(rank) {
@@ -152,17 +167,23 @@ export async function calculateChallengeRanking(db, challenge, targetRoutes) {
     };
     const routeId = String(realisation.voieId);
     const date = isoDate(realisation.dateRealisation);
+    const quality = challengeRealisationQuality(realisation);
     const previous = current.completed.get(routeId);
-    if (!previous || date < previous) current.completed.set(routeId, date);
+    if (!previous || quality > previous.quality || (quality === previous.quality && date < previous.date)) {
+      current.completed.set(routeId, { date, quality });
+    }
     byParticipant.set(participantId, current);
   });
 
   const ranking = [...byParticipant.values()].map((entry) => {
-    const completionDates = [...entry.completed.values()].filter(Boolean).sort();
+    const completions = [...entry.completed.values()];
+    const completionDates = completions.map((item) => item.date).filter(Boolean).sort();
+    const typeScore = completions.reduce((sum, item) => sum + item.quality, 0);
     return {
       participantId: entry.participantId,
       participantName: entry.participantName,
       score: entry.completed.size,
+      typeScore,
       completedRouteIds: [...entry.completed.keys()],
       finalScoringAt: completionDates.at(-1) || null,
     };
@@ -170,6 +191,7 @@ export async function calculateChallengeRanking(db, challenge, targetRoutes) {
 
   ranking.sort((a, b) => (
     b.score - a.score
+    || b.typeScore - a.typeScore
     || String(a.finalScoringAt || "9999-12-31").localeCompare(String(b.finalScoringAt || "9999-12-31"))
     || compareParticipantIds(a.participantId, b.participantId)
   ));
