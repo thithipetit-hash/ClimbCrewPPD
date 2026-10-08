@@ -61,7 +61,11 @@ export default function StatisticsSection({
               style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, minWidth: 0 }}
             >
               <div className="label" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <span className="passport-dot" style={getPassportDotStyle({ passport })} aria-hidden="true" />
+                <span
+                  className="passport-dot"
+                  style={getPassportDotStyle({ passport, ffme: true })}
+                  aria-hidden="true"
+                />
                 <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
               </div>
               <div className="value" style={{ flex: "0 0 auto" }}>{sessionStats.passportCounts?.[passport] || 0}</div>
