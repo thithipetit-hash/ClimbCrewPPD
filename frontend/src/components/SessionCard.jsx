@@ -56,7 +56,18 @@ export default function SessionCard({
     <div className={`card session-card session-status-${String(session.status || "fermee").trim().toLowerCase()} ${missingSupervisor ? "session-card-missing-supervisor" : ""} ${compact ? "session-card-compact" : ""}`}>
       <div className="card-header">
         <h3>Séance {session.slot}</h3>
-        <span className="badge">{occupied}/{MAX_PARTICIPANTS}</span>
+        <span
+          className="badge"
+          style={{
+            background: "rgba(255,255,255,.94)",
+            color: "#0f172a",
+            border: "1px solid rgba(15,23,42,.32)",
+            fontWeight: 900,
+            boxShadow: "0 1px 3px rgba(15,23,42,.18)",
+          }}
+        >
+          {occupied}/{MAX_PARTICIPANTS}
+        </span>
       </div>
 
       <div className="session-form-row">
