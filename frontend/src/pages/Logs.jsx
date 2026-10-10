@@ -50,33 +50,58 @@ export default function Logs({
   const [broadcastDraft, setBroadcastDraft] = useState({ title: "", body: "" });
   const [broadcastStatus, setBroadcastStatus] = useState("");
   const [broadcastSending, setBroadcastSending] = useState(false);
-  const [resetting, setResetting] = useState("");
-  const [resetStatus, setResetStatus] = useState("");
+  const [routeArchiveState, setRouteArchiveState] = useState({ status: "idle", message: "" });
   const [accountLogsOnly, setAccountLogsOnly] = useState(true);
 
   const displayedLogs = accountLogsOnly
     ? adminAccessLogs.filter((log) => String(log.event_type || "").startsWith("account_creation"))
     : adminAccessLogs;
 
-  async function resetData(type, label) {
-    const safetyMessage = type === "statistiques"
-      ? "Les statistiques seront recalculées à partir des données métier."
-      : "Une sauvegarde PostgreSQL de sécurité sera créée avant toute modification.";
-    if (!window.confirm(`Confirmer ${label} ?\n\n${safetyMessage}`)) return;
+  async function archiveActiveRoutes() {
+    if (!window.confirm("Archiver toutes les voies actives ? Elles resteront dans l’historique mais ne seront plus affichées dans l’onglet Voies.")) return;
+
+    setRouteArchiveState({ status: "saving", message: "Archivage des voies…" });
     try {
-      setResetting(type);
-      setResetStatus("");
-      const confirmation = type === "statistiques" ? null : `RESET_${type.toUpperCase()}`;
-      const result = await apiFetch(`/admin/reset/${type}`, {
-        method: "POST",
-        body: JSON.stringify(confirmation ? { confirm: confirmation } : {}),
+      const routes = await apiFetch("/routes");
+      const activeRoutes = Array.isArray(routes)
+        ? routes.filter((route) => route?.active !== false)
+        : [];
+
+      if (activeRoutes.length === 0) {
+        setRouteArchiveState({ status: "success", message: "Aucune voie active à archiver." });
+        return;
+      }
+
+      const results = await Promise.allSettled(
+        activeRoutes.map((route) => apiFetch(`/routes/${encodeURIComponent(route.id)}`, {
+          method: "PUT",
+          body: JSON.stringify({ active: false }),
+        })),
+      );
+      const archivedCount = results.filter(
+        (result) => result.status === "fulfilled" && result.value?.active === false,
+      ).length;
+      const failedCount = activeRoutes.length - archivedCount;
+
+      if (failedCount > 0) {
+        setRouteArchiveState({
+          status: "error",
+          message: `Archivage incomplet : ${archivedCount}/${activeRoutes.length} voie(s) archivée(s). Rechargement…`,
+        });
+        window.setTimeout(() => window.location.reload(), 1400);
+        return;
+      }
+
+      setRouteArchiveState({
+        status: "success",
+        message: `${archivedCount} voie${archivedCount > 1 ? "s" : ""} archivée${archivedCount > 1 ? "s" : ""}. Rechargement…`,
       });
-      const backupInfo = result?.safetyBackup ? ` · sauvegarde : ${result.safetyBackup}` : "";
-      setResetStatus(`${label} effectué${result?.affected != null ? ` (${result.affected} élément(s) modifié(s))` : ""}${backupInfo}.`);
+      window.setTimeout(() => window.location.reload(), 900);
     } catch (error) {
-      setResetStatus(`Échec : ${error.message || error}`);
-    } finally {
-      setResetting("");
+      setRouteArchiveState({
+        status: "error",
+        message: `Archivage impossible : ${String(error?.message || error)}`,
+      });
     }
   }
 
@@ -226,14 +251,25 @@ export default function Logs({
 
   return (
     <>
-      <ServerSection title="Réinitialisation annuelle / données" summary="Actions administratives sur les données">
-        <div className="group">
-          <Button variant="danger" disabled={Boolean(resetting)} onClick={() => resetData("statistiques", "le reset et recalcul des statistiques")}>Reset statistiques</Button>
-          <Button variant="danger" disabled={Boolean(resetting)} onClick={() => resetData("realisations", "la suppression de toutes les réalisations")}>Reset réalisations</Button>
-          <Button variant="danger" disabled={Boolean(resetting)} onClick={() => resetData("cotisations", "le reset des cotisations")}>Reset cotisations</Button>
-          <Button variant="danger" disabled={Boolean(resetting)} onClick={() => resetData("ffme", "le reset des licences FFME")}>Reset licences FFME</Button>
+      <ServerSection title="Gestion des voies" summary="Archive les voies actives sans supprimer leur historique">
+        <div className="small" style={{ marginBottom: 10 }}>
+          Les voies archivées restent conservées avec leurs réalisations, mais ne sont plus affichées dans l’onglet Voies.
         </div>
-        {resetStatus && <div className="muted-box" style={{ marginTop: 10 }}>{resetStatus}</div>}
+        <Button
+          variant="danger"
+          disabled={routeArchiveState.status === "saving"}
+          onClick={archiveActiveRoutes}
+        >
+          {routeArchiveState.status === "saving" ? "Archivage…" : "Archiver les voies"}
+        </Button>
+        {routeArchiveState.message && (
+          <div
+            className={routeArchiveState.status === "error" ? "error" : routeArchiveState.status === "success" ? "success" : "muted-box"}
+            style={{ marginTop: 10 }}
+          >
+            {routeArchiveState.message}
+          </div>
+        )}
       </ServerSection>
 
       <ServerSection title="Analyse technique" summary="Règles et seuils de l’analyse vidéo MediaPipe">
