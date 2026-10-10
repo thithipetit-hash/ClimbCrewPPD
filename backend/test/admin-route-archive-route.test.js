@@ -9,7 +9,6 @@ function createFakeApp() {
     registrations,
     get(path, ...handlers) { registrations.push({ method: "GET", path, handlers }); },
     post(path, ...handlers) { registrations.push({ method: "POST", path, handlers }); },
-    put(path, ...handlers) { registrations.push({ method: "PUT", path, handlers }); },
   };
 }
 
@@ -19,7 +18,7 @@ function registeredHandler(app, method, path) {
   return route.handlers.at(-1);
 }
 
-test("l'archivage groupé journalise une seule fois le nombre de voies modifiées", async () => {
+test("l'endpoint d'archivage global journalise une seule fois le nombre de voies modifiées", async () => {
   const app = createFakeApp();
   const queries = [];
   const logs = [];
@@ -38,15 +37,14 @@ test("l'archivage groupé journalise une seule fois le nombre de voies modifiée
     logAccess,
   });
 
-  const handler = registeredHandler(app, "PUT", "/routes/:id");
-  let nextCount = 0;
+  const handler = registeredHandler(app, "POST", "/admin/routes/archive-active");
+  let payload = null;
   await handler(
-    { body: { active: false }, auth: { user: { id: 42 } } },
-    { status() { throw new Error("réponse HTTP inattendue"); } },
-    () => { nextCount += 1; },
+    { auth: { user: { id: 42 } } },
+    { json(value) { payload = value; } },
   );
 
-  assert.equal(nextCount, 1);
+  assert.deepEqual(payload, { ok: true, archivedCount: 7 });
   assert.equal(queries.length, 1);
   assert.match(queries[0], /where active is distinct from false/i);
   assert.equal(logs.length, 1);
@@ -54,26 +52,17 @@ test("l'archivage groupé journalise une seule fois le nombre de voies modifiée
   assert.deepEqual(logs[0].details, { archivedCount: 7 });
 });
 
-test("une mise à jour classique d'une voie n'est pas transformée en archivage global", async () => {
+test("le module d'archivage global n'intercepte plus PUT /routes/:id", () => {
   const app = createFakeApp();
-  let queryCount = 0;
   installAdminRouteArchiveRoute(app, {
     requireAuth: (_req, _res, next) => next(),
     requireAdmin: (_req, _res, next) => next(),
-    pool: { async query() { queryCount += 1; return { rowCount: 0, rows: [] }; } },
+    pool: { async query() { return { rowCount: 0, rows: [] }; } },
     logAccess: async () => {},
   });
 
-  const handler = registeredHandler(app, "PUT", "/routes/:id");
-  let nextCount = 0;
-  await handler(
-    { body: { nomVoie: "Nouvelle voie", active: false }, auth: { user: { id: 42 } } },
-    {},
-    () => { nextCount += 1; },
-  );
-
-  assert.equal(nextCount, 1);
-  assert.equal(queryCount, 0);
+  const putRoute = app.registrations.find((item) => item.method === "PUT" && item.path === "/routes/:id");
+  assert.equal(putRoute, undefined);
 });
 
 test("la lecture des voies désactive le cache HTTP pour refléter immédiatement l'archivage", () => {
