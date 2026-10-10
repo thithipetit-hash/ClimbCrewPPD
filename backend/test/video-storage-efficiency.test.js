@@ -2,22 +2,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const routeSource = await readFile(new URL("../route-management-routes.js", import.meta.url), "utf8");
+const routeVideoSource = await readFile(new URL("../route-video-routes.js", import.meta.url), "utf8");
 const realisationSource = await readFile(new URL("../realisation-management-routes.js", import.meta.url), "utf8");
 const videoPolicySource = await readFile(new URL("../video-upload-policy.js", import.meta.url), "utf8");
 const migration = await readFile(new URL("../database/migrations/008_video_upload_cleanup.sql", import.meta.url), "utf8");
 
 test("une lecture HTTP Range extrait uniquement la plage demandée en PostgreSQL", () => {
-  assert.match(routeSource, /octet_length\(rv\.content\)::bigint as content_length/);
-  assert.match(routeSource, /substring\(content from \$3 for \$4\) as content/);
-  assert.doesNotMatch(routeSource, /rv\.content,\s*rv\.source_realisation_id/);
+  assert.match(routeVideoSource, /octet_length\(rv\.content\)::bigint as content_length/);
+  assert.match(routeVideoSource, /substring\(content from \$3 for \$4\) as content/);
+  assert.doesNotMatch(routeVideoSource, /rv\.content,\s*rv\.source_realisation_id/);
 });
 
 test("le nettoyage des chunks est limité à une exécution périodique", () => {
   assert.match(videoPolicySource, /VIDEO_CHUNK_CLEANUP_INTERVAL_MS = 60 \* 60 \* 1000/);
   assert.match(videoPolicySource, /nextVideoChunkCleanupAt = now \+ VIDEO_CHUNK_CLEANUP_INTERVAL_MS/);
   assert.match(realisationSource, /cleanupExpiredVideoChunks\(pool\)/);
-  assert.match(routeSource, /cleanupExpiredVideoChunks\(pool\)/);
+  assert.match(routeVideoSource, /cleanupExpiredVideoChunks\(pool\)/);
 });
 
 test("la finalisation vidéo laisse PostgreSQL agréger les fragments", () => {
