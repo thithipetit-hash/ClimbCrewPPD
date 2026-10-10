@@ -1,9 +1,3 @@
-function isArchiveOnlyPayload(body) {
-  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
-  const keys = Object.keys(body);
-  return keys.length === 1 && keys[0] === "active" && body.active === false;
-}
-
 async function archiveActiveRoutes({ pool, logAccess, req }) {
   const archivedResult = await pool.query(`
     update routes
@@ -39,18 +33,6 @@ export function installAdminRouteArchiveRoute(app, { requireAuth, requireAdmin, 
     } catch (error) {
       console.error("Archivage des voies impossible :", error);
       res.status(500).json({ error: error.message || "Archivage des voies impossible" });
-    }
-  });
-
-  app.put("/routes/:id", requireAuth, requireAdmin, async (req, res, next) => {
-    if (!isArchiveOnlyPayload(req.body)) return next();
-
-    try {
-      await archiveActiveRoutes({ pool, logAccess, req });
-      return next();
-    } catch (error) {
-      console.error("Archivage groupé des voies impossible :", error);
-      return res.status(500).json({ error: error.message || "Archivage des voies impossible" });
     }
   });
 }

@@ -57,7 +57,7 @@ test("l'assemblage vérifie toutes les métadonnées et la taille reçue", () =>
 
 test("voies et réalisations partagent la même politique d'upload", async () => {
   const [routesSource, realisationsSource] = await Promise.all([
-    readFile(new URL("../route-management-routes.js", import.meta.url), "utf8"),
+    readFile(new URL("../route-video-routes.js", import.meta.url), "utf8"),
     readFile(new URL("../realisation-management-routes.js", import.meta.url), "utf8"),
   ]);
   for (const source of [routesSource, realisationsSource]) {
