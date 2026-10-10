@@ -44,6 +44,7 @@ export default function Administration({
   const [participantDrafts, setParticipantDrafts] = useState({});
   const [participantSaveState, setParticipantSaveState] = useState({});
   const [dataTransferState, setDataTransferState] = useState({ status: "idle", message: "" });
+  const [routeArchiveState, setRouteArchiveState] = useState({ status: "idle", message: "" });
 
   useEffect(() => {
     setParticipantDrafts(Object.fromEntries(
@@ -251,6 +252,59 @@ export default function Administration({
     }
   }
 
+  async function archiveActiveRoutes() {
+    if (!USE_API) {
+      setRouteArchiveState({ status: "error", message: "Archivage des voies disponible uniquement avec l’API." });
+      return;
+    }
+
+    if (!window.confirm("Archiver toutes les voies actives ? Elles resteront dans l’historique mais ne seront plus affichées dans l’onglet Voies.")) return;
+
+    setRouteArchiveState({ status: "saving", message: "Archivage des voies…" });
+    try {
+      const routes = await apiFetch("/routes");
+      const activeRoutes = Array.isArray(routes)
+        ? routes.filter((route) => route?.active !== false)
+        : [];
+
+      if (activeRoutes.length === 0) {
+        setRouteArchiveState({ status: "success", message: "✓ Aucune voie active à archiver" });
+        return;
+      }
+
+      const results = await Promise.allSettled(
+        activeRoutes.map((route) => apiFetch(`/routes/${encodeURIComponent(route.id)}`, {
+          method: "PUT",
+          body: JSON.stringify({ active: false }),
+        }))
+      );
+      const archivedCount = results.filter(
+        (result) => result.status === "fulfilled" && result.value?.active === false
+      ).length;
+      const failedCount = activeRoutes.length - archivedCount;
+
+      if (failedCount > 0) {
+        setRouteArchiveState({
+          status: "error",
+          message: `Archivage incomplet : ${archivedCount}/${activeRoutes.length} voie(s) archivée(s). Rechargement…`,
+        });
+        window.setTimeout(() => window.location.reload(), 1400);
+        return;
+      }
+
+      setRouteArchiveState({
+        status: "success",
+        message: `✓ ${archivedCount} voie${archivedCount > 1 ? "s" : ""} archivée${archivedCount > 1 ? "s" : ""}. Rechargement…`,
+      });
+      window.setTimeout(() => window.location.reload(), 900);
+    } catch (error) {
+      setRouteArchiveState({
+        status: "error",
+        message: `Archivage impossible : ${String(error?.message || error)}`,
+      });
+    }
+  }
+
   if (!adminUnlocked) {
     return (
       <div className="card">
@@ -304,7 +358,23 @@ export default function Administration({
         </div>
       </AdminSection>
 
-
+      <AdminSection
+        title="Gestion des voies"
+        summary="Archive les voies actives sans supprimer leur historique"
+      >
+        <div className="small" style={{ marginBottom: 10 }}>
+          Les voies archivées restent conservées avec leurs réalisations, mais ne sont plus affichées dans l’onglet Voies.
+        </div>
+        <Button
+          type="button"
+          variant="danger"
+          disabled={routeArchiveState.status === "saving"}
+          onClick={archiveActiveRoutes}
+        >
+          {routeArchiveState.status === "saving" ? "Archivage…" : "Archiver les voies"}
+        </Button>
+        <SaveFeedback status={routeArchiveState.status} message={routeArchiveState.message} />
+      </AdminSection>
 
       <AdminSection
         title="Export / import des données"
