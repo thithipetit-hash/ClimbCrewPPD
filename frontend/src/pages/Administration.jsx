@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import Button from "../components/Button.jsx";
 import SaveFeedback from "../components/SaveFeedback.jsx";
+import AdminSection from "../components/AdminSection.jsx";
+import AdminRouteArchiveSection from "../components/AdminRouteArchiveSection.jsx";
 import { apiFetch, downloadFile, USE_API } from "../lib/api.js";
 import { fullName, PASSPORT_OPTIONS } from "../lib/domain.js";
 
@@ -8,20 +10,6 @@ function PassportOptions() {
   return PASSPORT_OPTIONS.map((passport) => (
     <option key={passport.value} value={passport.value}>{passport.label}</option>
   ));
-}
-
-function AdminSection({ title, summary, children }) {
-  return (
-    <details className="card admin-section-details">
-      <summary className="card-header" style={{ cursor: "pointer", userSelect: "none", marginBottom: 0 }}>
-        <div>
-          <h2>{title}</h2>
-          {summary ? <div className="small">{summary}</div> : null}
-        </div>
-      </summary>
-      <div style={{ marginTop: 12 }}>{children}</div>
-    </details>
-  );
 }
 
 export default function Administration({
@@ -44,7 +32,6 @@ export default function Administration({
   const [participantDrafts, setParticipantDrafts] = useState({});
   const [participantSaveState, setParticipantSaveState] = useState({});
   const [dataTransferState, setDataTransferState] = useState({ status: "idle", message: "" });
-  const [routeArchiveState, setRouteArchiveState] = useState({ status: "idle", message: "" });
 
   useEffect(() => {
     setParticipantDrafts(Object.fromEntries(
@@ -252,59 +239,6 @@ export default function Administration({
     }
   }
 
-  async function archiveActiveRoutes() {
-    if (!USE_API) {
-      setRouteArchiveState({ status: "error", message: "Archivage des voies disponible uniquement avec l’API." });
-      return;
-    }
-
-    if (!window.confirm("Archiver toutes les voies actives ? Elles resteront dans l’historique mais ne seront plus affichées dans l’onglet Voies.")) return;
-
-    setRouteArchiveState({ status: "saving", message: "Archivage des voies…" });
-    try {
-      const routes = await apiFetch("/routes");
-      const activeRoutes = Array.isArray(routes)
-        ? routes.filter((route) => route?.active !== false)
-        : [];
-
-      if (activeRoutes.length === 0) {
-        setRouteArchiveState({ status: "success", message: "✓ Aucune voie active à archiver" });
-        return;
-      }
-
-      const results = await Promise.allSettled(
-        activeRoutes.map((route) => apiFetch(`/routes/${encodeURIComponent(route.id)}`, {
-          method: "PUT",
-          body: JSON.stringify({ active: false }),
-        }))
-      );
-      const archivedCount = results.filter(
-        (result) => result.status === "fulfilled" && result.value?.active === false
-      ).length;
-      const failedCount = activeRoutes.length - archivedCount;
-
-      if (failedCount > 0) {
-        setRouteArchiveState({
-          status: "error",
-          message: `Archivage incomplet : ${archivedCount}/${activeRoutes.length} voie(s) archivée(s). Rechargement…`,
-        });
-        window.setTimeout(() => window.location.reload(), 1400);
-        return;
-      }
-
-      setRouteArchiveState({
-        status: "success",
-        message: `✓ ${archivedCount} voie${archivedCount > 1 ? "s" : ""} archivée${archivedCount > 1 ? "s" : ""}. Rechargement…`,
-      });
-      window.setTimeout(() => window.location.reload(), 900);
-    } catch (error) {
-      setRouteArchiveState({
-        status: "error",
-        message: `Archivage impossible : ${String(error?.message || error)}`,
-      });
-    }
-  }
-
   if (!adminUnlocked) {
     return (
       <div className="card">
@@ -358,23 +292,7 @@ export default function Administration({
         </div>
       </AdminSection>
 
-      <AdminSection
-        title="Gestion des voies"
-        summary="Archive les voies actives sans supprimer leur historique"
-      >
-        <div className="small" style={{ marginBottom: 10 }}>
-          Les voies archivées restent conservées avec leurs réalisations, mais ne sont plus affichées dans l’onglet Voies.
-        </div>
-        <Button
-          type="button"
-          variant="danger"
-          disabled={routeArchiveState.status === "saving"}
-          onClick={archiveActiveRoutes}
-        >
-          {routeArchiveState.status === "saving" ? "Archivage…" : "Archiver les voies"}
-        </Button>
-        <SaveFeedback status={routeArchiveState.status} message={routeArchiveState.message} />
-      </AdminSection>
+      <AdminRouteArchiveSection />
 
       <AdminSection
         title="Export / import des données"
