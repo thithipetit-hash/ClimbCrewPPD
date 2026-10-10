@@ -134,7 +134,7 @@ export default function Logs({
       );
       await loadBackups();
     } catch (error) {
-      setBackupStatus(`Sauvegardes impossible : ${error.message || error}`);
+      setBackupStatus(`Sauvegarde impossible : ${error.message || error}`);
     } finally {
       setBackupBusy(false);
     }
