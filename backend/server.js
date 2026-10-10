@@ -15,6 +15,7 @@ import { installBuddyRoutes } from "./buddy-routes.js";
 import { installAuthSessionRoutes } from "./auth-session-routes.js";
 import { installAdminAccessLogRoutes } from "./admin-access-log-routes.js";
 import { installAdminAccountDeleteRoute } from "./admin-account-delete-route.js";
+import { installAdminRouteArchiveRoute } from "./admin-route-archive-route.js";
 import { createAuthMiddleware } from "./auth-middleware.js";
 import { installDatabaseMaintenanceRoutes } from "./database-maintenance-routes.js";
 import { runDatabaseMigrations } from "./database/migrate.js";
@@ -139,6 +140,7 @@ installBuddyRoutes(app, { requireAuth, pool });
 installRealisationManagementRoutes(app, { requireAuth, pool });
 installRealisationKudoRoutes(app, { requireAuth, pool });
 installRealisationTechnicalAnalysisRoutes(app, { requireAuth, pool });
+installAdminRouteArchiveRoute(app, { requireAuth, requireAdmin, pool, logAccess });
 installRouteManagementRoutes(app, { requireAuth, requireAdmin, pool });
 
 app.get("/", (_req, res) => {
