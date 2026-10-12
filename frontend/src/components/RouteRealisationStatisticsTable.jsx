@@ -31,6 +31,7 @@ export default function RouteRealisationStatisticsTable({
     filters, sortKey: sort.key, sortDirection: sort.direction, formatRouteName,
   }), [rows, filters, sort, formatRouteName]);
   const hasFilters = Object.values(filters).some((value) => String(value || "").trim());
+  const highlightCprRows = title === "Voies du grimpeur";
 
   function toggleSort(key) {
     setSort((current) => current.key === key
@@ -65,12 +66,20 @@ export default function RouteRealisationStatisticsTable({
           </thead>
           <tbody>{displayedRows.length === 0
             ? <tr><td colSpan={ROUTE_REALISATION_COLUMNS.length} style={{ padding: 12, textAlign: "center", border: "1px solid #ccc" }}>Aucune voie ne correspond aux filtres sélectionnés.</td></tr>
-            : displayedRows.map((entry) => <tr key={entry.route.id}>{ROUTE_REALISATION_COLUMNS.map((column) => {
-              const value = routeRealisationStatisticValue(entry, column.key, { formatRouteName });
-              return <td key={column.key} style={{ padding: 6, textAlign: column.key === "route" ? "left" : "center", border: "1px solid #ccc", minWidth: column.key === "route" ? 180 : undefined, whiteSpace: column.key === "route" ? "normal" : "nowrap", fontVariantNumeric: column.numeric ? "tabular-nums" : undefined }}>
-                {value}{column.key === "route" && entry.route.moulinetteOnly && <span className="small"> · Moulinette uniquement</span>}
-              </td>;
-            })}</tr>)}</tbody>
+            : displayedRows.map((entry) => {
+              const cprIncluded = highlightCprRows && entry.cprIncluded;
+              return <tr
+                key={entry.route.id}
+                data-cpr-included={cprIncluded ? "true" : undefined}
+                title={cprIncluded ? "Voie prise en compte pour le CPR" : undefined}
+                style={cprIncluded ? { background: "rgba(34, 197, 94, 0.24)", boxShadow: "inset 4px 0 #16a34a" } : undefined}
+              >{ROUTE_REALISATION_COLUMNS.map((column) => {
+                const value = routeRealisationStatisticValue(entry, column.key, { formatRouteName });
+                return <td key={column.key} style={{ padding: 6, textAlign: column.key === "route" ? "left" : "center", border: "1px solid #ccc", minWidth: column.key === "route" ? 180 : undefined, whiteSpace: column.key === "route" ? "normal" : "nowrap", fontVariantNumeric: column.numeric ? "tabular-nums" : undefined }}>
+                  {value}{column.key === "route" && entry.route.moulinetteOnly && <span className="small"> · Moulinette uniquement</span>}
+                </td>;
+              })}</tr>;
+            })}</tbody>
         </table>
       </div>
     </>
