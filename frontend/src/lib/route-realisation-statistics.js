@@ -4,7 +4,7 @@ import {
   getRealisationCriterion,
   getRealisationMode,
 } from "./realisation-mode.js";
-import { gradeToIndex, normalizeRopeNumber } from "./domain.js";
+import { calculateSimpleCpr, gradeToIndex, normalizeRopeNumber } from "./domain.js";
 
 function emptyCounts(values) {
   return Object.fromEntries(values.map((value) => [value, 0]));
@@ -12,6 +12,10 @@ function emptyCounts(values) {
 
 export function buildRouteRealisationStatistics(routes = [], realisations = []) {
   const realisationsByRouteId = new Map();
+  const routesById = Object.fromEntries(routes.map((route) => [String(route?.id ?? ""), route]));
+  const cprIncludedRealisationIds = new Set(
+    calculateSimpleCpr(realisations, routesById).timeline.map((item) => String(item.id)),
+  );
 
   realisations.forEach((realisation) => {
     const routeId = String(realisation?.voieId ?? "");
@@ -53,6 +57,9 @@ export function buildRouteRealisationStatistics(routes = [], realisations = []) 
         criterionCounts,
         combinationCounts,
         historicalCriterionCount,
+        cprIncluded: routeRealisations.some((realisation) => (
+          cprIncludedRealisationIds.has(String(realisation.id))
+        )),
       };
     });
 }
