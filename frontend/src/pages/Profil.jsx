@@ -9,6 +9,7 @@ import ProfileReceivedKudos from "../components/ProfileReceivedKudos.jsx";
 import RouteRealisationStatisticsTable from "../components/RouteRealisationStatisticsTable.jsx";
 import RealisationVideoAnalysis from "../components/RealisationVideoAnalysis.jsx";
 import ConfirmDialog from "../components/ConfirmDialog.jsx";
+import CprDetailsModal from "../components/CprDetailsModal.jsx";
 import CprEvolutionChart from "../sections/CprEvolutionChart.jsx";
 import { apiFetch } from "../lib/api.js";
 import { useProfileRealisations } from "../hooks/useProfileRealisations.js";
@@ -117,6 +118,7 @@ export default function Profil({
   const [buddySaving, setBuddySaving] = React.useState(false);
   const [buddySaveStatus, setBuddySaveStatus] = React.useState("");
   const [pendingConfirmation, setPendingConfirmation] = React.useState(null);
+  const [cprDetailsOpen, setCprDetailsOpen] = React.useState(false);
 
   async function toggleKudo(realisation) {
     if (!myParticipantId || kudosPendingId) return;
@@ -294,6 +296,13 @@ export default function Profil({
         onConfirm={() => void pendingConfirmation?.onConfirm?.()}
         onCancel={() => setPendingConfirmation(null)}
       />
+      <CprDetailsModal
+        open={cprDetailsOpen}
+        cpr={cpr}
+        realisations={selectedRealisations}
+        routesById={routesById}
+        onClose={() => setCprDetailsOpen(false)}
+      />
 
       {!selectedParticipant ? (
         <div className="card"><div className="muted-box">Choisissez un grimpeur.</div></div>
@@ -393,7 +402,19 @@ export default function Profil({
                 <div className="stats-grid profile-stats-grid">
                   <div className="stat"><div className="label">Voies réalisées</div><div className="value">{selectedRealisations.length}</div></div>
                   <div className="stat"><div className="label">Meilleure cotation</div><div className="value">{bestGrade || (isOwnProfile ? myProfileStats.bestAll : "-") || "-"}</div></div>
-                  <div className="stat"><div className="label">CPR actuel</div><div className="value">{cpr.currentGrade || "-"}</div></div>
+                  <div className="stat">
+                    <div className="label">CPR actuel</div>
+                    <div className="value">
+                      <button
+                        type="button"
+                        className="cpr-stat-button"
+                        onClick={() => setCprDetailsOpen(true)}
+                        aria-label={`Afficher les voies prises en compte dans le CPR ${cpr.currentGrade || "-"}`}
+                      >
+                        {cpr.currentGrade || "-"}
+                      </button>
+                    </div>
+                  </div>
                   <div className="stat"><div className="label">Points</div><div className="value">{formatPoints(points)}</div></div>
                   <div className="stat"><div className="label">Séances</div><div className="value">{participations}</div></div>
                   <div className="stat"><div className="label">Kudos reçus</div><div className="value">{selectedRealisations.reduce((total, item) => total + Number(item.kudosCount || 0), 0)}</div></div>
