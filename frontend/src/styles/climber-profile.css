@@ -20,6 +20,64 @@
   font-size: 19px;
   line-height: 1;
 }
+.profile-stats-grid .cpr-stat-button {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.profile-stats-grid .cpr-stat-button:hover,
+.profile-stats-grid .cpr-stat-button:focus-visible {
+  color: var(--theme-accent, #2563eb);
+}
+.cpr-details-modal { max-width: 680px; }
+.cpr-details-help { margin: 12px 0 14px; }
+.cpr-details-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(58vh, 520px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.cpr-details-item {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--theme-accent, #3b82f6) 24%, transparent);
+  border-radius: 12px;
+  background: var(--theme-card-soft);
+}
+.cpr-details-rank {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--theme-accent, #3b82f6);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+.cpr-details-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+.cpr-details-actions {
+  justify-content: flex-end;
+  margin-top: 14px;
+}
 
 .climber-profile-card { margin-top: 12px; }
 .climber-profile-layout { display: grid; grid-template-columns: minmax(0,1fr); gap: 14px; }

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import express from "express";
 import { validateRealisationPayload } from "./validation.js";
 import { assertRealisationIntegrity } from "./realisation-integrity.js";
+import { buildRealisationChatMessage } from "./realisation-chat-message.js";
 import { importTheCragRealisations } from "./thecrag-import-service.js";
 import {
   LOCAL_VIDEO_MAX_BYTES,
@@ -230,16 +231,23 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
         const routeParts = [
           row.numero_corde ? `corde ${row.numero_corde}` : "",
           row.couleur_prises ? String(row.couleur_prises).trim() : "",
-          row.nom_voie ? `« ${row.nom_voie} »` : "",
           row.nom_ouvreur ? `ouverte par ${row.nom_ouvreur}` : "",
         ].filter(Boolean);
-        const route = routeParts.length ? routeParts.join(" · ") : "une voie";
+        const route = row.nom_voie
+          ? `« ${String(row.nom_voie).trim()} »`
+          : (routeParts.length ? routeParts.join(" · ") : "une voie");
         const grade = realisation.cotationProposee || row.cotation_ajustee || row.cotation_reference || "cotation non renseignée";
-        const mode = realisation.modeRealisation === "moulinette" ? "en moulinette" : "en tête";
+        const message = buildRealisationChatMessage({
+          who,
+          route,
+          grade,
+          modeRealisation: realisation.modeRealisation,
+          styleRealisation: realisation.styleRealisation,
+        });
         await pool.query(
           `insert into chat_messages (participant_id, message, kind, event_type, event_ref)
            values ($1,$2,'system','realisation',$3)`,
-          [participantId, `🏆 ${who} a réalisé ${route} · ${grade} · ${mode}.`, realisation.id],
+          [participantId, message, realisation.id],
         );
       } catch (chatError) {
         console.error("realisation chat event error:", chatError);

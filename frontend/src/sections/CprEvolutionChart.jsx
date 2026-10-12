@@ -36,7 +36,7 @@ export default function CprEvolutionChart({ realisations, routesById }) {
   const bestIndex = Math.max(...history.map((point) => point.averageIndex));
   const selectedPoint = visibleHistory.find((point) => point.date === selectedPointDate) || visibleHistory.at(-1);
   const selectedRealisations = selectedPoint
-    ? realisations.filter((item) => selectedPoint.realisationIds.includes(String(item.id)))
+    ? realisations.filter((item) => selectedPoint.includedIds.includes(String(item.id)))
     : [];
 
   return (
@@ -44,7 +44,7 @@ export default function CprEvolutionChart({ realisations, routesById }) {
       <div className="card-header">
         <div><h3>Évolution du CPR Club</h3><div className="small">Meilleur historique : {GRADES[Math.max(0, Math.min(GRADES.length - 1, Math.round(bestIndex)))]}</div></div>
         <div className="group cpr-range-selector" aria-label="Période du graphique CPR">
-          {[['3m', '3 mois'], ['6m', '6 mois'], ['1a', '1 an'], ['all', 'Tout']].map(([value, label]) => (
+          {[["3m", "3 mois"], ["6m", "6 mois"], ["1a", "1 an"], ["all", "Tout"]].map(([value, label]) => (
             <Button type="button" variant={range === value ? "primary" : "secondary"} aria-pressed={range === value} key={value} onClick={() => { setRange(value); setSelectedPointDate(""); }}>{label}</Button>
           ))}
         </div>
