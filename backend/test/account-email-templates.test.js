@@ -32,3 +32,11 @@ test("les mails de confirmation décrivent l’approbation manuelle du compte", 
   assert.doesNotMatch(admin.text, /activé automatiquement/);
   assert.doesNotMatch(admin.html, /activé automatiquement/);
 });
+
+test("les e-mails de confirmation affichent CristalClimbCrew", () => {
+  const email = buildAccountRequestConfirmation({ prenom: "Alex", nom: "Test", publicUrl: "https://pre.example.test" });
+  for (const field of ["subject", "text", "html"]) {
+    assert.match(email[field], /CristalClimbCrew/);
+    assert.doesNotMatch(email[field], /CristalClimbClub|\bClimbCrew\b/);
+  }
+});
