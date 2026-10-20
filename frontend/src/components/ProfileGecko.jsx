@@ -68,6 +68,7 @@ function evolutionImagesByVariant(avatarId) {
 
 export const AVATAR_OPTIONS = Object.freeze([
   { id: "gecko", label: "Gecko", group: "Animaux", image: asset(AVATAR_ROOT, "gecko"), evolutionImagesByVariant: evolutionImagesByVariant("gecko") },
+  { id: "crocodile", label: "Crocodile grimpeur", group: "Animaux", image: asset(`${EVOLUTION_ROOT}/crocodile`, "level-1"), evolutionImages: [1, 2, 2, 3, 3, 4, 4, 5].map((stage) => asset(`${EVOLUTION_ROOT}/crocodile`, `level-${stage}`)) },
   { id: "bouquetin", label: "Bouquetin", group: "Animaux", image: asset(AVATAR_ROOT, "bouquetin"), evolutionImagesByVariant: evolutionImagesByVariant("bouquetin") },
   { id: "capucin", label: "Singe capucin", group: "Animaux", image: asset(AVATAR_ROOT, "capucin"), evolutionImagesByVariant: evolutionImagesByVariant("capucin") },
   { id: "ecureuil", label: "Écureuil", group: "Animaux", image: asset(AVATAR_ROOT, "ecureuil"), evolutionImagesByVariant: evolutionImagesByVariant("ecureuil") },
