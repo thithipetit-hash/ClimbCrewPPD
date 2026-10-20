@@ -125,13 +125,14 @@ export function getPassportStyle(participant) {
 }
 
 export function getPassportDotStyle(participant) {
-  const baseStyle = PASSPORT_STYLES[getPassportColor(participant?.passport)] || PASSPORT_STYLES.sans;
+  const passportColor = getPassportColor(participant?.passport);
+  const baseStyle = PASSPORT_STYLES[passportColor] || PASSPORT_STYLES.sans;
   const hasFfmeLicence = Boolean(participant?.ffme);
   const isDiscovery = hasPassportDiscoveryMark(
     participant?.passport,
     participant?.passportDecouverte,
   );
-  const showFullDot = hasFfmeLicence || isDiscovery;
+  const showFullDot = hasFfmeLicence || isDiscovery || passportColor === "sans";
 
   return {
     backgroundColor: showFullDot ? baseStyle.backgroundColor : "transparent",
