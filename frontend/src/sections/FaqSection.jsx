@@ -3,8 +3,8 @@ import DemandesEvolution from "../pages/DemandesEvolution.jsx";
 
 const HELP_ITEMS = [
   {
-    title: "A quoi sert CristalClimbClub ?",
-    content: "CristalClimbClub gère les séances, les inscriptions, les participants, les voies, les profils et la progression des grimpeurs du site SAE de Cristal. Les séances sont disponibles en vues Jour et Semaine et peuvent être Libres, Encadrées, Passeport, Challenge, Renouvellement ou Fermées.",
+    title: "À quoi sert ClimbCrew ?",
+    content: "ClimbCrew gère les séances, les inscriptions, les participants, les voies, les profils et la progression des grimpeurs du site SAE de Cristal. Les séances sont disponibles en vues Jour et Semaine et peuvent être Libres, Encadrées, Passeport, Challenge, Renouvellement ou Fermées.",
   },
   {
     title: "Qui peut changer le statut d'une séance ?",
@@ -28,11 +28,11 @@ const HELP_ITEMS = [
   },
   {
     title: "Comment sont présentés les participants et les voies ?",
-    content: "La bille d'un participant indique son passeport. Le cadre reflète cotisation et licence FFME. En séance Libre, un fond hachuré signale une inscription sans passeport requis. Pour une voie, le fond reprend la couleur des prises et un cadre rouge indique une voie uniquement en moulinette.",
+    content: "La pastille d'un participant indique la couleur de son passeport : gris clair (sans passeport), jaune, orange, bleu ou vert. La lettre D noire signale l'option Découverte. La pastille grise reste toujours entièrement remplie, même sans licence FFME ; pour les autres couleurs, une demi-pastille indique l'absence de licence FFME. Le cadre signale la cotisation (vert si payée, rouge sinon). En séance Libre, un fond hachuré peut signaler une inscription sans passeport requis. Pour une voie, le fond reprend la couleur des prises et un cadre rouge indique une voie uniquement en moulinette.",
   },
   {
     title: "Comment fonctionnent les avatars et l'image de profil ?",
-    content: "Chaque grimpeur peut choisir un avatar ou une image personnelle. L'avatar évolue selon le niveau récent calculé par l'application. Une image PNG, JPEG ou WebP peut être recadrée en carré 512 × 512. Ces éléments sont ludiques et ne modifient ni les droits, ni les statistiques, ni les classements.",
+    content: "Dans Profil, cliquez sur l'avatar pour choisir un personnage ou importer une image personnelle. Les avatars évoluent sur huit niveaux selon la cotation récente du grimpeur. Le Crocodile grimpeur propose cinq illustrations réparties sur ces huit niveaux. Une image personnelle PNG, JPEG ou WebP est recadrée en carré 512 × 512. Ces éléments sont ludiques : ils ne modifient ni les droits, ni le CPR, ni les points, ni les classements.",
   },
   {
     title: "A quoi sert le choix du sexe dans le profil ?",
@@ -99,7 +99,7 @@ export default function FaqSection({ APP_VERSION, USE_API, authUser }) {
   return (
     <div className="card">
       <div className="card-header">
-        <h2>FAQ - fonctionnement de CristalClimbClub</h2>
+        <h2>FAQ - fonctionnement de ClimbCrew</h2>
         <span className="small">Version : {APP_VERSION}</span>
       </div>
 

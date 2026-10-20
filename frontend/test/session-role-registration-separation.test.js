@@ -165,8 +165,8 @@ test("Découverte ajoute un D noir et conserve une pastille pleine", () => {
   assert.equal(licensed.backgroundImage, "none");
 
   const unlicensed = getPassportDotStyle({ passport: "sans", ffme: false });
-  assert.equal(unlicensed.backgroundColor, "transparent");
-  assert.match(unlicensed.backgroundImage, /linear-gradient\(to right, #cbd5e1 0 50%, transparent 50% 100%\)/);
+  assert.equal(unlicensed.backgroundColor, "#cbd5e1");
+  assert.equal(unlicensed.backgroundImage, "none");
 
   const discoveryUnlicensed = getPassportDotStyle({ passport: "sans", passportDecouverte: true, ffme: false });
   assert.equal(discoveryUnlicensed.backgroundColor, "#cbd5e1");
