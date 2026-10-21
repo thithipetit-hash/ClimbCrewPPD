@@ -1,6 +1,7 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getGeckoLevelInfo } from "../lib/gecko-level.js";
 import { customAvatarSource } from "../lib/custom-avatar.js";
+import { isChristmasAvatarDate, millisecondsUntilNextLocalDay } from "../lib/seasonal-avatar.js";
 import "../styles/profile-gecko.css";
 
 const LEVEL_ACCENTS = ["#65a30d", "#4d7c0f", "#0284c7", "#2563eb", "#7c3aed", "#9333ea", "#d97706", "#0ea5e9"];
@@ -118,6 +119,18 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
   const [showAvatarEditor, setShowAvatarEditor] = useState(false);
   const [customImageError, setCustomImageError] = useState("");
   const [avatarImageRevision, setAvatarImageRevision] = useState(0);
+  const [christmasActive, setChristmasActive] = useState(() => isChristmasAvatarDate());
+
+  useEffect(() => {
+    let midnightTimer;
+    function updateSeasonalAvatar() {
+      const now = new Date();
+      setChristmasActive(isChristmasAvatarDate(now));
+      midnightTimer = window.setTimeout(updateSeasonalAvatar, millisecondsUntilNextLocalDay(now) + 50);
+    }
+    updateSeasonalAvatar();
+    return () => window.clearTimeout(midnightTimer);
+  }, []);
   const fileInputRef = useRef(null);
   const accent = variant === "feminine" ? "#db2777" : LEVEL_ACCENTS[level - 1];
   const avatar = useMemo(
@@ -190,7 +203,8 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
       <div className="profile-gecko-stage" style={{ "--gecko-accent": accent }} data-level={level}>
         <button
           type="button"
-          className="profile-gecko-real-image"
+          className={`profile-gecko-real-image${christmasActive && !customImage ? " profile-avatar-christmas" : ""}`}
+          data-avatar={avatar.id}
           aria-label={editable ? "Choisir l’avatar, l’image ou le sexe" : customImage ? "Image de profil personnalisée" : "Afficher les évolutions passées de l’avatar"}
           aria-expanded={editable ? showAvatarEditor : showEvolutionHistory}
           aria-controls={editable ? "profile-avatar-editor" : "profile-avatar-evolution-history"}
@@ -262,7 +276,7 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
               <div className="profile-avatar-evolution-gallery">
                 {EVOLUTION_LABELS.slice(0, level - 1).map((evolutionLabel, index) => (
                   <figure className="profile-avatar-history-item" key={evolutionLabel}>
-                    <span className="profile-gecko-stage profile-avatar-history-stage" data-level={index + 1}>
+                    <span className={`profile-gecko-stage profile-avatar-history-stage${christmasActive ? " profile-avatar-christmas" : ""}`} data-level={index + 1}>
                       <img className="profile-animal-image" src={imageForLevel(avatar, index + 1, variant)} alt={`${avatar.label} au niveau ${index + 1}`} draggable="false" />
                     </span>
                     <figcaption>Niveau {index + 1} · {evolutionLabel}</figcaption>
