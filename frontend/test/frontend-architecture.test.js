@@ -101,10 +101,13 @@ test("le branding courant est écrit dans les sources et les métadonnées", asy
   }
   assert.deepEqual(offenders, [], `ancien branding encore présent : ${offenders.join(", ")}`);
   assert.doesNotMatch(appSource, /ClimbClubCristal/);
-  assert.match(appSource, /<h1>CristalClimbCrew<\/h1>/);
+  assert.match(appSource, /<h1>CristalClimbClub<\/h1>/);
   assert.doesNotMatch(indexSource, /ClimbClubCristal/);
   assert.doesNotMatch(manifestSource, /ClimbClubCristal/);
-  assert.match(indexSource, /CristalClimbCrew/);
+  assert.match(indexSource, /CristalClimbClub/);
+  assert.doesNotMatch(appSource, /CristalClimbCrew/);
+  assert.doesNotMatch(indexSource, /CristalClimbCrew/);
+  assert.doesNotMatch(manifestSource, /CristalClimbCrew/);
 });
 
 test("la soumission des écrans d'accès appartient au composant React", () => {
