@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { getGeckoLevelInfo } from "../lib/gecko-level.js";
+import { GECKO_LEVEL_LABELS, getGeckoLevelInfo } from "../lib/gecko-level.js";
 import { customAvatarSource } from "../lib/custom-avatar.js";
 import { isChristmasAvatarDate, millisecondsUntilNextLocalDay } from "../lib/seasonal-avatar.js";
 import "../styles/profile-gecko.css";
@@ -9,7 +9,6 @@ const AVATAR_ROOT = "/media/avatars/split";
 const PROFILE_ROOT = "/media/avatars/profile";
 const EVOLUTION_ROOT = "/media/avatars/evolutions";
 const ASSET_VERSION = "260817010";
-const EVOLUTION_LABELS = ["Découverte", "Initiation", "Autonome", "Confirmé", "Technique", "Expert", "Maître", "Élite"];
 const CUSTOM_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const CUSTOM_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -57,13 +56,13 @@ function asset(root, name, extension = "webp") {
 }
 
 function evolutionImages(avatarId) {
-  return EVOLUTION_LABELS.map((_, index) => `${EVOLUTION_ROOT}/${avatarId}/level-${index + 1}.webp?v=${ASSET_VERSION}`);
+  return GECKO_LEVEL_LABELS.map((_, index) => `${EVOLUTION_ROOT}/${avatarId}/level-${index + 1}.webp?v=${ASSET_VERSION}`);
 }
 
 function evolutionImagesByVariant(avatarId) {
   return {
-    masculine: EVOLUTION_LABELS.map((_, index) => `${EVOLUTION_ROOT}/${avatarId}/homme/level-${index + 1}.webp?v=${ASSET_VERSION}`),
-    feminine: EVOLUTION_LABELS.map((_, index) => `${EVOLUTION_ROOT}/${avatarId}/femme/level-${index + 1}.webp?v=${ASSET_VERSION}`),
+    masculine: GECKO_LEVEL_LABELS.map((_, index) => `${EVOLUTION_ROOT}/${avatarId}/homme/level-${index + 1}.webp?v=${ASSET_VERSION}`),
+    feminine: GECKO_LEVEL_LABELS.map((_, index) => `${EVOLUTION_ROOT}/${avatarId}/femme/level-${index + 1}.webp?v=${ASSET_VERSION}`),
   };
 }
 
@@ -100,7 +99,7 @@ export const ANIMAL_OPTIONS = AVATAR_OPTIONS;
 const AVATAR_GROUPS = [...new Set(AVATAR_OPTIONS.map((option) => option.group))];
 
 function imageForLevel(avatar, level, variant) {
-  const index = Math.max(0, Math.min(EVOLUTION_LABELS.length - 1, level - 1));
+  const index = Math.max(0, Math.min(GECKO_LEVEL_LABELS.length - 1, level - 1));
   const variantImages = variant === "masculine" || variant === "feminine"
     ? avatar.evolutionImagesByVariant?.[variant]
     : null;
@@ -274,7 +273,7 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
             <strong>Images des évolutions précédentes</strong>
             {level > 1 ? (
               <div className="profile-avatar-evolution-gallery">
-                {EVOLUTION_LABELS.slice(0, level - 1).map((evolutionLabel, index) => (
+                {GECKO_LEVEL_LABELS.slice(0, level - 1).map((evolutionLabel, index) => (
                   <figure className="profile-avatar-history-item" key={evolutionLabel}>
                     <span className={`profile-gecko-stage profile-avatar-history-stage${christmasActive ? " profile-avatar-christmas" : ""}`} data-level={index + 1}>
                       <img className="profile-animal-image" src={imageForLevel(avatar, index + 1, variant)} alt={`${avatar.label} au niveau ${index + 1}`} draggable="false" />
