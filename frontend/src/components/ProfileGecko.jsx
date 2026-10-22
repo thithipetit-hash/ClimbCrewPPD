@@ -184,11 +184,13 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
   }
 
   function handleAvatarImageClick() {
-    if (editable) {
-      setShowAvatarEditor((visible) => !visible);
-      return;
-    }
-    if (!customImage) setShowEvolutionHistory((visible) => !visible);
+    setShowAvatarEditor(false);
+    setShowEvolutionHistory((visible) => !visible);
+  }
+
+  function handleAvatarEditorClick() {
+    setShowEvolutionHistory(false);
+    setShowAvatarEditor((visible) => !visible);
   }
 
   return (
@@ -204,14 +206,26 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
           type="button"
           className={`profile-gecko-real-image${christmasActive && !customImage ? " profile-avatar-christmas" : ""}`}
           data-avatar={avatar.id}
-          aria-label={editable ? "Choisir l’avatar, l’image ou le sexe" : customImage ? "Image de profil personnalisée" : "Afficher les évolutions passées de l’avatar"}
-          aria-expanded={editable ? showAvatarEditor : showEvolutionHistory}
-          aria-controls={editable ? "profile-avatar-editor" : "profile-avatar-evolution-history"}
+          aria-label="Afficher les huit évolutions de l’avatar sélectionné"
+          aria-expanded={showEvolutionHistory}
+          aria-controls="profile-avatar-evolution-history"
           onClick={handleAvatarImageClick}
-          title={editable ? "Cliquer pour modifier l’avatar, l’image ou le sexe" : undefined}
+          title="Cliquer pour voir les huit évolutions"
         >
           <img key={`${avatar.id}-${level}-${variant}-${avatarImageRevision}-${customImage ? "custom" : "standard"}`} className={`profile-animal-image${customImage ? " profile-custom-image" : ""}`} src={refreshableImageSource(customImage || imageForLevel(avatar, level, variant))} alt="" draggable="false" />
         </button>
+
+        {editable && (
+          <button
+            type="button"
+            className="secondary profile-avatar-edit-button"
+            aria-expanded={showAvatarEditor}
+            aria-controls="profile-avatar-editor"
+            onClick={handleAvatarEditorClick}
+          >
+            Personnaliser mon avatar
+          </button>
+        )}
 
         {editable && showAvatarEditor && (
           <div id="profile-avatar-editor" className="profile-avatar-evolution-history profile-avatar-editor">
@@ -268,22 +282,36 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
           </div>
         )}
 
-        {!editable && !customImage && showEvolutionHistory && (
+        {showEvolutionHistory && (
           <div id="profile-avatar-evolution-history" className="profile-avatar-evolution-history">
-            <strong>Images des évolutions précédentes</strong>
-            {level > 1 ? (
-              <div className="profile-avatar-evolution-gallery">
-                {GECKO_LEVEL_LABELS.slice(0, level - 1).map((evolutionLabel, index) => (
-                  <figure className="profile-avatar-history-item" key={evolutionLabel}>
-                    <span className={`profile-gecko-stage profile-avatar-history-stage${christmasActive ? " profile-avatar-christmas" : ""}`} data-level={index + 1}>
-                      <img className="profile-animal-image" src={imageForLevel(avatar, index + 1, variant)} alt={`${avatar.label} au niveau ${index + 1}`} draggable="false" />
+            <strong>Les huit évolutions de {avatar.label}</strong>
+            <div className="profile-avatar-evolution-gallery">
+              {GECKO_LEVEL_LABELS.map((evolutionLabel, index) => {
+                const displayedLevel = index + 1;
+                const isCurrent = displayedLevel === level;
+                const isFuture = displayedLevel > level;
+                return (
+                  <figure
+                    key={displayedLevel}
+                    className={`profile-avatar-history-item${isCurrent ? " profile-avatar-history-item--current" : ""}${isFuture ? " profile-avatar-history-item--locked" : ""}`}
+                    aria-current={isCurrent ? "step" : undefined}
+                  >
+                    <span className={`profile-gecko-stage profile-avatar-history-stage${christmasActive ? " profile-avatar-christmas" : ""}`} data-level={displayedLevel}>
+                      <img className="profile-animal-image" src={imageForLevel(avatar, displayedLevel, variant)} alt={`${avatar.label} au niveau ${displayedLevel}`} draggable="false" />
                     </span>
-                    <figcaption>Niveau {index + 1} · {evolutionLabel}</figcaption>
+                    <figcaption>
+                      Niveau {displayedLevel} · {evolutionLabel}
+                      {isCurrent && <span className="profile-avatar-history-status">Niveau actuel</span>}
+                      {isFuture && <span className="profile-avatar-history-status">À débloquer</span>}
+                    </figcaption>
                   </figure>
-                ))}
+                );
+              })}
+            </div>
+            {customImage && (
+              <div className="small profile-custom-image-help">
+                Ces évolutions concernent l’avatar sélectionné. La photo personnelle reste inchangée.
               </div>
-            ) : (
-              <div className="small">Aucune évolution précédente pour le moment.</div>
             )}
           </div>
         )}
