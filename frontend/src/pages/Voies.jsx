@@ -6,6 +6,7 @@ import { API_BASE, apiFetch, apiUploadVideoInChunks } from "../lib/api.js";
 import { REALISATIONS_PAGE_SIZE, fetchPaginatedCollection } from "../lib/bootstrap-data.js";
 import { GRADES, formatRouteName, getRouteCardStyle, normalizeRopeNumber } from "../lib/domain.js";
 import {
+  ROUTE_REALISATION_EXCLUSION_OPTIONS,
   ROUTE_REALISATION_FILTER_OPTIONS,
   filterRouteDisplayGroups,
   formatRouteProgress,
@@ -77,6 +78,7 @@ export default function Voies({
   const [videoDeleteCandidate, setVideoDeleteCandidate] = React.useState(null);
   const [qrRouteId, setQrRouteId] = React.useState("");
   const [routeRealisationFilter, setRouteRealisationFilter] = React.useState([]);
+  const [routeRealisationExclusionFilter, setRouteRealisationExclusionFilter] = React.useState([]);
   const [currentParticipantId, setCurrentParticipantId] = React.useState("");
   const [myRouteRealisations, setMyRouteRealisations] = React.useState([]);
   const [routeProgressError, setRouteProgressError] = React.useState("");
@@ -92,8 +94,10 @@ export default function Voies({
     [myRouteRealisations, currentParticipantId],
   );
   const filteredRouteDisplayGroups = React.useMemo(
-    () => filterRouteDisplayGroups(routeDisplayGroups, realisationsByRoute, routeRealisationFilter),
-    [routeDisplayGroups, realisationsByRoute, routeRealisationFilter],
+    () => filterRouteDisplayGroups(
+      routeDisplayGroups, realisationsByRoute, routeRealisationFilter, routeRealisationExclusionFilter,
+    ),
+    [routeDisplayGroups, realisationsByRoute, routeRealisationFilter, routeRealisationExclusionFilter],
   );
 
   const loadMyRouteRealisations = React.useCallback(async () => {
@@ -136,6 +140,7 @@ export default function Voies({
   }, [videoRouteId]);
 
   function toggleRouteRealisationType(value) {
+    setRouteRealisationExclusionFilter((selected) => selected.filter((type) => type !== value));
     setRouteRealisationFilter((selected) => (
       selected.includes(value)
         ? selected.filter((type) => type !== value)
@@ -143,11 +148,28 @@ export default function Voies({
     ));
   }
 
-  const selectedRealisationFilterLabel = routeRealisationFilter.length === 0
+  function toggleRouteRealisationExclusion(value) {
+    setRouteRealisationFilter((selected) => selected.filter((type) => type !== value));
+    setRouteRealisationExclusionFilter((selected) => (
+      selected.includes(value)
+        ? selected.filter((type) => type !== value)
+        : [...selected, value]
+    ));
+  }
+
+  const selectedRouteFilterLabels = [
+    ...routeRealisationFilter.map((value) => (
+      ROUTE_REALISATION_FILTER_OPTIONS.find((option) => option.value === value)?.label || value
+    )),
+    ...routeRealisationExclusionFilter.map((value) => (
+      ROUTE_REALISATION_EXCLUSION_OPTIONS.find((option) => option.value === value)?.label || value
+    )),
+  ];
+  const selectedRealisationFilterLabel = selectedRouteFilterLabels.length === 0
     ? "Toutes les voies"
-    : routeRealisationFilter.length === 1
-      ? ROUTE_REALISATION_FILTER_OPTIONS.find((option) => option.value === routeRealisationFilter[0])?.label || "1 type"
-      : `${routeRealisationFilter.length} types sélectionnés`;
+    : selectedRouteFilterLabels.length === 1
+      ? selectedRouteFilterLabels[0]
+      : `${selectedRouteFilterLabels.length} filtres actifs`;
 
   function toggleRouteDetails(routeId) {
   const key = String(routeId);
@@ -465,7 +487,7 @@ function handleRouteSummaryKeyDown(event, routeId) {
             <details className="route-realisation-filters">
               <summary id="route-realisation-filter">Réalisation : {selectedRealisationFilterLabel}</summary>
               <fieldset className="route-realisation-filter-options">
-                <legend>Afficher les voies correspondant à au moins un type sélectionné</legend>
+                <legend>Inclure : au moins un des types sélectionnés</legend>
                 {ROUTE_REALISATION_FILTER_OPTIONS.filter((option) => option.value !== "all").map((option) => (
                   <label className="checkbox-field" key={option.value}>
                     <input
@@ -476,10 +498,29 @@ function handleRouteSummaryKeyDown(event, routeId) {
                     <span>{option.label}</span>
                   </label>
                 ))}
-                <button type="button" className="secondary" onClick={() => setRouteRealisationFilter([])} disabled={routeRealisationFilter.length === 0}>
-                  Effacer les filtres
-                </button>
               </fieldset>
+              <fieldset className="route-realisation-filter-options">
+                <legend>Exclure : aucune réalisation du type sélectionné</legend>
+                {ROUTE_REALISATION_EXCLUSION_OPTIONS.map((option) => (
+                  <label className="checkbox-field" key={option.value}>
+                    <input
+                      type="checkbox"
+                      checked={routeRealisationExclusionFilter.includes(option.value)}
+                      onChange={() => toggleRouteRealisationExclusion(option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </fieldset>
+              <div className="small">« Jamais : En tête » exclut les voies « Moulinette uniquement ».</div>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => { setRouteRealisationFilter([]); setRouteRealisationExclusionFilter([]); }}
+                disabled={routeRealisationFilter.length === 0 && routeRealisationExclusionFilter.length === 0}
+              >
+                Effacer les filtres
+              </button>
             </details>
           </div>
         </div>
