@@ -78,18 +78,22 @@ export function formatRouteProgress(realisations, route) {
 
 export function matchesRouteRealisationFilter(realisations, route, filterValue) {
   const list = Array.isArray(realisations) ? realisations : [];
-  const filter = String(filterValue || "all");
-  if (filter === "all") return true;
-  if (filter === "none") return list.length === 0;
+  const selectedFilters = Array.isArray(filterValue) ? filterValue : [filterValue || "all"];
+  if (selectedFilters.length === 0 || selectedFilters.includes("all")) return true;
 
-  const [kind, value] = filter.split(":", 2);
-  if (kind === "criterion") {
-    return list.some((realisation) => getRealisationCriterion(realisation) === value);
-  }
-  if (kind === "mode") {
-    return list.some((realisation) => getRealisationMode(realisation, route) === value);
-  }
-  return true;
+  // Plusieurs types sélectionnés : union des voies, jamais cumul de réalisations fictives.
+  return selectedFilters.some((filter) => {
+    if (filter === "none") return list.length === 0;
+
+    const [kind, value] = String(filter).split(":", 2);
+    if (kind === "criterion") {
+      return list.some((realisation) => getRealisationCriterion(realisation) === value);
+    }
+    if (kind === "mode") {
+      return list.some((realisation) => getRealisationMode(realisation, route) === value);
+    }
+    return false;
+  });
 }
 
 export function filterRouteDisplayGroups(groups, realisationsByRoute, filterValue) {

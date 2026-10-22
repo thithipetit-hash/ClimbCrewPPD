@@ -12,6 +12,7 @@ import {
   groupParticipantRealisationsByRoute,
 } from "../lib/route-progress.js";
 import { ROPE_NUMBERS, ROUTE_COLORS, ROUTE_TAGS } from "../lib/ui-config.js";
+import "../styles/route-realisation-filters.css";
 
 function parseVideoUrls(text) {
   return [...new Set(String(text || "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean))];
@@ -75,7 +76,7 @@ export default function Voies({
   const [comparisonOpen, setComparisonOpen] = React.useState(false);
   const [videoDeleteCandidate, setVideoDeleteCandidate] = React.useState(null);
   const [qrRouteId, setQrRouteId] = React.useState("");
-  const [routeRealisationFilter, setRouteRealisationFilter] = React.useState("all");
+  const [routeRealisationFilter, setRouteRealisationFilter] = React.useState([]);
   const [currentParticipantId, setCurrentParticipantId] = React.useState("");
   const [myRouteRealisations, setMyRouteRealisations] = React.useState([]);
   const [routeProgressError, setRouteProgressError] = React.useState("");
@@ -133,6 +134,20 @@ export default function Voies({
     setComparisonOpen(false);
     setVideoSaveStatus("");
   }, [videoRouteId]);
+
+  function toggleRouteRealisationType(value) {
+    setRouteRealisationFilter((selected) => (
+      selected.includes(value)
+        ? selected.filter((type) => type !== value)
+        : [...selected, value]
+    ));
+  }
+
+  const selectedRealisationFilterLabel = routeRealisationFilter.length === 0
+    ? "Toutes les voies"
+    : routeRealisationFilter.length === 1
+      ? ROUTE_REALISATION_FILTER_OPTIONS.find((option) => option.value === routeRealisationFilter[0])?.label || "1 type"
+      : `${routeRealisationFilter.length} types sélectionnés`;
 
   function toggleRouteDetails(routeId) {
   const key = String(routeId);
@@ -447,10 +462,25 @@ function handleRouteSummaryKeyDown(event, routeId) {
           <div className="group">
             <label htmlFor="route-sort-mode">Trier par</label>
             <select id="route-sort-mode" value={routeSortMode} onChange={(event) => setRouteSortMode(event.target.value)} style={{ width: "auto", minWidth: 130 }}><option value="corde">Corde</option><option value="cotation">Cotation</option></select>
-            <label htmlFor="route-realisation-filter">Réalisation</label>
-            <select id="route-realisation-filter" value={routeRealisationFilter} onChange={(event) => setRouteRealisationFilter(event.target.value)} style={{ width: "auto", minWidth: 150 }}>
-              {ROUTE_REALISATION_FILTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
+            <details className="route-realisation-filters">
+              <summary id="route-realisation-filter">Réalisation : {selectedRealisationFilterLabel}</summary>
+              <fieldset className="route-realisation-filter-options">
+                <legend>Afficher les voies correspondant à au moins un type sélectionné</legend>
+                {ROUTE_REALISATION_FILTER_OPTIONS.filter((option) => option.value !== "all").map((option) => (
+                  <label className="checkbox-field" key={option.value}>
+                    <input
+                      type="checkbox"
+                      checked={routeRealisationFilter.includes(option.value)}
+                      onChange={() => toggleRouteRealisationType(option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+                <button type="button" className="secondary" onClick={() => setRouteRealisationFilter([])} disabled={routeRealisationFilter.length === 0}>
+                  Effacer les filtres
+                </button>
+              </fieldset>
+            </details>
           </div>
         </div>
         {routeProgressError && <div className="small" role="status" style={{ marginBottom: 10 }}>{routeProgressError}</div>}

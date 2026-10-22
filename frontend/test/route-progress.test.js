@@ -42,3 +42,36 @@ test("le filtrage conserve les groupes et ne garde que les voies correspondantes
   const filtered = filterRouteDisplayGroups(groups, grouped, "criterion:flash");
   assert.deepEqual(filtered[0].routes.map((item) => item.id), ["r1"]);
 });
+test("plusieurs critères sélectionnés affichent l'union des voies sans doublon", () => {
+  const mine = realisations.slice(0, 2);
+  assert.equal(matchesRouteRealisationFilter(mine, route, ["criterion:projet", "criterion:flash"]), true);
+  assert.equal(matchesRouteRealisationFilter(mine, route, ["criterion:a_vue", "criterion:travaillee"]), false);
+  const grouped = groupParticipantRealisationsByRoute(realisations, "p1");
+  const groups = [{ key: "g", label: "Groupe", routes: [route, { id: "r2" }] }];
+  const filtered = filterRouteDisplayGroups(groups, grouped, ["criterion:projet", "mode:moulinette"]);
+  assert.deepEqual(filtered[0].routes.map((item) => item.id), ["r1"]);
+});
+
+test("les modes, critères et voies non essayées peuvent être combinés", () => {
+  assert.equal(matchesRouteRealisationFilter(realisations.slice(0, 2), route, ["none", "mode:en_tete"]), true);
+  assert.equal(matchesRouteRealisationFilter([], route, ["none", "criterion:flash"]), true);
+  assert.equal(matchesRouteRealisationFilter(realisations.slice(0, 2), route, ["none", "criterion:a_vue"]), false);
+});
+
+test("aucune sélection affiche toutes les voies et les anciens filtres restent valides", () => {
+  assert.equal(matchesRouteRealisationFilter([], route, []), true);
+  assert.equal(matchesRouteRealisationFilter(realisations.slice(0, 2), route, []), true);
+  assert.equal(matchesRouteRealisationFilter([], route, "all"), true);
+  assert.equal(matchesRouteRealisationFilter([], route, ["all", "criterion:flash"]), true);
+  assert.equal(matchesRouteRealisationFilter(realisations.slice(0, 2), route, "criterion:flash"), true);
+  assert.equal(matchesRouteRealisationFilter([], route, ["mode:inconnu"]), false);
+});
+
+test("le filtre de l'écran Voies propose des cases à cocher cumulables", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("../src/pages/Voies.jsx", import.meta.url), "utf8");
+  assert.match(source, /routeRealisationFilter\.includes\(option\.value\)/);
+  assert.match(source, /toggleRouteRealisationType\(option\.value\)/);
+  assert.match(source, /setRouteRealisationFilter\(\[\]\)/);
+  assert.match(source, /type="checkbox"/);
+});
