@@ -102,3 +102,14 @@
   background: url("/media/avatars/christmas/santa-hat.svg") center / contain no-repeat;
   pointer-events: none;
 }
+
+.profile-avatar-edit-button { width: min(260px, 100%); margin-top: 8px; }
+.profile-avatar-history-item--current {
+  padding: 4px;
+  border: 2px solid var(--gecko-accent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--gecko-accent) 12%, var(--theme-card));
+}
+.profile-avatar-history-item--current figcaption { color: var(--theme-text); font-weight: 800; }
+.profile-avatar-history-item--locked { filter: grayscale(1); opacity: .48; }
+.profile-avatar-history-status { display: block; margin-top: 2px; font-size: 9px; }
