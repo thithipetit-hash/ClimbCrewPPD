@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { GRADES } from "../../../shared/climbing-grades.js";
+import { GRADES } from "../../shared/climbing-grades.js";
 import { GECKO_LEVEL_LABELS, getGeckoLevel, getGeckoLevelInfo } from "../src/lib/gecko-level.js";
 
 test("les huit niveaux couvrent toutes les cotations du CPR, dès 7a pour l'Élite", () => {
