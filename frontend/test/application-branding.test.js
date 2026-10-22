@@ -12,10 +12,10 @@ const visibleSurfaces = [
   "../src/sections/FaqSection.jsx",
 ];
 
-test("les pages et l'application installable utilisent le nom CristalClimbCrew", () => {
+test("les pages et l'application installable utilisent le nom CristalClimbClub", () => {
   for (const path of visibleSurfaces) {
     const source = readFileSync(new URL(path, import.meta.url), "utf8");
-    assert.match(source, /CristalClimbCrew/, path);
-    assert.doesNotMatch(source, /CristalClimbClub|\bClimbCrew\b/, path);
+    assert.match(source, /CristalClimbClub/, path);
+    assert.doesNotMatch(source, /CristalClimbCrew|\bClimbCrew\b/, path);
   }
 });

@@ -8,11 +8,11 @@ export default function AppSidebar({
   onClose,
 }) {
   return (
-    <aside className={`sidebar ${open ? "open" : ""}`} aria-label="Navigation CristalClimbCrew">
+    <aside className={`sidebar ${open ? "open" : ""}`} aria-label="Navigation CristalClimbClub">
       <div className="sidebar-header">
         <div className="sidebar-brand">
-          <img src="/logo-climbcrew.png" alt="Logo CristalClimbCrew" className="sidebar-logo" />
-          <span>CristalClimbCrew</span>
+          <img src="/logo-climbcrew.png" alt="Logo CristalClimbClub" className="sidebar-logo" />
+          <span>CristalClimbClub</span>
         </div>
         <button
           className="sidebar-close sidebar-logout"

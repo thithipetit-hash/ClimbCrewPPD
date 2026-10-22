@@ -3,8 +3,8 @@ import DemandesEvolution from "../pages/DemandesEvolution.jsx";
 
 const HELP_ITEMS = [
   {
-    title: "À quoi sert CristalClimbCrew ?",
-    content: "CristalClimbCrew gère les séances, les inscriptions, les participants, les voies, les profils et la progression des grimpeurs du site SAE de Cristal. Les séances sont disponibles en vues Jour et Semaine et peuvent être Libres, Encadrées, Passeport, Challenge, Renouvellement ou Fermées.",
+    title: "À quoi sert CristalClimbClub ?",
+    content: "CristalClimbClub gère les séances, les inscriptions, les participants, les voies, les profils et la progression des grimpeurs du site SAE de Cristal. Les séances sont disponibles en vues Jour et Semaine et peuvent être Libres, Encadrées, Passeport, Challenge, Renouvellement ou Fermées.",
   },
   {
     title: "Qui peut changer le statut d'une séance ?",
@@ -99,7 +99,7 @@ export default function FaqSection({ APP_VERSION, USE_API, authUser }) {
   return (
     <div className="card">
       <div className="card-header">
-        <h2>FAQ - fonctionnement de CristalClimbCrew</h2>
+        <h2>FAQ - fonctionnement de CristalClimbClub</h2>
         <span className="small">Version : {APP_VERSION}</span>
       </div>
 

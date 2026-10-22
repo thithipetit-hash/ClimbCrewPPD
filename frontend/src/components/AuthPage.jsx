@@ -35,9 +35,9 @@ export default function AuthPage({
       <div className="auth-page">
         <div className="auth-card">
           <div className="brand auth-brand">
-            <img src="/logo-climbcrew.png" alt="Logo CristalClimbCrew" className="app-logo" />
+            <img src="/logo-climbcrew.png" alt="Logo CristalClimbClub" className="app-logo" />
             <div>
-              <h1>CristalClimbCrew</h1>
+              <h1>CristalClimbClub</h1>
               <p className="small">Chargement de la session…</p>
             </div>
           </div>
@@ -50,9 +50,9 @@ export default function AuthPage({
     <div className="auth-page">
       <div className="auth-card">
         <div className="brand auth-brand">
-          <img src="/logo-climbcrew.png" alt="Logo CristalClimbCrew" className="app-logo" />
+          <img src="/logo-climbcrew.png" alt="Logo CristalClimbClub" className="app-logo" />
           <div>
-            <h1>CristalClimbCrew</h1>
+            <h1>CristalClimbClub</h1>
             <p className="small">Connexion requise pour accéder à l’application.</p>
           </div>
         </div>
