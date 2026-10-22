@@ -28,7 +28,7 @@ const SMTP_SECURE = envBoolean("SMTP_SECURE", SMTP_PORT === 465);
 const SMTP_REQUIRE_TLS = envBoolean("SMTP_REQUIRE_TLS", SMTP_PORT !== 465);
 const SMTP_USER = String(process.env.SMTP_USER || "").trim();
 const SMTP_PASSWORD = String(process.env.SMTP_PASSWORD || "");
-const EMAIL_FROM_NAME = String(process.env.EMAIL_FROM_NAME || "CristalClimbCrew").trim();
+const EMAIL_FROM_NAME = String(process.env.EMAIL_FROM_NAME || "CristalClimbClub").trim();
 const EMAIL_FROM_ADDRESS = String(process.env.EMAIL_FROM_ADDRESS || SMTP_USER || "").trim();
 const EMAIL_REPLY_TO = String(process.env.EMAIL_REPLY_TO || "").trim();
 const PUBLIC_URL = String(
@@ -75,7 +75,7 @@ async function sendEmail({ to, subject, text, html, attachments = [] }) {
 
   const info = await activeTransporter.sendMail({
     from: {
-      name: EMAIL_FROM_NAME || "CristalClimbCrew",
+      name: EMAIL_FROM_NAME || "CristalClimbClub",
       address: EMAIL_FROM_ADDRESS,
     },
     to: target,
@@ -161,9 +161,9 @@ export async function sendBackupEmail({ to, filePath, fileName, size }) {
 
     return await sendEmail({
       to,
-      subject: `Sauvegarde chiffrée CristalClimbCrew — ${encryptedFileName}`,
+      subject: `Sauvegarde chiffrée CristalClimbClub — ${encryptedFileName}`,
       text: [
-        "Sauvegarde PostgreSQL complète de CristalClimbCrew, chiffrée avant envoi.",
+        "Sauvegarde PostgreSQL complète de CristalClimbClub, chiffrée avant envoi.",
         `Fichier : ${encryptedFileName}`,
         `Format : ${encrypted.format} — ${encrypted.algorithm}`,
         `Taille du dump original : ${originalSizeMb} Mo`,
@@ -172,7 +172,7 @@ export async function sendBackupEmail({ to, filePath, fileName, size }) {
         "La clé de déchiffrement BACKUP_EMAIL_ENCRYPTION_KEY n'est jamais envoyée par e-mail.",
         "Conserver cette clé dans un emplacement distinct et protégé.",
       ].join("\n"),
-      html: `<p><strong>Sauvegarde PostgreSQL complète de CristalClimbCrew, chiffrée avant envoi.</strong></p><p>Fichier : ${encryptedFileName}<br>Format : ${encrypted.format} — ${encrypted.algorithm}<br>Taille du dump original : ${originalSizeMb} Mo<br>Taille chiffrée : ${encryptedSizeMb} Mo<br>Créée / envoyée : ${now}</p><p>La clé de déchiffrement <code>BACKUP_EMAIL_ENCRYPTION_KEY</code> n'est jamais envoyée par e-mail. Conserver cette clé dans un emplacement distinct et protégé.</p>`,
+      html: `<p><strong>Sauvegarde PostgreSQL complète de CristalClimbClub, chiffrée avant envoi.</strong></p><p>Fichier : ${encryptedFileName}<br>Format : ${encrypted.format} — ${encrypted.algorithm}<br>Taille du dump original : ${originalSizeMb} Mo<br>Taille chiffrée : ${encryptedSizeMb} Mo<br>Créée / envoyée : ${now}</p><p>La clé de déchiffrement <code>BACKUP_EMAIL_ENCRYPTION_KEY</code> n'est jamais envoyée par e-mail. Conserver cette clé dans un emplacement distinct et protégé.</p>`,
       attachments: [{
         filename: encryptedFileName,
         path: temporaryEncryptedPath,
