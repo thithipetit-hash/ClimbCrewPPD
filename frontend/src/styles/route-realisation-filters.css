@@ -1,0 +1,46 @@
+.route-realisation-filters {
+  min-width: min(225px, 100%);
+  max-width: 100%;
+}
+
+.route-realisation-filters > summary {
+  cursor: pointer;
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: var(--theme-card);
+  color: var(--theme-text);
+  font-weight: 700;
+}
+
+.route-realisation-filters > summary:focus-visible {
+  outline: 2px solid var(--theme-accent, #0284c7);
+  outline-offset: 2px;
+}
+
+.route-realisation-filter-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 4px 12px;
+  width: min(460px, calc(100vw - 48px));
+  max-width: 100%;
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  background: var(--theme-card-soft);
+}
+
+.route-realisation-filter-options legend {
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 0 4px;
+}
+
+.route-realisation-filter-options .checkbox-field {
+  min-height: 34px;
+}
+
+.route-realisation-filter-options button {
+  justify-self: start;
+}
