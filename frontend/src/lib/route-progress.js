@@ -32,6 +32,10 @@ export const ROUTE_REALISATION_FILTER_OPTIONS = [
   })),
 ];
 
+export const ROUTE_REALISATION_EXCLUSION_OPTIONS = ROUTE_REALISATION_FILTER_OPTIONS
+  .filter(({ value }) => value.startsWith("criterion:") || value.startsWith("mode:"))
+  .map(({ value, label }) => ({ value, label: `Jamais : ${label}` }));
+
 export function groupParticipantRealisationsByRoute(realisations, participantId) {
   const participantKey = String(participantId || "");
   const grouped = new Map();
@@ -76,33 +80,50 @@ export function formatRouteProgress(realisations, route) {
   return `${prefix} · ${formatRealisationModeCriterion(best, route)}`;
 }
 
-export function matchesRouteRealisationFilter(realisations, route, filterValue) {
-  const list = Array.isArray(realisations) ? realisations : [];
-  const selectedFilters = Array.isArray(filterValue) ? filterValue : [filterValue || "all"];
-  if (selectedFilters.length === 0 || selectedFilters.includes("all")) return true;
+function matchesSingleRouteRealisationFilter(realisations, route, filter) {
+  if (filter === "none") return realisations.length === 0;
 
-  // Plusieurs types sélectionnés : union des voies, jamais cumul de réalisations fictives.
-  return selectedFilters.some((filter) => {
-    if (filter === "none") return list.length === 0;
-
-    const [kind, value] = String(filter).split(":", 2);
-    if (kind === "criterion") {
-      return list.some((realisation) => getRealisationCriterion(realisation) === value);
-    }
-    if (kind === "mode") {
-      return list.some((realisation) => getRealisationMode(realisation, route) === value);
-    }
-    return false;
-  });
+  const [kind, value] = String(filter).split(":", 2);
+  if (kind === "criterion") {
+    return realisations.some((realisation) => getRealisationCriterion(realisation) === value);
+  }
+  if (kind === "mode") {
+    return realisations.some((realisation) => getRealisationMode(realisation, route) === value);
+  }
+  return false;
 }
 
-export function filterRouteDisplayGroups(groups, realisationsByRoute, filterValue) {
+function routeSupportsExcludedMode(route, filter) {
+  // Une voie limitée à la moulinette ne doit pas compter parmi les voies à faire en tête.
+  if (filter === "mode:en_tete" && (route?.moulinetteOnly || route?.moulinette_only)) {
+    return false;
+  }
+  return true;
+}
+
+export function matchesRouteRealisationFilter(realisations, route, filterValue, excludedFilters = []) {
+  const list = Array.isArray(realisations) ? realisations : [];
+  const selectedFilters = Array.isArray(filterValue) ? filterValue : [filterValue || "all"];
+  const exclusions = Array.isArray(excludedFilters) ? excludedFilters : [];
+
+  // Les inclusions sont alternatives ; les exclusions s'appliquent toutes.
+  const included = selectedFilters.length === 0
+    || selectedFilters.includes("all")
+    || selectedFilters.some((filter) => matchesSingleRouteRealisationFilter(list, route, filter));
+  return included && exclusions.every((filter) => (
+    routeSupportsExcludedMode(route, filter)
+    && !matchesSingleRouteRealisationFilter(list, route, filter)
+  ));
+}
+
+export function filterRouteDisplayGroups(groups, realisationsByRoute, filterValue, excludedFilters = []) {
   return (groups || []).map((group) => ({
     ...group,
     routes: (group.routes || []).filter((route) => matchesRouteRealisationFilter(
       realisationsByRoute.get(String(route.id)) || [],
       route,
       filterValue,
+      excludedFilters,
     )),
   }));
 }
