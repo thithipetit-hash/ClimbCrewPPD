@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import Button from "./components/Button.jsx";
 import AuthPage from "./components/AuthPage.jsx";
+import NovemberPumpkinWelcome from "./components/NovemberPumpkinWelcome.jsx";
 import AppSidebar from "./components/AppSidebar.jsx";
 import MobileBottomNav from "./components/MobileBottomNav.jsx";
 import BroadcastMessageModal from "./components/BroadcastMessageModal.jsx";
@@ -52,6 +53,7 @@ import {
 } from "./lib/domain.js";
 import { USE_API, apiFetch, downloadFile } from "./lib/api.js";
 import { createAuthSessionActions } from "./lib/auth-session-actions.js";
+import { selectNovemberPumpkin } from "./lib/seasonal-avatar.js";
 import { normalizeAppData } from "./lib/normalize.js";
 import { APP_VERSION } from "./lib/version.js";
 import { EMPTY_APP_DATA, useAppBusinessState } from "./hooks/useAppBusinessState.js";
@@ -86,6 +88,7 @@ import { normalizeSessionRoles } from "../../shared/session-rules.js";
 const ADMIN_CODE = import.meta.env.VITE_LEGACY_ADMIN_CODE || "";
 
 function App() {
+  const [novemberPumpkin, setNovemberPumpkin] = useState(null);
   const {
     tab, setTab,
     viewMode, setViewMode,
@@ -871,6 +874,8 @@ async function handleThemePreferenceChange(nextTheme) {
     setPendingBroadcastMessages,
     setBroadcastMessageError,
     setSyncMessage,
+    onLoginSuccess: () => setNovemberPumpkin(selectNovemberPumpkin()),
+    onLogoutSuccess: () => setNovemberPumpkin(null),
   });
 
   async function publishBroadcastMessage({ title, body }) {
@@ -1210,6 +1215,9 @@ async function handleThemePreferenceChange(nextTheme) {
 
   return (
     <div className="app">
+      {novemberPumpkin !== null && (
+        <NovemberPumpkinWelcome index={novemberPumpkin} onClose={() => setNovemberPumpkin(null)} />
+      )}
       {confirmationMessage && (
         <div className="confirmation-toast" role="status" aria-live="polite">
           {confirmationMessage}
