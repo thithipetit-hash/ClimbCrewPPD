@@ -58,3 +58,42 @@ test("App délègue les actions de session au module extrait", () => {
   assert.doesNotMatch(appSource, /async function handleLogin\(/);
   assert.doesNotMatch(appSource, /async function handleLogout\(/);
 });
+
+test("un accueil saisonnier est déclenché après chaque connexion réussie, jamais en cas d'échec", async () => {
+  const { args } = baseSetters();
+  let welcomeCount = 0;
+  const actionOptions = {
+    ...args,
+    loginForm: { email: "test@example.test", password: "secret" },
+    reloadApiState: async () => {},
+    onLoginSuccess: () => { welcomeCount += 1; },
+  };
+  const success = createAuthSessionActions({
+    ...actionOptions,
+    request: async () => ({ user: { id: "42", role: "user" } }),
+  });
+  await success.handleLogin();
+  await success.handleLogin();
+  assert.equal(welcomeCount, 2);
+
+  const failure = createAuthSessionActions({
+    ...actionOptions,
+    request: async () => { throw new Error("identifiants incorrects"); },
+  });
+  await failure.handleLogin();
+  assert.equal(welcomeCount, 2);
+});
+
+test("la déconnexion réussie efface l'accueil saisonnier", async () => {
+  const { args } = baseSetters();
+  let closed = 0;
+  const actions = createAuthSessionActions({
+    ...args,
+    loginForm: {},
+    reloadApiState: async () => {},
+    request: async () => ({}),
+    onLogoutSuccess: () => { closed += 1; },
+  });
+  assert.equal(await actions.handleLogout(), true);
+  assert.equal(closed, 1);
+});
