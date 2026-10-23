@@ -16,6 +16,8 @@ export function createAuthSessionActions({
   setPendingBroadcastMessages,
   setBroadcastMessageError,
   setSyncMessage,
+  onLoginSuccess = () => {},
+  onLogoutSuccess = () => {},
 }) {
   async function handleLogin() {
     try {
@@ -33,6 +35,7 @@ export function createAuthSessionActions({
       setAuthView("login");
       setGeneratedResetToken("");
       setAuthMessage("Connexion réussie.");
+      onLoginSuccess();
 
       try {
         await reloadApiState({ isMounted: () => true });
@@ -56,6 +59,7 @@ export function createAuthSessionActions({
     }
 
     setAuthUser(null);
+    onLogoutSuccess();
     setAdminUnlocked(false);
     setGeneratedResetToken("");
     setAdminAuthUsers([]);
