@@ -1,0 +1,47 @@
+.november-pumpkin-welcome {
+  position: fixed;
+  z-index: 1100;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(88px, calc(16px + env(safe-area-inset-bottom)));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(370px, calc(100vw - 32px));
+  min-height: 140px;
+  padding: 14px 36px 14px 10px;
+  border: 1px solid #cc7b26;
+  border-radius: 18px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.25);
+  background: var(--theme-card, #ffffff);
+  color: var(--theme-text, #1f2937);
+}
+.november-pumpkin-welcome__art {
+  flex: 0 0 116px;
+  width: 116px;
+  height: 116px;
+  background-image: url("/media/seasonal/november-2026/pumpkins-sprite.webp");
+  background-size: 500% 400%;
+  background-repeat: no-repeat;
+}
+.november-pumpkin-welcome__copy { display: grid; gap: 5px; font-size: 13px; }
+.november-pumpkin-welcome__copy strong { font-size: 15px; line-height: 1.3; }
+.november-pumpkin-welcome__close {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.november-pumpkin-welcome__close:hover,
+.november-pumpkin-welcome__close:focus-visible { outline: 2px solid #cc7b26; }
+@media (max-width: 640px) {
+  .november-pumpkin-welcome { right: 12px; bottom: max(82px, calc(76px + env(safe-area-inset-bottom))); }
+  .november-pumpkin-welcome__art { flex-basis: 98px; width: 98px; height: 98px; }
+}
