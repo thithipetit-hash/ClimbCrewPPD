@@ -21,3 +21,24 @@ test("le rafraîchissement est programmé à minuit local", () => {
   assert.equal(millisecondsUntilNextLocalDay(new Date(2026, 11, 31, 23, 59, 59, 900)), 100);
   assert.equal(millisecondsUntilNextLocalDay(new Date(2026, 11, 1, 0, 0)), 24 * 60 * 60 * 1000);
 });
+
+test("les citrouilles de novembre n’apparaissent que du 1er au 30 novembre 2026 (date locale)", async () => {
+  const { isNovemberPumpkinDate } = await import("../src/lib/seasonal-avatar.js");
+  assert.equal(isNovemberPumpkinDate(new Date(2026, 9, 31, 23, 59)), false);
+  assert.equal(isNovemberPumpkinDate(new Date(2026, 10, 1, 0, 0)), true);
+  assert.equal(isNovemberPumpkinDate(new Date(2026, 10, 30, 23, 59)), true);
+  assert.equal(isNovemberPumpkinDate(new Date(2026, 11, 1, 0, 0)), false);
+  assert.equal(isNovemberPumpkinDate(new Date(2027, 10, 15, 12, 0)), false);
+});
+
+test("un tirage aléatoire sélectionne chacune des vingt images, seulement en novembre", async () => {
+  const { NOVEMBER_PUMPKIN_COUNT, selectNovemberPumpkin } = await import("../src/lib/seasonal-avatar.js");
+  assert.equal(NOVEMBER_PUMPKIN_COUNT, 20);
+  const november = new Date(2026, 10, 15);
+  assert.deepEqual(
+    Array.from({ length: 20 }, (_, index) => selectNovemberPumpkin(november, () => (index + 0.5) / 20)),
+    Array.from({ length: 20 }, (_, index) => index),
+  );
+  assert.equal(selectNovemberPumpkin(november, () => 1), 19);
+  assert.equal(selectNovemberPumpkin(new Date(2026, 11, 1), () => 0), null);
+});
