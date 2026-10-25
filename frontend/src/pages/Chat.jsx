@@ -2,12 +2,14 @@ import React from "react";
 import { API_BASE, apiFetch, apiUpload } from "../lib/api.js";
 import { customAvatarSource } from "../lib/custom-avatar.js";
 import { AVATAR_OPTIONS } from "../components/ProfileGecko.jsx";
+import { pumpkinIndexForParticipant, pumpkinSpriteStyle } from "../lib/seasonal-avatar.js";
+import "../styles/seasonal-pumpkin.css";
 import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import "../styles/chat.css";
 
 const EMOJIS = ["😀","😂","😊","😍","👍","👏","💪","🧗","🔥","🎉","❤️","🤔","😅","🙌","👋","✅","📸","🏆"];
 
-export default function Chat({ myParticipantId, participants = [], canPin = false }) {
+export default function Chat({ myParticipantId, participants = [], canPin = false, octoberPumpkinSalt = null }) {
   const [messages, setMessages] = React.useState([]);
   const [text, setText] = React.useState("");
   const [error, setError] = React.useState("");
@@ -302,8 +304,12 @@ export default function Chat({ myParticipantId, participants = [], canPin = fals
           const mine = String(item.participantId) === String(myParticipantId);
           return (
             <div className={mine ? "chat-row chat-row-mine" : "chat-row"} key={item.id}>
-              {item.kind !== "system" && avatarSource(item.participantId) && (
-                <img className="chat-avatar" src={avatarSource(item.participantId)} alt="" aria-hidden="true" />
+              {item.kind !== "system" && (
+                octoberPumpkinSalt !== null && participantsById[String(item.participantId)] ? (
+                  <span className="chat-avatar seasonal-pumpkin-avatar" style={pumpkinSpriteStyle(pumpkinIndexForParticipant(item.participantId, octoberPumpkinSalt))} aria-hidden="true" />
+                ) : avatarSource(item.participantId) ? (
+                  <img className="chat-avatar" src={avatarSource(item.participantId)} alt="" aria-hidden="true" />
+                ) : null
               )}
               <div className={`${mine ? "chat-bubble chat-bubble-mine" : "chat-bubble"} ${item.kind === "system" ? "chat-bubble-system" : ""}`} role="button" tabIndex={0} aria-expanded={activeMessageId === item.id} onClick={() => setActiveMessageId((current) => current === item.id ? null : item.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setActiveMessageId((current) => current === item.id ? null : item.id); } }}>
                 {!mine && <strong>{displayName(item.participantId)}</strong>}

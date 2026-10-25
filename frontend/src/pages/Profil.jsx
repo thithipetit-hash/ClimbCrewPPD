@@ -103,6 +103,7 @@ export default function Profil({
   exportMyRealisationsCsv,
   onTheCragImported,
   onRealisationsChanged,
+  octoberPumpkinSalt = null,
 }) {
   const [participants, setParticipants] = React.useState(() => myParticipant ? [myParticipant] : []);
   const [selectedParticipantId, setSelectedParticipantId] = React.useState(() => String(myParticipantId || ""));
@@ -394,6 +395,7 @@ export default function Profil({
                 grade={cpr.currentGrade || ""}
                 sexe={selectedParticipant.sexe}
                 participant={selectedParticipant}
+                octoberPumpkinSalt={octoberPumpkinSalt}
                 editable={isOwnProfile}
                 onProfileUpdate={isOwnProfile ? handleProfileUpdate : undefined}
               />

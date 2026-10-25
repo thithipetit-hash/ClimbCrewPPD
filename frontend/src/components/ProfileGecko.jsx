@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { GECKO_LEVEL_LABELS, getGeckoLevelInfo } from "../lib/gecko-level.js";
 import { customAvatarSource } from "../lib/custom-avatar.js";
-import { isChristmasAvatarDate, millisecondsUntilNextLocalDay } from "../lib/seasonal-avatar.js";
+import { isChristmasAvatarDate, millisecondsUntilNextLocalDay, pumpkinIndexForParticipant, pumpkinSpriteStyle } from "../lib/seasonal-avatar.js";
+import "../styles/seasonal-pumpkin.css";
 import "../styles/profile-gecko.css";
 
 const LEVEL_ACCENTS = ["#65a30d", "#4d7c0f", "#0284c7", "#2563eb", "#7c3aed", "#9333ea", "#d97706", "#0ea5e9"];
@@ -112,7 +113,7 @@ function imageForLevel(avatar, level, variant) {
     || avatar.image;
 }
 
-export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate, editable = true, compact = false }) {
+export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate, editable = true, compact = false, octoberPumpkinSalt = null }) {
   const { level, variant } = getGeckoLevelInfo(grade, sexe);
   const [showEvolutionHistory, setShowEvolutionHistory] = useState(false);
   const [showAvatarEditor, setShowAvatarEditor] = useState(false);
@@ -137,6 +138,8 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
     [participant?.avatarId],
   );
   const customImage = customAvatarSource(participant);
+  const pumpkinIndex = octoberPumpkinSalt === null ? null
+    : pumpkinIndexForParticipant(participant?.id, octoberPumpkinSalt);
   const currentSexe = String(participant?.sexe || "").trim().toUpperCase();
   const selectedSexe = currentSexe === "M" ? "H" : currentSexe;
 
@@ -212,7 +215,11 @@ export default function ProfileGecko({ grade, sexe, participant, onProfileUpdate
           onClick={handleAvatarImageClick}
           title="Cliquer pour voir les huit évolutions"
         >
-          <img key={`${avatar.id}-${level}-${variant}-${avatarImageRevision}-${customImage ? "custom" : "standard"}`} className={`profile-animal-image${customImage ? " profile-custom-image" : ""}`} src={refreshableImageSource(customImage || imageForLevel(avatar, level, variant))} alt="" draggable="false" />
+          {pumpkinIndex === null ? (
+            <img key={`${avatar.id}-${level}-${variant}-${avatarImageRevision}-${customImage ? "custom" : "standard"}`} className={`profile-animal-image${customImage ? " profile-custom-image" : ""}`} src={refreshableImageSource(customImage || imageForLevel(avatar, level, variant))} alt="" draggable="false" />
+          ) : (
+            <span className="profile-animal-image seasonal-pumpkin-avatar" style={pumpkinSpriteStyle(pumpkinIndex)} role="img" aria-label="Citrouille grimpeuse d'octobre" />
+          )}
         </button>
 
         {editable && (

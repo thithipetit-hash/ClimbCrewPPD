@@ -52,6 +52,7 @@ import {
 } from "./lib/domain.js";
 import { USE_API, apiFetch, downloadFile } from "./lib/api.js";
 import { createAuthSessionActions } from "./lib/auth-session-actions.js";
+import { useOctoberPumpkin } from "./hooks/useOctoberPumpkin.js";
 import { normalizeAppData } from "./lib/normalize.js";
 import { APP_VERSION } from "./lib/version.js";
 import { EMPTY_APP_DATA, useAppBusinessState } from "./hooks/useAppBusinessState.js";
@@ -122,6 +123,8 @@ function App() {
     broadcastMessageError, setBroadcastMessageError,
     themePreference, setThemePreference,
   } = useAuthState({ useApi: USE_API, themePreferenceKey: THEME_PREFERENCE_KEY });
+
+  const octoberPumpkinSalt = useOctoberPumpkin(authUser?.id);
 
   const { newParticipant, setNewParticipant } = useParticipantEditorState();
   const {
@@ -1379,6 +1382,7 @@ async function handleThemePreferenceChange(nextTheme) {
             exportMyRealisationsCsv={exportMyRealisationsCsv}
             onTheCragImported={() => reloadApiState({ isMounted: () => true })}
             onRealisationsChanged={() => reloadApiState({ isMounted: () => true })}
+            octoberPumpkinSalt={octoberPumpkinSalt}
           />
         )}
 
@@ -1387,6 +1391,7 @@ async function handleThemePreferenceChange(nextTheme) {
             myParticipantId={myParticipantId}
             participants={state.participants}
             canPin={authUser?.role === "admin"}
+            octoberPumpkinSalt={octoberPumpkinSalt}
           />
         )}
 
