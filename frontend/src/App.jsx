@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import Button from "./components/Button.jsx";
 import AuthPage from "./components/AuthPage.jsx";
@@ -52,6 +52,7 @@ import {
 } from "./lib/domain.js";
 import { USE_API, apiFetch, downloadFile } from "./lib/api.js";
 import { createAuthSessionActions } from "./lib/auth-session-actions.js";
+import { isOctoberPumpkinDate, millisecondsUntilNextLocalDay } from "./lib/seasonal-avatar.js";
 import { normalizeAppData } from "./lib/normalize.js";
 import { APP_VERSION } from "./lib/version.js";
 import { EMPTY_APP_DATA, useAppBusinessState } from "./hooks/useAppBusinessState.js";
@@ -86,6 +87,8 @@ import { normalizeSessionRoles } from "../../shared/session-rules.js";
 const ADMIN_CODE = import.meta.env.VITE_LEGACY_ADMIN_CODE || "";
 
 function App() {
+  const [seasonalDate, setSeasonalDate] = useState(() => new Date());
+  const [pumpkinSessionSalt, setPumpkinSessionSalt] = useState(() => Math.floor(Math.random() * 0xffffffff));
   const {
     tab, setTab,
     viewMode, setViewMode,
@@ -122,6 +125,23 @@ function App() {
     broadcastMessageError, setBroadcastMessageError,
     themePreference, setThemePreference,
   } = useAuthState({ useApi: USE_API, themePreferenceKey: THEME_PREFERENCE_KEY });
+
+  useEffect(() => {
+    if (authUser?.id) setPumpkinSessionSalt(Math.floor(Math.random() * 0xffffffff));
+  }, [authUser?.id]);
+
+  useEffect(() => {
+    let midnightTimer;
+    function refreshSeasonalDate() {
+      const now = new Date();
+      setSeasonalDate(now);
+      midnightTimer = window.setTimeout(refreshSeasonalDate, millisecondsUntilNextLocalDay(now) + 50);
+    }
+    refreshSeasonalDate();
+    return () => window.clearTimeout(midnightTimer);
+  }, []);
+
+  const octoberPumpkinSalt = isOctoberPumpkinDate(seasonalDate) ? pumpkinSessionSalt : null;
 
   const { newParticipant, setNewParticipant } = useParticipantEditorState();
   const {
@@ -1379,6 +1399,7 @@ async function handleThemePreferenceChange(nextTheme) {
             exportMyRealisationsCsv={exportMyRealisationsCsv}
             onTheCragImported={() => reloadApiState({ isMounted: () => true })}
             onRealisationsChanged={() => reloadApiState({ isMounted: () => true })}
+            octoberPumpkinSalt={octoberPumpkinSalt}
           />
         )}
 
@@ -1387,6 +1408,7 @@ async function handleThemePreferenceChange(nextTheme) {
             myParticipantId={myParticipantId}
             participants={state.participants}
             canPin={authUser?.role === "admin"}
+            octoberPumpkinSalt={octoberPumpkinSalt}
           />
         )}
 
