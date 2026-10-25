@@ -12,7 +12,7 @@ test("l'habillage d'octobre reprend les vingt illustrations validées (5 × 4)",
   assert.equal((image[28] | (image[29] << 8)) & 0x3fff, 800);
   // Le contrôle d'intégrité empêche une substitution silencieuse des dessins validés.
   assert.equal(createHash("sha256").update(image).digest("hex"), "c037b5a65cc6107a353af9633ffa6d5ec82525a6fb7d46a09dc0fefb1bd19ac9");
-  assert.match(css, /pumpkins-2026-approved\\.webp/);
+  assert.match(css, /pumpkins-2026-approved\.webp/);
   assert.match(css, /background-size: 500% 400%/);
 });
 
