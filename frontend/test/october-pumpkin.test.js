@@ -18,6 +18,8 @@ test("le remplacement visuel conserve l'avatar personnel et la version normale e
   assert.match(profile, /imageForLevel\(avatar, level, variant\)/);
   assert.match(profile, /customAvatarSource\(participant\)/);
   assert.match(chat, /octoberPumpkinSalt !== null/);
-  assert.match(app, /isOctoberPumpkinDate\(seasonalDate\)/);
-  assert.match(app, /millisecondsUntilNextLocalDay\(now\)/);
+  assert.match(app, /useOctoberPumpkin\(authUser\?\.id\)/);
+  const hook = readFileSync(new URL("../src/hooks/useOctoberPumpkin.js", import.meta.url), "utf8");
+  assert.match(hook, /millisecondsUntilNextLocalDay\(now\)/);
+  assert.match(hook, /isOctoberPumpkinDate\(date\)/);
 });
