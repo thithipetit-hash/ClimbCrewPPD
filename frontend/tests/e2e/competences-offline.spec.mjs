@@ -43,7 +43,8 @@ test("une fois préparée, la bibliothèque reste consultable sans réseau", asy
     await page.goto("/competences/hors-ligne", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: /ClimbCrew · Bibliothèque de compétences/i })).toBeVisible();
     await expect(page.locator(".competence-resource")).toHaveCount(12);
-    await page.locator("summary").last().click();
+    // Le sommaire de la fiche est parent des contrôles « mise en page originale ».
+    await page.locator(".competence-resource").last().locator("details > summary").first().click();
     const officialPages = page.locator(".competence-resource").last().locator(".source-figure img");
     await expect(officialPages).toHaveCount(8);
     const officialPage = officialPages.first();
@@ -52,6 +53,6 @@ test("une fois préparée, la bibliothèque reste consultable sans réseau", asy
     await expect(page.getByText("Développer l'observation et l'anticipation")).toBeVisible();
     await expect(page.locator(".competence-resource").last().locator("a[download]")).toHaveAttribute("href", "/assets/competences-ffme/lecture.pdf");
   } finally {
-    await context.setOffline(false);
+    if (!page.isClosed()) await context.setOffline(false);
   }
 });
