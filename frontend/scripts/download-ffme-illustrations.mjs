@@ -1,12 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, readdirSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { FFME_COMPETENCES } from "../src/lib/competences-ffme.js";
 
 // Import ponctuel des pages officielles FFME pour usage local autorisé par le club.
-// Les PDF sources ne sont pas conservés : seuls leurs rendus JPEG sont distribués.
+// Les PDF officiels sont conservés à l'identique ; les JPEG permettent la lecture native intégrée.
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const target = path.join(projectRoot, "public/assets/competences-ffme");
 const scratch = mkdtempSync(path.join(tmpdir(), "climbcrew-ffme-"));
@@ -24,6 +24,7 @@ function run(binary, args) {
 try {
   mkdirSync(target, { recursive: true });
   const manifest = {};
+  const pdfs = {};
   let total = 0;
   for (const item of FFME_COMPETENCES) {
     if (!/^https:\/\/www\.ffme\.fr\/wp-content\/uploads\/[a-zA-Z0-9/_.-]+\.pdf$/i.test(item.pdfUrl)) {
@@ -51,6 +52,10 @@ try {
       throw new Error("Nombre de pages de " + item.id + " : source = " + pageCount + ", catalogue = " + item.pages);
     }
 
+    const pdfName = item.id + ".pdf";
+    copyFileSync(sourceFile, path.join(target, pdfName));
+    pdfs[item.id] = "/assets/competences-ffme/" + pdfName;
+    total += sourceBytes.length;
     manifest[item.id] = [];
     for (let page = 1; page <= pageCount; page++) {
       const filename = item.id + "-" + String(page).padStart(2, "0") + ".jpg";
@@ -72,14 +77,16 @@ try {
     }
     console.log(item.id + ": " + pageCount + " page(s), " + Math.round(total / 1024) + " KiB cumulés.");
   }
-  const extraImages = readdirSync(target).filter((file) => file.endsWith(".jpg") && !Object.values(manifest).flat().some((url) => url.endsWith("/" + file)));
+  const expectedFiles = [...Object.values(manifest).flat(), ...Object.values(pdfs)];
+  const extraImages = readdirSync(target).filter((file) => /\.(jpg|pdf)$/i.test(file) && !expectedFiles.some((url) => url.endsWith("/" + file)));
   if (extraImages.length) throw new Error("Fichiers obsolètes à supprimer : " + extraImages.join(", "));
   writeFileSync(path.join(target, "manifest.json"), JSON.stringify({
     source: "Fédération française de la montagne et de l'escalade (FFME)",
     notice: "Reproduction autorisée déclarée par l'exploitant du club. Pages originales non retouchées.",
     documents: manifest,
+    pdfs,
   }, null, 2) + "\n");
-  console.log("Terminé : " + Object.values(manifest).flat().length + " images, " + (total / 1e6).toFixed(2) + " Mo.");
+  console.log("Terminé : " + Object.values(manifest).flat().length + " images et " + Object.keys(pdfs).length + " PDF, " + (total / 1e6).toFixed(2) + " Mo.");
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }
