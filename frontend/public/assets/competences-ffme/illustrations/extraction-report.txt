@@ -1,7 +1,7 @@
 check p1: 237 text chars, 6 spans, illustration=yes
 check p2: 0 text chars, 0 spans, illustration=yes
 encord p1: 243 text chars, 6 spans, illustration=yes
-huit p1: 1175 text chars, 24 spans, illustration=yes
+huit p1: 1175 text chars, 24 spans, illustration=no
 cinq p1: 702 text chars, 15 spans, illustration=yes
 trois p1: 628 text chars, 19 spans, illustration=yes
 leader p1: 1107 text chars, 32 spans, illustration=yes
