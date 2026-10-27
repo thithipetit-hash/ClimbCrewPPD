@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import {
   COMPETENCE_CATEGORIES,
   FFME_COMPETENCES,
@@ -40,4 +41,10 @@ test("le filtrage fonctionne par domaine et sans accents", () => {
 test("le suivi de consultation rejette les entrées inconnues et les doublons", () => {
   assert.deepEqual(normalizeConsultedCompetences(["parade", "huit", "parade", "inconnu", 12]), ["parade", "huit"]);
   assert.deepEqual(normalizeConsultedCompetences({}), []);
+});
+
+test("l’aperçu PDF limite les cadres externes au domaine FFME", () => {
+  const nginxConfig = readFileSync(new URL("../../nginx.prod.conf", import.meta.url), "utf8");
+  assert.match(nginxConfig, /frame-src https:\/\/www\.ffme\.fr;/);
+  assert.doesNotMatch(nginxConfig, /frame-src[^;]*\*/);
 });
