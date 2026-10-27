@@ -1,0 +1,35 @@
+name: Import FFME illustrations to feature branch (one-off)
+on:
+  push:
+    branches:
+      - feature/competences-illustrations-ffme-261027
+    paths:
+      - .github/workflows/import-ffme-illustrations.yml
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-ffme-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout preproduction feature branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Install PDF page rendering utilities
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+      - name: Download official sources and render all pages
+        run: node frontend/scripts/download-ffme-illustrations.mjs
+      - name: Commit reproducible image assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/public/assets/competences-ffme
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+          else
+            git commit -m "assets(ffme): inclure les pages officielles pour lecture autonome"
+            git push origin HEAD:refs/heads/feature/competences-illustrations-ffme-261027
+          fi
