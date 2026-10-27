@@ -32,8 +32,9 @@ function OfflineCompetences() {
         if (!name) return;
         const cache = await caches.open(name);
         const shell = await cache.match("/");
+        const fallback = await cache.match("/competences-offline.html");
         const resources = await cache.keys();
-        if (mounted && shell && resources.some((request) => new URL(request.url).pathname.startsWith("/assets/"))) {
+        if (mounted && shell && fallback && resources.some((request) => new URL(request.url).pathname.startsWith("/assets/"))) {
           setOfflineReady(true);
         }
       } catch {

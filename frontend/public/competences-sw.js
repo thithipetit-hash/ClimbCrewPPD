@@ -16,7 +16,7 @@ self.addEventListener("install", (event) => {
     const urls = [...new Set(
       [...html.matchAll(/(?:src|href)=["'](\/assets\/[^"']+)["']/g)].map((match) => match[1])
     )];
-    await cache.addAll(urls);
+    await cache.addAll([...urls, "/competences-offline.html"]);
     // Ces deux ressources sont facultatives et ne doivent pas invalider le mode hors-ligne.
     await Promise.allSettled(["/site.webmanifest", "/app-icon-32.png"].map((url) => cache.add(url)));
     await self.skipWaiting();
@@ -40,11 +40,10 @@ self.addEventListener("fetch", (event) => {
   if (path.startsWith("/api/") || path === "/deployment-version.json" || path.startsWith("/media/")) return;
 
   if (request.mode === "navigate") {
-    // Toutes les navigations restent réseau en priorité, avec repli sur le shell
-    // pour ouvrir la bibliothèque autonome hors connexion.
     event.respondWith(fetch(request).catch(async () => {
       const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match("/");
+      const fallback = path === OFFLINE_PATH ? "/competences-offline.html" : "/";
+      const cached = await cache.match(fallback);
       return cached || Response.error();
     }));
     return;
