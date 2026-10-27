@@ -9,6 +9,7 @@ import {
   FFME_VIDEOS,
   filterFfmeCompetences,
   normalizeConsultedCompetences,
+  getFfmeImagePaths,
 } from "./competences-ffme.js";
 
 test("les 12 fiches de l’atlas couvrent ses cinq domaines", () => {
@@ -21,7 +22,7 @@ test("les 12 fiches de l’atlas couvrent ses cinq domaines", () => {
   );
 });
 
-test("les documents restent sur le site FFME et les quatre vidéos sur YouTube", () => {
+test("les liens identifient les sources FFME officielles et les quatre références vidéo", () => {
   for (const item of FFME_COMPETENCES) {
     assert.match(item.pdfUrl, /^https:\/\/www\.ffme\.fr\/wp-content\/uploads\/.+\.pdf$/i);
     assert.ok(item.chapter);
@@ -80,7 +81,9 @@ test("le cache autonome ne stocke jamais l'API ni les données privées", () => 
   assert.match(worker, /path\.startsWith\("\/api\/"\)/);
   assert.match(worker, /path === "\/deployment-version\.json"/);
   assert.match(worker, /request\.method !== "GET"/);
-  assert.match(worker, /cache\.addAll\(\[\.\.\.urls, "\/competences-offline\.html"\]\)/);
+  assert.match(worker, /"\/assets\/competences-ffme\/manifest\.json"/);
+  assert.match(worker, /\.\.\.illustrations/);
+  assert.match(worker, /cache\.addAll/);
   assert.match(entry, /<Competences accountId="autonome" standalone/);
   assert.match(entry, /navigator\.serviceWorker\.register/);
 });
@@ -91,4 +94,25 @@ test("la version de secours est générée depuis la même source et sans JavaSc
   assert.match(generator, /FFME_COMPETENCES/);
   assert.match(generator, /<details>/);
   assert.doesNotMatch(generator, /<script/);
+});
+
+test("les 27 pages originales FFME existent, sont de vrais JPEG et correspondent au catalogue", () => {
+  const manifest = JSON.parse(readFileSync(new URL("../../public/assets/competences-ffme/manifest.json", import.meta.url), "utf8"));
+  const documents = manifest.documents;
+  assert.equal(FFME_COMPETENCES.length, Object.keys(documents).length);
+  assert.equal(Object.values(documents).flat().length, 27);
+  for (const item of FFME_COMPETENCES) {
+    assert.deepEqual(getFfmeImagePaths(item), documents[item.id]);
+    for (const page of documents[item.id]) {
+      assert.match(page, /^\/assets\/competences-ffme\/[a-z0-9-]+-\d{2}\.jpg$/);
+      const file = readFileSync(new URL("../../public" + page, import.meta.url));
+      assert.ok(file.length > 1000, "Page incomplète : " + page);
+      assert.equal(file[0], 0xff, "En-tête JPEG non valide : " + page);
+      assert.equal(file[1], 0xd8, "En-tête JPEG non valide : " + page);
+    }
+  }
+  assert.deepEqual(getFfmeImagePaths({ id: "../autre" }), []);
+  const generator = readFileSync(new URL("../../scripts/prepare-competences-offline.mjs", import.meta.url), "utf8");
+  assert.match(generator, /getFfmeImagePaths/);
+  assert.match(generator, /<img loading=/);
 });
