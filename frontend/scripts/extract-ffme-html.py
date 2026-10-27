@@ -109,7 +109,12 @@ def extract_graphic(page: fitz.Page, stem: str):
         content.putalpha(alpha)
         content = content.crop(bbox)
         url = f"/assets/competences-ffme/illustrations/{stem}.webp"
-        content.save(ILLUSTRATIONS / f"{stem}.webp", format="WEBP", lossless=True, method=5)
+        output_file = ILLUSTRATIONS / f"{stem}.webp"
+        content.save(output_file, format="WEBP", lossless=True, method=5)
+        # Ignore a few antialias pixels or a decorative rule mistaken for a diagram.
+        if output_file.stat().st_size < 512:
+            output_file.unlink()
+            return None
         return {
             "src": url,
             "x": round(bbox[0] / scale, 2), "y": round(bbox[1] / scale, 2),
