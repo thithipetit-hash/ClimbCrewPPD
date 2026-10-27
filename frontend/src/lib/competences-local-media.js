@@ -30,9 +30,12 @@ async function transact(key, mode, callback) {
     return await new Promise((resolve, reject) => {
       const transaction = db.transaction(STORE_NAME, mode);
       const request = callback(transaction.objectStore(STORE_NAME), key);
-      request.onsuccess = () => resolve(request.result);
+      let result = null;
+      request.onsuccess = () => { result = request.result; };
       request.onerror = () => reject(request.error || new Error("Erreur de lecture ou d'écriture du média."));
+      transaction.oncomplete = () => resolve(result);
       transaction.onabort = () => reject(transaction.error || new Error("Le stockage du média a échoué."));
+      transaction.onerror = () => reject(transaction.error || new Error("Erreur de stockage du média."));
     });
   } finally {
     db.close();
