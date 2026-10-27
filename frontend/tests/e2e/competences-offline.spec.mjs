@@ -7,7 +7,6 @@ test("la bibliothèque autonome ouvre les fiches sans API ni lecteur externe", a
   await page.goto("/competences/hors-ligne", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: /Compétences · Atlas FFME/i })).toBeVisible();
   await expect(page.locator(".competence-resource")).toHaveCount(12);
-  await expect(page.locator(".competence-resource")).toHaveCount(12);
   await expect(page.locator("iframe, object")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Lire la fiche intégrée" }).first().click();
@@ -37,7 +36,7 @@ test("une fois préparée, la bibliothèque reste consultable sans réseau", asy
   });
   expect(cached.controlled, "Le navigateur doit être contrôlé avant le passage hors-ligne").toBe(true);
   expect(cached.keys).toContain("/");
-  expect(cached.keys.filter((key) => key.startsWith("/assets/competences-ffme/illustrations/") && key.endsWith(".webp")).length).toBe(26);
+  expect(cached.keys.filter((key) => key.startsWith("/assets/competences-ffme/illustrations/") && key.endsWith(".webp")).length).toBe(25);
   expect(cached.keys.filter((key) => key.startsWith("/assets/competences-ffme/") && key.endsWith(".pdf")).length).toBe(12);
   await context.setOffline(true);
   try {

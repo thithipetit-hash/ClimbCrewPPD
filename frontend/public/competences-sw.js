@@ -35,7 +35,7 @@ self.addEventListener("install", (event) => {
     if (!nativeResponse.ok) throw new Error("Manifeste des schémas FFME indisponible.");
     const nativeManifest = await nativeResponse.json();
     const figures = nativeManifest.figures;
-    if (!Array.isArray(figures) || figures.length !== 26 ||
+    if (!Array.isArray(figures) || figures.length !== 25 ||
       !figures.every((url) => typeof url === "string" &&
         /^\/assets\/competences-ffme\/illustrations\/[a-z0-9-]+-\d{2}\.webp$/.test(url))) {
       throw new Error("Schémas FFME manquants pour la consultation autonome.");

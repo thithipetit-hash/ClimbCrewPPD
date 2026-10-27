@@ -125,7 +125,6 @@ test("les 27 pages originales FFME existent, sont de vrais JPEG et correspondent
   const generator = readFileSync(new URL("../../scripts/prepare-competences-offline.mjs", import.meta.url), "utf8");
   assert.match(generator, /getFfmePdfPath/);
   assert.match(generator, /EXTRACTED/);
-  assert.match(generator, /getFfmePdfPath/);
   assert.match(generator, /source-html/);
 });
 
@@ -135,8 +134,8 @@ test("les 12 documents ont du texte HTML structuré et 25 schémas séparés des
     new URL("../../public/assets/competences-ffme/illustrations/manifest.json", import.meta.url), "utf8",
   ));
   assert.equal(Object.keys(data).length, 12);
-  assert.equal(graphicManifest.figures.length, 26);
-  assert.equal(new Set(graphicManifest.figures).size, 26);
+  assert.equal(graphicManifest.figures.length, 25);
+  assert.equal(new Set(graphicManifest.figures).size, 25);
   let pageCount = 0;
   let graphicCount = 0;
   let totalCharacters = 0;
