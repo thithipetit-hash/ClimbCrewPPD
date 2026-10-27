@@ -129,7 +129,7 @@ export const FFME_VIDEOS = Object.freeze([
 export const COMPETENCE_IDS = Object.freeze(FFME_COMPETENCES.map((item) => item.id));
 
 function normalizeSearch(value) {
-  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  return String(value || "").replace(/œ/gi, "oe").replace(/æ/gi, "ae").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
 
 export function filterFfmeCompetences({ category = "all", query = "" } = {}) {
