@@ -1,6 +1,6 @@
 // Cache exclusivement les ressources publiques nécessaires à la bibliothèque locale.
 // Ne jamais mettre en cache les API, comptes, sauvegardes ou marqueurs de déploiement.
-const CACHE_NAME = "climbcrew-competences-shell-261027.002";
+const CACHE_NAME = "climbcrew-competences-shell-261027.003";
 const OFFLINE_PATH = "/competences/hors-ligne";
 
 self.addEventListener("install", (event) => {
@@ -16,7 +16,16 @@ self.addEventListener("install", (event) => {
     const urls = [...new Set(
       [...html.matchAll(/(?:src|href)=["'](\/assets\/[^"']+)["']/g)].map((match) => match[1])
     )];
-    await cache.addAll([...urls, "/competences-offline.html"]);
+    const manifestResponse = await fetch("/assets/competences-ffme/manifest.json", { cache: "reload" });
+    if (!manifestResponse.ok) throw new Error("Illustrations officielles FFME indisponibles.");
+    const manifest = await manifestResponse.json();
+    const illustrations = Object.values(manifest.documents || {}).flat();
+    if (illustrations.length !== 27 || !illustrations.every((url) =>
+      typeof url === "string" && /^\/assets\/competences-ffme\/[a-z0-9-]+-\d{2}\.jpg$/.test(url)
+    )) {
+      throw new Error("Manifeste des planches FFME incomplet ou invalide.");
+    }
+    await cache.addAll([...urls, "/competences-offline.html", "/assets/competences-ffme/manifest.json", ...illustrations]);
     // Ces deux ressources sont facultatives et ne doivent pas invalider le mode hors-ligne.
     await Promise.allSettled(["/site.webmanifest", "/app-icon-32.png"].map((url) => cache.add(url)));
     await self.skipWaiting();
