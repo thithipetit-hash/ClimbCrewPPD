@@ -13,6 +13,7 @@ import Inscriptions from "./pages/Inscriptions.jsx";
 import Voies from "./pages/Voies.jsx";
 import Progression from "./pages/Progression.jsx";
 import Profil from "./pages/Profil.jsx";
+import Competences from "./pages/Competences.jsx";
 import Chat from "./pages/Chat.jsx";
 import Parametres from "./pages/Parametres.jsx";
 import Administration from "./pages/Administration.jsx";
@@ -1385,6 +1386,8 @@ async function handleThemePreferenceChange(nextTheme) {
             octoberPumpkinSalt={octoberPumpkinSalt}
           />
         )}
+
+        {tab === "competences" && <Competences accountId={authUser?.id} />}
 
         {tab === "chat" && (
           <Chat

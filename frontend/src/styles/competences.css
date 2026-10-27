@@ -1,0 +1,38 @@
+/* Module documentaire FFME : thème et comportement responsive de l'application. */
+.competences-page { min-width: 0; padding-bottom: 80px; }
+.competences-page .card { min-width: 0; }
+.competences-intro h2, .competences-videos h3, .competences-domain h3 { margin-top: 0; }
+.competences-dashboard progress { display: block; width: 100%; height: 12px; accent-color: var(--theme-accent); }
+.competences-count { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.competences-count strong { font-size: 1.5rem; }
+.competences-search { display: grid; gap: 10px; }
+.competences-search input[type="search"] { display: block; width: 100%; min-height: 44px; background: var(--theme-input-bg); color: var(--theme-text); border: 1px solid var(--theme-input-border); border-radius: 8px; padding: 10px; }
+.competences-categories { display: flex; flex-wrap: wrap; gap: 8px; }
+.competences-categories button, .competences-actions button { min-height: 40px; border: 1px solid var(--theme-card-border); background: var(--theme-card-soft); color: var(--theme-text); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+.competences-categories button.selected { background: var(--theme-accent); color: var(--theme-accent-text); }
+.competences-unread, .competences-consulted { display: flex; gap: 9px; align-items: center; cursor: pointer; }
+.competences-unread input, .competences-consulted input { accent-color: var(--theme-accent); width: 18px; height: 18px; flex: 0 0 auto; }
+.competences-domain { min-width: 0; }
+.competences-domain h3 { margin-bottom: 12px; }
+.competences-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 14px; }
+.competence-resource { display: flex; flex-direction: column; gap: 8px; }
+.competence-resource-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.competence-resource h4 { margin: 0; font-size: 1.08rem; line-height: 1.4; }
+.competence-resource p { margin: 0; }
+.competences-viewed { font-size: .78rem; border: 1px solid var(--theme-card-border); border-radius: 999px; padding: 3px 8px; white-space: nowrap; }
+.competences-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 10px; }
+.competences-source-link { display: inline-flex; align-items: center; min-height: 40px; border-radius: 8px; padding: 8px 12px; background: var(--theme-accent); color: var(--theme-accent-text); text-decoration: none; font-weight: 700; }
+.competences-consulted { margin-top: 10px; font-size: .92rem; }
+.competences-preview { width: 100%; min-width: 0; }
+.competences-preview iframe { display: block; width: 100%; height: 420px; border: 1px solid var(--theme-card-border); border-radius: 8px; background: #fff; }
+.competences-video-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 10px; }
+.competences-video-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; min-height: 52px; background: var(--theme-card-soft); border: 1px solid var(--theme-card-border); border-radius: 8px; color: var(--theme-text); text-decoration: none; }
+.competences-video-link:hover, .competences-video-link:focus-visible { text-decoration: underline; }
+.competences-empty { text-align: center; }
+.competences-error { color: #dc2626; font-weight: 700; }
+@media (max-width: 600px) {
+  .competences-grid { grid-template-columns: minmax(0, 1fr); }
+  .competences-actions { flex-direction: column; }
+  .competences-actions > * { justify-content: center; text-align: center; }
+  .competences-preview iframe { height: 360px; }
+}
