@@ -83,7 +83,7 @@ test("le cache autonome ne stocke jamais l'API ni les données privées", () => 
   assert.match(worker, /path === "\/deployment-version\.json"/);
   assert.match(worker, /request\.method !== "GET"/);
   assert.match(worker, /"\/assets\/competences-ffme\/manifest\.json"/);
-  assert.match(worker, /\.\.\.illustrations/);
+  assert.match(worker, /\.\.\.figures/);
   assert.match(worker, /\.\.\.pdfs/);
   assert.match(worker, /cache\.addAll/);
   assert.match(entry, /<Competences accountId="autonome" standalone/);
@@ -123,7 +123,50 @@ test("les 27 pages originales FFME existent, sont de vrais JPEG et correspondent
   assert.equal(getFfmePdfPath({ id: "../autre" }), null);
   assert.equal(Object.keys(manifest.pdfs).length, 12);
   const generator = readFileSync(new URL("../../scripts/prepare-competences-offline.mjs", import.meta.url), "utf8");
-  assert.match(generator, /getFfmeImagePaths/);
   assert.match(generator, /getFfmePdfPath/);
-  assert.match(generator, /<img loading=/);
+  assert.match(generator, /EXTRACTED/);
+  assert.match(generator, /source-html/);
+});
+
+test("les 12 documents ont du texte HTML structuré et 25 schémas séparés des caractères", () => {
+  const data = JSON.parse(readFileSync(new URL("../data/ffme-extracted.json", import.meta.url), "utf8"));
+  const graphicManifest = JSON.parse(readFileSync(
+    new URL("../../public/assets/competences-ffme/illustrations/manifest.json", import.meta.url), "utf8",
+  ));
+  assert.equal(Object.keys(data).length, 12);
+  assert.equal(graphicManifest.figures.length, 25);
+  assert.equal(new Set(graphicManifest.figures).size, 25);
+  let pageCount = 0;
+  let graphicCount = 0;
+  let totalCharacters = 0;
+  for (const item of FFME_COMPETENCES) {
+    const pages = data[item.id]?.pages;
+    assert.equal(pages?.length, item.pages, "Pages natives manquantes : " + item.id);
+    for (const page of pages) {
+      pageCount++;
+      assert.ok(page.width > 0 && page.height > 0);
+      assert.ok(Array.isArray(page.paragraphs));
+      assert.ok(Array.isArray(page.spans));
+      for (const block of page.paragraphs) {
+        assert.ok(["heading", "paragraph", "list"].includes(block.kind));
+        assert.ok(block.lines.every((line) => typeof line === "string" && line.length > 0));
+      }
+      totalCharacters += page.paragraphs.reduce((sum, block) => sum + block.lines.join("").length, 0);
+      if (page.illustration) {
+        graphicCount++;
+        assert.ok(graphicManifest.figures.includes(page.illustration.src));
+        const image = readFileSync(new URL("../../public" + page.illustration.src, import.meta.url));
+        assert.ok(image.length > 300);
+        assert.equal(image.subarray(0, 4).toString("ascii"), "RIFF");
+        assert.equal(image.subarray(8, 12).toString("ascii"), "WEBP");
+      }
+    }
+  }
+  assert.equal(pageCount, 27);
+  assert.equal(graphicCount, 25);
+  assert.ok(totalCharacters > 25000, "L'extraction complète doit préserver le texte FFME.");
+  assert.equal(data.check.pages[1].paragraphs.length, 0, "La planche graphique sans texte doit rester une image.");
+  const frontend = readFileSync(new URL("../pages/Competences.jsx", import.meta.url), "utf8");
+  assert.match(frontend, /CompetencesPdfHtml/);
+  assert.doesNotMatch(frontend, /competences-original-figure/);
 });

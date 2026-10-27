@@ -1,6 +1,6 @@
 // Cache exclusivement les ressources publiques nécessaires à la bibliothèque locale.
 // Ne jamais mettre en cache les API, comptes, sauvegardes ou marqueurs de déploiement.
-const CACHE_NAME = "climbcrew-competences-shell-261027.003";
+const CACHE_NAME = "climbcrew-competences-shell-261027.004";
 const OFFLINE_PATH = "/competences/hors-ligne";
 
 self.addEventListener("install", (event) => {
@@ -31,7 +31,17 @@ self.addEventListener("install", (event) => {
     )) {
       throw new Error("Les 12 PDF originaux FFME sont manquants ou invalides.");
     }
-    await cache.addAll([...urls, "/competences-offline.html", "/assets/competences-ffme/manifest.json", ...illustrations, ...pdfs]);
+    const nativeResponse = await fetch("/assets/competences-ffme/illustrations/manifest.json", { cache: "reload" });
+    if (!nativeResponse.ok) throw new Error("Manifeste des schémas FFME indisponible.");
+    const nativeManifest = await nativeResponse.json();
+    const figures = nativeManifest.figures;
+    if (!Array.isArray(figures) || figures.length !== 25 ||
+      !figures.every((url) => typeof url === "string" &&
+        /^\/assets\/competences-ffme\/illustrations\/[a-z0-9-]+-\d{2}\.webp$/.test(url))) {
+      throw new Error("Schémas FFME manquants pour la consultation autonome.");
+    }
+    await cache.addAll([...urls, "/competences-offline.html", "/assets/competences-ffme/manifest.json",
+      "/assets/competences-ffme/illustrations/manifest.json", ...figures, ...pdfs]);
     // Ces deux ressources sont facultatives et ne doivent pas invalider le mode hors-ligne.
     await Promise.allSettled(["/site.webmanifest", "/app-icon-32.png"].map((url) => cache.add(url)));
     await self.skipWaiting();

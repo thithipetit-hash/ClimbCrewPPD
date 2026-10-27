@@ -81,3 +81,26 @@
 .competences-zoom-scroller { height:calc(100% - 64px); min-width:0; overflow:auto; }
 .competences-zoom-scroller img { display:block; height:auto; max-width:none; border:0; }
 @media (max-width:600px) { .competences-zoom-dialog { padding:6px; height:96vh; } .competences-zoom-controls { gap:5px; } .competences-zoom-controls strong { flex-basis:100%; } .competences-zoom-scroller { height:calc(100% - 105px); } }
+
+/* Documents FFME reconstruits à partir des blocs de texte et des illustrations
+   des PDF originaux, sans rendu des pages complètes comme des JPEG. */
+.ffme-native-document { display:grid; gap:12px; min-width:0; }
+.ffme-native-toolbar { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.ffme-native-switch { display:flex; flex-wrap:wrap; gap:6px; }
+.ffme-native-switch button { min-height:42px; border-radius:8px; border:1px solid var(--theme-card-border); color:var(--theme-text); background:var(--theme-card-soft); padding:7px 11px; }
+.ffme-native-switch button[aria-pressed="true"] { background:var(--theme-accent); color:var(--theme-accent-text); }
+.ffme-native-pages { display:grid; gap:16px; }
+.ffme-native-page { min-width:0; border:1px solid var(--theme-card-border); border-radius:10px; padding:12px; }
+.ffme-native-page-label { margin:0 0 10px; font-size:.95rem; }
+.ffme-native-reader { display:grid; gap:10px; line-height:1.55; }
+.ffme-native-reader p, .ffme-native-reader h5 { margin:0; overflow-wrap:anywhere; white-space:pre-line; }
+.ffme-native-reader .ffme-html-heading { font-size:1.05rem; font-weight:750; }
+.ffme-native-reader .ffme-html-list { padding-left:14px; border-left:3px solid var(--theme-card-border); }
+.ffme-native-figure { margin:6px 0 0; }
+.ffme-native-figure button { width:100%; border:1px solid var(--theme-card-border); background:#fff; border-radius:8px; overflow:hidden; padding:5px; cursor:zoom-in; }
+.ffme-native-figure img { display:block; width:100%; height:auto; max-height:620px; object-fit:contain; }
+.ffme-native-figure figcaption { font-size:.8rem; padding:6px; opacity:.85; }
+.ffme-native-sheet { width:100%; min-width:0; position:relative; overflow:hidden; container-type:inline-size; background:white; border:1px solid #dce4ea; }
+.ffme-native-drawing { position:absolute; display:block; object-fit:fill; }
+.ffme-native-span { position:absolute; display:block; white-space:pre; line-height:1; font-family:Arial,Helvetica,sans-serif; letter-spacing:-.015em; }
+@media(max-width:600px) { .ffme-native-page { padding:7px; } .ffme-native-toolbar { display:grid; } }
