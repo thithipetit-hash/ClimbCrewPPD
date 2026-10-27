@@ -22,12 +22,31 @@ function OfflineCompetences() {
   const [offlineReady, setOfflineReady] = React.useState(false);
 
   React.useEffect(() => {
-    if (!("serviceWorker" in navigator)) return undefined;
+    if (!("serviceWorker" in navigator) || !("caches" in window)) return undefined;
     let mounted = true;
-    navigator.serviceWorker.ready.then(() => {
-      if (mounted) setOfflineReady(true);
-    }).catch(() => {});
-    return () => { mounted = false; };
+    async function checkOfflineCache() {
+      if (!navigator.serviceWorker.controller) return;
+      try {
+        const cacheNames = await caches.keys();
+        const name = cacheNames.find((entry) => entry.startsWith("climbcrew-competences-shell-"));
+        if (!name) return;
+        const cache = await caches.open(name);
+        const shell = await cache.match("/");
+        const resources = await cache.keys();
+        if (mounted && shell && resources.some((request) => new URL(request.url).pathname.startsWith("/assets/"))) {
+          setOfflineReady(true);
+        }
+      } catch {
+        // Le statut reste « préparation » si le navigateur bloque le cache.
+      }
+    }
+    navigator.serviceWorker.addEventListener("controllerchange", checkOfflineCache);
+    void navigator.serviceWorker.ready.then(checkOfflineCache).catch(() => {});
+    void checkOfflineCache();
+    return () => {
+      mounted = false;
+      navigator.serviceWorker.removeEventListener("controllerchange", checkOfflineCache);
+    };
   }, []);
 
   return (

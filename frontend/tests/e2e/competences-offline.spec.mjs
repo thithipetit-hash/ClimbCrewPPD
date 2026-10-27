@@ -19,6 +19,15 @@ test("la bibliothèque autonome ouvre les fiches sans API ni lecteur externe", a
 test("une fois préparée, la bibliothèque reste consultable sans réseau", async ({ page, context }) => {
   await page.goto("/competences/hors-ligne", { waitUntil: "domcontentloaded" });
   await expect(page.getByText(/Bibliothèque préparée pour une consultation sans réseau/i)).toBeVisible({ timeout: 20_000 });
+  const cached = await page.evaluate(async () => {
+    const names = (await caches.keys()).filter((name) => name.startsWith("climbcrew-competences-shell-"));
+    const shell = await caches.open(names[0]);
+    const keys = (await shell.keys()).map((request) => new URL(request.url).pathname);
+    return { controlled: Boolean(navigator.serviceWorker.controller), keys };
+  });
+  expect(cached.controlled, "Le navigateur doit être contrôlé avant le passage hors-ligne").toBe(true);
+  expect(cached.keys).toContain("/");
+  expect(cached.keys.filter((key) => key.startsWith("/assets/")).length).toBeGreaterThan(0);
   await context.setOffline(true);
   try {
     await page.reload({ waitUntil: "domcontentloaded" });
