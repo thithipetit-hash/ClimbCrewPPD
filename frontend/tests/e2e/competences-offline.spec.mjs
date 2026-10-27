@@ -17,6 +17,9 @@ test("la bibliothèque autonome ouvre les fiches sans API ni lecteur externe", a
 });
 
 test("une fois préparée, la bibliothèque reste consultable sans réseau", async ({ page, context }) => {
+  const failures = [];
+  page.on("requestfailed", (req) => failures.push([req.url(), req.failure()?.errorText]));
+  page.on("pageerror", (err) => failures.push(["JS", err.message]));
   await page.goto("/competences/hors-ligne", { waitUntil: "domcontentloaded" });
   await expect(page.getByText(/Bibliothèque préparée pour une consultation sans réseau/i)).toBeVisible({ timeout: 20_000 });
   const cached = await page.evaluate(async () => {
@@ -31,6 +34,14 @@ test("une fois préparée, la bibliothèque reste consultable sans réseau", asy
   await context.setOffline(true);
   try {
     await page.reload({ waitUntil: "domcontentloaded" });
+    const diagnostics = await page.evaluate(async () => ({
+      title: document.title,
+      snippet: document.body?.innerText?.slice(0, 500),
+      rootHtml: document.getElementById("root")?.innerHTML?.slice(0, 350),
+      controlled: Boolean(navigator.serviceWorker.controller),
+      assets: [...performance.getEntriesByType("resource")].slice(-10).map((x) => x.name),
+    }));
+    console.log("OFFLINE_BROWSER_DIAGNOSTIC", JSON.stringify({ diagnostics, failures }));
     await expect(page.getByRole("heading", { name: /Compétences · Atlas FFME/i })).toBeVisible();
     await expect(page.locator(".competence-resource")).toHaveCount(12);
     await page.getByRole("button", { name: "Lire la fiche intégrée" }).last().click();
