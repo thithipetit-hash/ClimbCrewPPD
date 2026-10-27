@@ -1,5 +1,5 @@
 // Ressources issues de l'atlas iconographique FFME fourni avec la demande.
-// Les PDF et vidéos restent hébergés par leurs éditeurs : aucune image FFME n'est copiée.
+// Les planches FFME sont conservées localement, selon les droits déclarés par le club.
 export const COMPETENCE_CATEGORIES = Object.freeze([
   { id: "securite", title: "Sécurité et encordement" },
   { id: "assurage", title: "Assurage" },
@@ -144,4 +144,13 @@ export function filterFfmeCompetences({ category = "all", query = "" } = {}) {
 export function normalizeConsultedCompetences(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.filter((id) => typeof id === "string" && COMPETENCE_IDS.includes(id)))];
+}
+
+export function getFfmeImagePaths(item) {
+  const resource = FFME_COMPETENCES.find((entry) => entry.id === item?.id);
+  if (!resource) return [];
+  return Array.from(
+    { length: resource.pages },
+    (_, index) => "/assets/competences-ffme/" + resource.id + "-" + String(index + 1).padStart(2, "0") + ".jpg",
+  );
 }
