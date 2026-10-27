@@ -32,7 +32,7 @@ test("les documents restent sur le site FFME et les quatre vidéos sur YouTube",
 
 test("le filtrage fonctionne par domaine et sans accents", () => {
   assert.deepEqual(filterFfmeCompetences({ category: "bloc" }).map((item) => item.id), ["parade"]);
-  assert.deepEqual(filterFfmeCompetences({ query: "noeud" }).map((item) => item.id), ["huit", "encord"].filter((id) => id === "huit" || id === "encord"));
+  assert.deepEqual(filterFfmeCompetences({ query: "noeud" }).map((item) => item.id), ["encord", "huit"]);
   assert.deepEqual(filterFfmeCompetences({ query: "PÉDAGOGIE INTROUVABLE" }), []);
   assert.equal(filterFfmeCompetences({}).length, 12);
 });
