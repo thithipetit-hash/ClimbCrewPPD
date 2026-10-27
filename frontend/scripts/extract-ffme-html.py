@@ -150,6 +150,11 @@ def main() -> None:
     # No imported statements or PDFs are replaced by generated text.
     OUT.write_text(json.dumps(documents, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     (ILLUSTRATIONS / "extraction-report.txt").write_text("\n".join(report) + "\n", encoding="utf-8")
+    figures = [
+        page["illustration"]["src"]
+        for doc in documents.values() for page in doc["pages"] if page["illustration"]
+    ]
+    (ILLUSTRATIONS / "manifest.json").write_text(json.dumps({"figures": figures}, indent=2) + "\n", encoding="utf-8")
     print("\n".join(report))
     print(f"Generated {OUT.relative_to(FRONTEND)} ({OUT.stat().st_size:,} bytes) from 12 original PDFs.")
 
