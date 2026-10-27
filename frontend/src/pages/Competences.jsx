@@ -5,11 +5,11 @@ import {
   FFME_VIDEOS,
   filterFfmeCompetences,
   normalizeConsultedCompetences,
-  getFfmeImagePaths,
   getFfmePdfPath,
 } from "../lib/competences-ffme.js";
 import { COMPETENCE_LESSONS } from "../lib/competences-lessons.js";
 import CompetenceLocalMedia from "../components/CompetenceLocalMedia.jsx";
+import CompetencesPdfHtml from "../components/CompetencesPdfHtml.jsx";
 
 const STORAGE_PREFIX = "climbcrew-ffme-ressources-consultees:";
 
@@ -76,10 +76,10 @@ export default function Competences({ accountId, standalone = false }) {
         <h2>Compétences · Atlas FFME</h2>
         <p>
           Explorez les 12 fiches pédagogiques rédigées pour ClimbCrew à partir des thèmes
-          de l’atlas « Initiateur SAE ». Les 27 pages des documents FFME sont
-          affichées directement dans les fiches, avec agrandissement. Les 12 PDF originaux
-          sont aussi inclus dans l’application et téléchargeables sans accès au site FFME,
-          sans lecteur externe pour consulter les pages.
+          de l’atlas « Initiateur SAE ». Le texte original des documents FFME est désormais
+          consultable directement en HTML sélectionnable, avec les dessins conservés en images.
+          Une vue « Mise en page originale » préserve le positionnement des consignes et schémas.
+          Les 12 PDF restent disponibles au téléchargement local.
         </p>
         <p className="small">
           Ces fiches sont des supports de formation, pas une évaluation de votre aptitude
@@ -154,7 +154,7 @@ export default function Competences({ accountId, standalone = false }) {
               {items.map((item) => {
                 const consulted = consultedSet.has(item.id);
                 const lessonOpen = openLessonId === item.id;
-                const officialPages = getFfmeImagePaths(item);
+
                 return (
                   <article className="card competence-resource" key={item.id}>
                     <div className="competence-resource-header">
@@ -163,19 +163,7 @@ export default function Competences({ accountId, standalone = false }) {
                     </div>
                     <p>{item.description}</p>
                     <p className="small">Chapitre : {item.chapter} · Thème de l’atlas FFME</p>
-                    <button
-                      type="button"
-                      className="competences-original-preview"
-                      onClick={() => setOpenLessonId(lessonOpen ? null : item.id)}
-                      aria-label={"Afficher les " + officialPages.length + " pages du document FFME : " + item.title}
-                    >
-                      <img
-                        src={officialPages[0]}
-                        alt={"Première page du document FFME : " + item.title}
-                        loading="lazy"
-                      />
-                      <span>Document original FFME · {officialPages.length} page{officialPages.length > 1 ? "s" : ""}</span>
-                    </button>
+                    <p className="small">Texte FFME intégré et consultable, illustrations séparées et mise en page d’origine disponible.</p>
                     <div className="competences-actions">
                       <a
                         className="competences-source-link"
@@ -196,26 +184,8 @@ export default function Competences({ accountId, standalone = false }) {
                     </div>
                     {lessonOpen && (
                       <div id={"competences-lesson-" + item.id} className="competences-lesson">
-                        <section className="competences-original-pages" aria-label={"Planches originales FFME : " + item.title}>
-                          <h5>Illustrations officielles FFME · Pages originales</h5>
-                          <p className="small">Documents reproduits sans retouche avec l’autorisation du club. Touchez une page pour l’agrandir.</p>
-                          {officialPages.map((src, index) => (
-                            <figure key={src} className="competences-original-figure">
-                              <button
-                                type="button"
-                                onClick={() => showImage(src, item.title + ", page " + (index + 1))}
-                                aria-label={"Agrandir la page " + (index + 1) + " du document " + item.title}
-                              >
-                                <img
-                                  src={src}
-                                  alt={"Document officiel FFME : " + item.title + ", page " + (index + 1) + " sur " + officialPages.length}
-                                  loading="lazy"
-                                />
-                              </button>
-                              <figcaption>Page {index + 1} / {officialPages.length} · © FFME</figcaption>
-                            </figure>
-                          ))}
-                        </section>
+                        <CompetencesPdfHtml item={item} onExpandImage={showImage} />
+                        <h5>Complément pédagogique ClimbCrew</h5>
                         <p><strong>Objectif :</strong> {COMPETENCE_LESSONS[item.id].objective}</p>
                         <ul>
                           {COMPETENCE_LESSONS[item.id].points.map((point, index) => <li key={index}>{point}</li>)}
