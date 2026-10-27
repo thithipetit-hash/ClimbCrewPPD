@@ -6,6 +6,7 @@ import {
   filterFfmeCompetences,
   normalizeConsultedCompetences,
   getFfmeImagePaths,
+  getFfmePdfPath,
 } from "../lib/competences-ffme.js";
 import { COMPETENCE_LESSONS } from "../lib/competences-lessons.js";
 import CompetenceLocalMedia from "../components/CompetenceLocalMedia.jsx";
@@ -76,8 +77,9 @@ export default function Competences({ accountId, standalone = false }) {
         <p>
           Explorez les 12 fiches pédagogiques rédigées pour ClimbCrew à partir des thèmes
           de l’atlas « Initiateur SAE ». Les 27 pages des documents FFME sont
-          maintenant intégrées sous forme d’images originales consultables et agrandissables,
-          sans lecteur PDF ni connexion aux serveurs FFME.
+          affichées directement dans les fiches, avec agrandissement. Les 12 PDF originaux
+          sont aussi inclus dans l’application et téléchargeables sans accès au site FFME,
+          sans lecteur externe pour consulter les pages.
         </p>
         <p className="small">
           Ces fiches sont des supports de formation, pas une évaluation de votre aptitude
@@ -175,6 +177,14 @@ export default function Competences({ accountId, standalone = false }) {
                       <span>Document original FFME · {officialPages.length} page{officialPages.length > 1 ? "s" : ""}</span>
                     </button>
                     <div className="competences-actions">
+                      <a
+                        className="competences-source-link"
+                        href={getFfmePdfPath(item)}
+                        download={"FFME-" + item.id + ".pdf"}
+                        aria-label={"Télécharger le document PDF FFME original : " + item.title}
+                      >
+                        Télécharger le PDF original
+                      </a>
                       <button
                         type="button"
                         onClick={() => setOpenLessonId(lessonOpen ? null : item.id)}

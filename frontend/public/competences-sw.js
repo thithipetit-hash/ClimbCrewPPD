@@ -25,7 +25,13 @@ self.addEventListener("install", (event) => {
     )) {
       throw new Error("Manifeste des planches FFME incomplet ou invalide.");
     }
-    await cache.addAll([...urls, "/competences-offline.html", "/assets/competences-ffme/manifest.json", ...illustrations]);
+    const pdfs = Object.values(manifest.pdfs || {});
+    if (pdfs.length !== 12 || !pdfs.every((url) =>
+      typeof url === "string" && /^\/assets\/competences-ffme\/[a-z0-9-]+\.pdf$/.test(url)
+    )) {
+      throw new Error("Les 12 PDF originaux FFME sont manquants ou invalides.");
+    }
+    await cache.addAll([...urls, "/competences-offline.html", "/assets/competences-ffme/manifest.json", ...illustrations, ...pdfs]);
     // Ces deux ressources sont facultatives et ne doivent pas invalider le mode hors-ligne.
     await Promise.allSettled(["/site.webmanifest", "/app-icon-32.png"].map((url) => cache.add(url)));
     await self.skipWaiting();

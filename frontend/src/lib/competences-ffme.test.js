@@ -10,6 +10,7 @@ import {
   filterFfmeCompetences,
   normalizeConsultedCompetences,
   getFfmeImagePaths,
+  getFfmePdfPath,
 } from "./competences-ffme.js";
 
 test("les 12 fiches de l’atlas couvrent ses cinq domaines", () => {
@@ -83,6 +84,7 @@ test("le cache autonome ne stocke jamais l'API ni les données privées", () => 
   assert.match(worker, /request\.method !== "GET"/);
   assert.match(worker, /"\/assets\/competences-ffme\/manifest\.json"/);
   assert.match(worker, /\.\.\.illustrations/);
+  assert.match(worker, /\.\.\.pdfs/);
   assert.match(worker, /cache\.addAll/);
   assert.match(entry, /<Competences accountId="autonome" standalone/);
   assert.match(entry, /navigator\.serviceWorker\.register/);
@@ -103,6 +105,12 @@ test("les 27 pages originales FFME existent, sont de vrais JPEG et correspondent
   assert.equal(Object.values(documents).flat().length, 27);
   for (const item of FFME_COMPETENCES) {
     assert.deepEqual(getFfmeImagePaths(item), documents[item.id]);
+    const pdfPath = getFfmePdfPath(item);
+    assert.equal(pdfPath, manifest.pdfs[item.id]);
+    assert.match(pdfPath, /^\/assets\/competences-ffme\/[a-z0-9-]+\.pdf$/);
+    const pdf = readFileSync(new URL("../../public" + pdfPath, import.meta.url));
+    assert.ok(pdf.length > 500, "PDF absent ou incomplet : " + item.id);
+    assert.equal(pdf.subarray(0, 5).toString("ascii"), "%PDF-", "PDF mal formé : " + item.id);
     for (const page of documents[item.id]) {
       assert.match(page, /^\/assets\/competences-ffme\/[a-z0-9-]+-\d{2}\.jpg$/);
       const file = readFileSync(new URL("../../public" + page, import.meta.url));
@@ -112,7 +120,10 @@ test("les 27 pages originales FFME existent, sont de vrais JPEG et correspondent
     }
   }
   assert.deepEqual(getFfmeImagePaths({ id: "../autre" }), []);
+  assert.equal(getFfmePdfPath({ id: "../autre" }), null);
+  assert.equal(Object.keys(manifest.pdfs).length, 12);
   const generator = readFileSync(new URL("../../scripts/prepare-competences-offline.mjs", import.meta.url), "utf8");
   assert.match(generator, /getFfmeImagePaths/);
+  assert.match(generator, /getFfmePdfPath/);
   assert.match(generator, /<img loading=/);
 });

@@ -154,3 +154,9 @@ export function getFfmeImagePaths(item) {
     (_, index) => "/assets/competences-ffme/" + resource.id + "-" + String(index + 1).padStart(2, "0") + ".jpg",
   );
 }
+
+// Les PDF sont distribués avec l'application ; aucune lecture depuis l'URL FFME au runtime.
+export function getFfmePdfPath(item) {
+  const resource = FFME_COMPETENCES.find((entry) => entry.id === item?.id);
+  return resource ? "/assets/competences-ffme/" + resource.id + ".pdf" : null;
+}

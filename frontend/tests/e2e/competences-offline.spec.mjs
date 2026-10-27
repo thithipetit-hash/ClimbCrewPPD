@@ -16,7 +16,8 @@ test("la bibliothèque autonome ouvre les fiches sans API ni lecteur externe", a
   await page.getByRole("button", { name: /Agrandir la page 1 du document Contrôle croisé/ }).click();
   await expect(page.getByRole("dialog", { name: "Agrandir une illustration FFME" })).toBeVisible();
   await expect(page.getByRole("dialog").locator("img")).toHaveJSProperty("complete", true);
-  await page.getByRole("button", { name: "Fermer" }).click();
+  await page.getByRole("button", { name: "Fermer", exact: true }).click();
+  await expect(page.getByRole("link", { name: /Télécharger le document PDF FFME original : Contrôle croisé/i })).toHaveAttribute("href", "/assets/competences-ffme/check.pdf");
   await expect(page.locator(".competences-local-media video")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
@@ -33,17 +34,20 @@ test("une fois préparée, la bibliothèque reste consultable sans réseau", asy
   expect(cached.controlled, "Le navigateur doit être contrôlé avant le passage hors-ligne").toBe(true);
   expect(cached.keys).toContain("/");
   expect(cached.keys.filter((key) => key.startsWith("/assets/competences-ffme/") && key.endsWith(".jpg")).length).toBe(27);
+  expect(cached.keys.filter((key) => key.startsWith("/assets/competences-ffme/") && key.endsWith(".pdf")).length).toBe(12);
   await context.setOffline(true);
   try {
     await page.goto("/competences/hors-ligne", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: /ClimbCrew · Bibliothèque de compétences/i })).toBeVisible();
     await expect(page.locator(".competence-resource")).toHaveCount(12);
     await page.locator("summary").last().click();
-    await expect(page.locator(".ffme-page img")).toHaveCount(8);
-    const officialPage = page.locator(".ffme-page img").first();
+    const officialPages = page.locator(".competence-resource").last().locator(".ffme-page img");
+    await expect(officialPages).toHaveCount(8);
+    const officialPage = officialPages.first();
     await officialPage.scrollIntoViewIfNeeded();
     await expect.poll(() => officialPage.evaluate((img) => img.naturalWidth)).toBeGreaterThan(100);
     await expect(page.getByText("Développer l'observation et l'anticipation")).toBeVisible();
+    await expect(page.locator(".competence-resource").last().locator("a[download]")).toHaveAttribute("href", "/assets/competences-ffme/lecture.pdf");
   } finally {
     await context.setOffline(false);
   }

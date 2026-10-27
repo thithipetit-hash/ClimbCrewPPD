@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { FFME_COMPETENCES, FFME_VIDEOS, COMPETENCE_CATEGORIES, getFfmeImagePaths } from "../src/lib/competences-ffme.js";
+import { FFME_COMPETENCES, FFME_VIDEOS, COMPETENCE_CATEGORIES, getFfmeImagePaths, getFfmePdfPath } from "../src/lib/competences-ffme.js";
 import { COMPETENCE_LESSONS } from "../src/lib/competences-lessons.js";
 
 // Version statique, sans JS ni dépendance réseau : repli de lecture après une coupure.
@@ -20,6 +20,7 @@ const sections = COMPETENCE_CATEGORIES.map(({ id, title }) => {
     return '<article class="competence-resource"><h3>' + escapeHtml(item.title) + '</h3>'
       + '<p>' + escapeHtml(item.description) + '</p>'
       + '<details><summary>Consulter la fiche et les ' + pages.length + ' pages officielles FFME</summary>'
+      + '<p><a class="official-pdf" href="' + escapeHtml(getFfmePdfPath(item)) + '" download="FFME-' + escapeHtml(item.id) + '.pdf">Télécharger le PDF original FFME (local)</a></p>'
       + '<div class="ffme-pages">' + originalFigures + '</div>'
       + '<p><strong>Objectif :</strong> ' + escapeHtml(lesson.objective) + '</p>'
       + '<ul>' + lesson.points.map((point) => '<li>' + escapeHtml(point) + '</li>').join("") + '</ul>'
@@ -40,7 +41,7 @@ main{max-width:1150px;padding:12px 14px 44px;margin:auto}h2{margin:24px 0 14px}h
 .ffme-pages{display:grid;gap:12px;min-width:0}.ffme-page{margin:0}.ffme-page img{display:block;width:100%;height:auto;border:1px solid #b8cddf;border-radius:8px}.ffme-page figcaption{text-align:center;font-size:13px;color:#46627a}
 details{border-top:1px solid #d1dce6;margin-top:12px;padding-top:10px}summary{cursor:pointer;font-weight:700;padding:10px 0}
 li{margin:6px 0}.alert{background:#fff4df;border-left:4px solid #ca851c;padding:9px 12px}
-.notice{padding:12px 15px;background:#fff4df;border-left:4px solid #ca851c}a{color:#136a93}
+.notice{padding:12px 15px;background:#fff4df;border-left:4px solid #ca851c}a{color:#136a93}.official-pdf{display:inline-block;border:1px solid #b1cadd;border-radius:7px;padding:8px 12px;font-weight:700}
 </style></head><body>
 <header><h1>ClimbCrew · Bibliothèque de compétences</h1><p>Version de lecture autonome · sans connexion ni lecteur externe</p></header>
 <main><div class="notice"><strong>Lecture hors connexion.</strong> Les 27 pages intégrales des documents officiels FFME sont reproduites telles quelles avec l'autorisation déclarée par le club, à côté des fiches explicatives ClimbCrew.
