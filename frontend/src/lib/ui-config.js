@@ -43,6 +43,7 @@ export const TABS = [
   { key: "inscriptions", label: "Planning" },
   { key: "voies", label: "Voies" },
   { key: "mon_profil", label: "Profil" },
+  { key: "competences", label: "Compétences" },
   { key: "challenges", label: "Challenges" },
   { key: "chat", label: "Chat" },
   { key: "statistiques", label: "Statistiques" },
