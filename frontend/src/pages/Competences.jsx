@@ -5,9 +5,10 @@ import {
   FFME_VIDEOS,
   filterFfmeCompetences,
   normalizeConsultedCompetences,
+  getFfmeImagePaths,
+  getFfmePdfPath,
 } from "../lib/competences-ffme.js";
 import { COMPETENCE_LESSONS } from "../lib/competences-lessons.js";
-import CompetenceIllustration from "../components/CompetenceIllustration.jsx";
 import CompetenceLocalMedia from "../components/CompetenceLocalMedia.jsx";
 
 const STORAGE_PREFIX = "climbcrew-ffme-ressources-consultees:";
@@ -19,6 +20,21 @@ export default function Competences({ accountId, standalone = false }) {
   const [openLessonId, setOpenLessonId] = React.useState(null);
   const [consultedIds, setConsultedIds] = React.useState([]);
   const [storageError, setStorageError] = React.useState("");
+  const [zoomedImage, setZoomedImage] = React.useState(null);
+  const [zoomPercent, setZoomPercent] = React.useState(100);
+  const imageDialogRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const dialog = imageDialogRef.current;
+    if (!dialog) return;
+    if (zoomedImage && !dialog.open) dialog.showModal();
+    if (!zoomedImage && dialog.open) dialog.close();
+  }, [zoomedImage]);
+
+  function showImage(src, alt) {
+    setZoomPercent(100);
+    setZoomedImage({ src, alt });
+  }
   const storageKey = accountId == null ? null : STORAGE_PREFIX + String(accountId);
 
   React.useEffect(() => {
@@ -60,14 +76,17 @@ export default function Competences({ accountId, standalone = false }) {
         <h2>Compétences · Atlas FFME</h2>
         <p>
           Explorez les 12 fiches pédagogiques rédigées pour ClimbCrew à partir des thèmes
-          de l’atlas « Initiateur SAE ». Texte et schémas sont intégrés à l’application :
-          aucun PDF ni lecteur externe n’est nécessaire.
+          de l’atlas « Initiateur SAE ». Les 27 pages des documents FFME sont
+          affichées directement dans les fiches, avec agrandissement. Les 12 PDF originaux
+          sont aussi inclus dans l’application et téléchargeables sans accès au site FFME,
+          sans lecteur externe pour consulter les pages.
         </p>
         <p className="small">
           Ces fiches sont des supports de formation, pas une évaluation de votre aptitude
           ni une certification FFME. Pour les gestes de sécurité, pratiquez avec un encadrant
           qualifié et suivez les règles du club ainsi que les notices des fabricants.
-          Ces synthèses et schémas originaux ne reproduisent pas les documents officiels de la FFME.
+          Les fiches explicatives sont rédigées pour le club ; les illustrations officielles FFME
+          sont reproduites à l’identique avec l’autorisation déclarée par le club.
         </p>
         <p className="small">
           <a className="competences-offline-link" href="/competences/hors-ligne">
@@ -135,6 +154,7 @@ export default function Competences({ accountId, standalone = false }) {
               {items.map((item) => {
                 const consulted = consultedSet.has(item.id);
                 const lessonOpen = openLessonId === item.id;
+                const officialPages = getFfmeImagePaths(item);
                 return (
                   <article className="card competence-resource" key={item.id}>
                     <div className="competence-resource-header">
@@ -143,8 +163,28 @@ export default function Competences({ accountId, standalone = false }) {
                     </div>
                     <p>{item.description}</p>
                     <p className="small">Chapitre : {item.chapter} · Thème de l’atlas FFME</p>
-                    <CompetenceIllustration category={item.category} title={item.title} />
+                    <button
+                      type="button"
+                      className="competences-original-preview"
+                      onClick={() => setOpenLessonId(lessonOpen ? null : item.id)}
+                      aria-label={"Afficher les " + officialPages.length + " pages du document FFME : " + item.title}
+                    >
+                      <img
+                        src={officialPages[0]}
+                        alt={"Première page du document FFME : " + item.title}
+                        loading="lazy"
+                      />
+                      <span>Document original FFME · {officialPages.length} page{officialPages.length > 1 ? "s" : ""}</span>
+                    </button>
                     <div className="competences-actions">
+                      <a
+                        className="competences-source-link"
+                        href={getFfmePdfPath(item)}
+                        download={"FFME-" + item.id + ".pdf"}
+                        aria-label={"Télécharger le document PDF FFME original : " + item.title}
+                      >
+                        Télécharger le PDF original
+                      </a>
                       <button
                         type="button"
                         onClick={() => setOpenLessonId(lessonOpen ? null : item.id)}
@@ -156,6 +196,26 @@ export default function Competences({ accountId, standalone = false }) {
                     </div>
                     {lessonOpen && (
                       <div id={"competences-lesson-" + item.id} className="competences-lesson">
+                        <section className="competences-original-pages" aria-label={"Planches originales FFME : " + item.title}>
+                          <h5>Illustrations officielles FFME · Pages originales</h5>
+                          <p className="small">Documents reproduits sans retouche avec l’autorisation du club. Touchez une page pour l’agrandir.</p>
+                          {officialPages.map((src, index) => (
+                            <figure key={src} className="competences-original-figure">
+                              <button
+                                type="button"
+                                onClick={() => showImage(src, item.title + ", page " + (index + 1))}
+                                aria-label={"Agrandir la page " + (index + 1) + " du document " + item.title}
+                              >
+                                <img
+                                  src={src}
+                                  alt={"Document officiel FFME : " + item.title + ", page " + (index + 1) + " sur " + officialPages.length}
+                                  loading="lazy"
+                                />
+                              </button>
+                              <figcaption>Page {index + 1} / {officialPages.length} · © FFME</figcaption>
+                            </figure>
+                          ))}
+                        </section>
                         <p><strong>Objectif :</strong> {COMPETENCE_LESSONS[item.id].objective}</p>
                         <ul>
                           {COMPETENCE_LESSONS[item.id].points.map((point, index) => <li key={index}>{point}</li>)}
@@ -163,7 +223,7 @@ export default function Competences({ accountId, standalone = false }) {
                         <p className="competences-warning"><strong>Vigilance :</strong> {COMPETENCE_LESSONS[item.id].vigilance}</p>
                         <details className="competences-image-details">
                           <summary>Ajouter une illustration personnelle</summary>
-                          <p className="small">Image autorisée, enregistrée localement ; ne remplace pas les illustrations officielles.</p>
+                          <p className="small">Image complémentaire personnelle, enregistrée localement sur cet appareil.</p>
                           <CompetenceLocalMedia type="image" id={item.id} title={item.title} />
                         </details>
                       </div>
@@ -204,6 +264,25 @@ export default function Competences({ accountId, standalone = false }) {
           ))}
         </div>
       </section>
+      <dialog
+        ref={imageDialogRef}
+        className="competences-zoom-dialog"
+        aria-label="Agrandir une illustration FFME"
+        onClose={() => setZoomedImage(null)}
+      >
+        <div className="competences-zoom-controls">
+          <strong>Page officielle FFME · © FFME</strong>
+          <button type="button" disabled={zoomPercent <= 100} onClick={() => setZoomPercent((size) => Math.max(100, size - 50))}>−</button>
+          <span>{zoomPercent}%</span>
+          <button type="button" disabled={zoomPercent >= 400} onClick={() => setZoomPercent((size) => Math.min(400, size + 50))}>+</button>
+          <button type="button" onClick={() => imageDialogRef.current?.close()}>Fermer</button>
+        </div>
+        {zoomedImage && (
+          <div className="competences-zoom-scroller">
+            <img src={zoomedImage.src} alt={zoomedImage.alt} style={{ width: zoomPercent + "%" }} />
+          </div>
+        )}
+      </dialog>
     </div>
   );
 }
