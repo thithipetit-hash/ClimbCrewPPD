@@ -47,9 +47,9 @@ test("une fois préparée, la bibliothèque reste consultable sans réseau", asy
       })(),
     }));
     console.log("OFFLINE_BROWSER_DIAGNOSTIC", JSON.stringify({ diagnostics, failures }));
-    await expect(page.getByRole("heading", { name: /Compétences · Atlas FFME/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /ClimbCrew · Bibliothèque de compétences/i })).toBeVisible();
     await expect(page.locator(".competence-resource")).toHaveCount(12);
-    await page.getByRole("button", { name: "Lire la fiche intégrée" }).last().click();
+    await page.locator("summary").last().click();
     await expect(page.getByText("Développer l'observation et l'anticipation")).toBeVisible();
   } finally {
     await context.setOffline(false);

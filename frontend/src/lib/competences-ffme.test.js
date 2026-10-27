@@ -80,7 +80,15 @@ test("le cache autonome ne stocke jamais l'API ni les données privées", () => 
   assert.match(worker, /path\.startsWith\("\/api\/"\)/);
   assert.match(worker, /path === "\/deployment-version\.json"/);
   assert.match(worker, /request\.method !== "GET"/);
-  assert.match(worker, /cache\.addAll\(urls\)/);
+  assert.match(worker, /cache\.addAll\(\[\.\.\.urls, "\/competences-offline\.html"\]\)/);
   assert.match(entry, /<Competences accountId="autonome" standalone/);
   assert.match(entry, /navigator\.serviceWorker\.register/);
+});
+
+test("la version de secours est générée depuis la même source et sans JavaScript externe", () => {
+  const generator = readFileSync(new URL("../../scripts/prepare-competences-offline.mjs", import.meta.url), "utf8");
+  assert.match(generator, /COMPETENCE_LESSONS/);
+  assert.match(generator, /FFME_COMPETENCES/);
+  assert.match(generator, /<details>/);
+  assert.doesNotMatch(generator, /<script/);
 });
