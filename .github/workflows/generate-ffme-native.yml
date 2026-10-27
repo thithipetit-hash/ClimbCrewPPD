@@ -1,0 +1,31 @@
+name: Generate FFME native HTML + drawings (one-off)
+on:
+  push:
+    branches:
+      - feature/competences-pdf-texte-html-261027
+    paths:
+      - .github/workflows/generate-ffme-native.yml
+permissions:
+  contents: write
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PDF extractor
+        run: pip install "pymupdf==1.26.7" "Pillow==12.0.0"
+      - name: Extract original PDF text and original drawings
+        run: python frontend/scripts/extract-ffme-html.py
+      - name: Commit generated FFME content
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/src/data/ffme-extracted.json frontend/public/assets/competences-ffme/illustrations
+          if git diff --cached --quiet; then echo "No generated changes"; else
+            git commit -m "assets(ffme): séparer le texte des schémas originaux"
+            git push origin HEAD:refs/heads/feature/competences-pdf-texte-html-261027
+          fi
