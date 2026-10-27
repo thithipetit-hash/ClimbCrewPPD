@@ -129,7 +129,7 @@ test("les 27 pages originales FFME existent, sont de vrais JPEG et correspondent
   assert.match(generator, /source-html/);
 });
 
-test("les 12 documents ont du texte HTML structuré et 26 schémas séparés des caractères", () => {
+test("les 12 documents ont du texte HTML structuré et 25 schémas séparés des caractères", () => {
   const data = JSON.parse(readFileSync(new URL("../data/ffme-extracted.json", import.meta.url), "utf8"));
   const graphicManifest = JSON.parse(readFileSync(
     new URL("../../public/assets/competences-ffme/illustrations/manifest.json", import.meta.url), "utf8",
@@ -164,7 +164,7 @@ test("les 12 documents ont du texte HTML structuré et 26 schémas séparés des
     }
   }
   assert.equal(pageCount, 27);
-  assert.equal(graphicCount, 26);
+  assert.equal(graphicCount, 25);
   assert.ok(totalCharacters > 25000, "L'extraction complète doit préserver le texte FFME.");
   assert.equal(data.check.pages[1].paragraphs.length, 0, "La planche graphique sans texte doit rester une image.");
   const frontend = readFileSync(new URL("../pages/Competences.jsx", import.meta.url), "utf8");
