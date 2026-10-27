@@ -53,5 +53,19 @@
       "/assets/competences-ffme/lecture-07.jpg",
       "/assets/competences-ffme/lecture-08.jpg"
     ]
+  },
+  "pdfs": {
+    "check": "/assets/competences-ffme/check.pdf",
+    "encord": "/assets/competences-ffme/encord.pdf",
+    "huit": "/assets/competences-ffme/huit.pdf",
+    "cinq": "/assets/competences-ffme/cinq.pdf",
+    "trois": "/assets/competences-ffme/trois.pdf",
+    "leader": "/assets/competences-ffme/leader.pdf",
+    "clip": "/assets/competences-ffme/clip.pdf",
+    "parade": "/assets/competences-ffme/parade.pdf",
+    "comparatif": "/assets/competences-ffme/comparatif.pdf",
+    "pieds": "/assets/competences-ffme/pieds.pdf",
+    "repos": "/assets/competences-ffme/repos.pdf",
+    "lecture": "/assets/competences-ffme/lecture.pdf"
   }
 }
