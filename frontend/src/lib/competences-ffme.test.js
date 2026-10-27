@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { COMPETENCE_LESSONS } from "./competences-lessons.js";
+import { validateMediaFile, mediaStorageKey, MEDIA_LIMIT_BYTES } from "./competences-local-media.js";
 import {
   COMPETENCE_CATEGORIES,
   FFME_COMPETENCES,
@@ -43,8 +45,50 @@ test("le suivi de consultation rejette les entrées inconnues et les doublons", 
   assert.deepEqual(normalizeConsultedCompetences({}), []);
 });
 
-test("l’aperçu PDF limite les cadres externes au domaine FFME", () => {
-  const nginxConfig = readFileSync(new URL("../../nginx.prod.conf", import.meta.url), "utf8");
-  assert.match(nginxConfig, /frame-src https:\/\/www\.ffme\.fr;/);
-  assert.doesNotMatch(nginxConfig, /frame-src[^;]*\*/);
+test("les 12 fiches comportent un apprentissage original et des précautions", () => {
+  assert.deepEqual(Object.keys(COMPETENCE_LESSONS).sort(), FFME_COMPETENCES.map((item) => item.id).sort());
+  for (const { id } of FFME_COMPETENCES) {
+    const lesson = COMPETENCE_LESSONS[id];
+    assert.ok(lesson.objective.length >= 20);
+    assert.ok(lesson.points.length >= 3);
+    assert.ok(lesson.vigilance.length >= 20);
+  }
+});
+
+test("l'import local accepte seulement les images et vidéos prévues, et limite leur taille", () => {
+  assert.equal(mediaStorageKey("video", "huit-video"), "video:huit-video");
+  assert.throws(() => mediaStorageKey("video", "../outside"));
+  assert.throws(() => mediaStorageKey("script", "huit-video"));
+  assert.equal(validateMediaFile({ type: "video/mp4", size: 1024 }, "video"), true);
+  assert.equal(validateMediaFile({ type: "image/webp", size: 500 }, "image"), true);
+  assert.throws(() => validateMediaFile({ type: "text/html", size: 10 }, "image"));
+  assert.throws(() => validateMediaFile({ type: "video/mp4", size: MEDIA_LIMIT_BYTES.video + 1 }, "video"));
+});
+
+test("le lecteur utilise les blobs locaux ; les cadres FFME/YouTube ont été supprimés", () => {
+  const nginx = readFileSync(new URL("../../nginx.prod.conf", import.meta.url), "utf8");
+  const page = readFileSync(new URL("../pages/Competences.jsx", import.meta.url), "utf8");
+  assert.match(nginx, /media-src 'self' blob:/);
+  assert.match(nginx, /img-src 'self' data: blob:/);
+  assert.doesNotMatch(nginx, /frame-src https:\/\/www\.ffme\.fr/);
+  assert.doesNotMatch(page, /<iframe|<object|pdfUrl|video\.url/);
+});
+
+test("le cache autonome ne stocke jamais l'API ni les données privées", () => {
+  const worker = readFileSync(new URL("../../public/competences-sw.js", import.meta.url), "utf8");
+  const entry = readFileSync(new URL("../main.jsx", import.meta.url), "utf8");
+  assert.match(worker, /path\.startsWith\("\/api\/"\)/);
+  assert.match(worker, /path === "\/deployment-version\.json"/);
+  assert.match(worker, /request\.method !== "GET"/);
+  assert.match(worker, /cache\.addAll\(\[\.\.\.urls, "\/competences-offline\.html"\]\)/);
+  assert.match(entry, /<Competences accountId="autonome" standalone/);
+  assert.match(entry, /navigator\.serviceWorker\.register/);
+});
+
+test("la version de secours est générée depuis la même source et sans JavaScript externe", () => {
+  const generator = readFileSync(new URL("../../scripts/prepare-competences-offline.mjs", import.meta.url), "utf8");
+  assert.match(generator, /COMPETENCE_LESSONS/);
+  assert.match(generator, /FFME_COMPETENCES/);
+  assert.match(generator, /<details>/);
+  assert.doesNotMatch(generator, /<script/);
 });

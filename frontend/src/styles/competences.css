@@ -36,3 +36,29 @@
   .competences-actions > * { justify-content: center; text-align: center; }
   .competences-preview iframe { height: 360px; }
 }
+
+/* Fiches pédagogiques et médias entièrement internes au navigateur. */
+.competences-illustration { display: block; width: 100%; max-height: 176px; height: auto; border-radius: 12px; }
+.competences-lesson { display: grid; gap: 10px; line-height: 1.55; border-top: 1px solid var(--theme-card-border); padding-top: 12px; }
+.competences-lesson ul { padding-left: 22px; margin: 0; }
+.competences-lesson li { margin: 7px 0; }
+.competences-warning { border-left: 3px solid #d97706; padding: 9px 12px; background: var(--theme-card-soft); }
+.competences-lesson details { border: 1px solid var(--theme-card-border); border-radius: 8px; padding: 10px; }
+.competences-lesson summary { cursor: pointer; font-weight: 600; }
+.competences-offline-link { display: inline-flex; padding: 10px 14px; border: 1px solid var(--theme-card-border); border-radius: 8px; color: var(--theme-text); font-weight: 700; }
+.competences-video-item { border: 1px solid var(--theme-card-border); border-radius: 10px; padding: 14px; background: var(--theme-card-soft); min-width: 0; }
+.competences-video-item h4 { margin: 0 0 12px; }
+.competences-local-media { min-width: 0; }
+.competences-local-media video, .competences-local-media img { display: block; width: 100%; max-height: 330px; border-radius: 8px; background: #000; object-fit: contain; }
+.competences-local-media img { background: transparent; }
+.competences-media-empty { padding: 12px; border: 1px dashed var(--theme-card-border); border-radius: 8px; }
+.competences-media-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.competences-file-label { position: relative; display: inline-flex; cursor: pointer; border-radius: 8px; padding: 10px 12px; border: 1px solid var(--theme-card-border); color: var(--theme-text); font-weight: 650; background: var(--theme-card-soft); }
+.competences-file-label:focus-within { outline: 2px solid var(--theme-accent); }
+.competences-file-label input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.competences-file-label:has(input:disabled) { opacity: .6; pointer-events: none; }
+.competences-media-actions button { min-height: 40px; border: 1px solid var(--theme-card-border); border-radius: 8px; padding: 8px 12px; background: var(--theme-card-soft); color: var(--theme-text); }
+.competences-autonomous-header { max-width: 1100px; margin: 22px auto 0; padding: 12px 18px; }
+.competences-autonomous-header a { margin-left: 12px; color: inherit; }
+.competences-autonomous-main { max-width: 1100px; margin: auto; padding: 14px; }
+@media (max-width: 600px) { .competences-video-grid { grid-template-columns: minmax(0,1fr); } }

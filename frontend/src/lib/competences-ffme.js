@@ -113,8 +113,8 @@ export const FFME_COMPETENCES = Object.freeze([
     category: "pedagogie",
     title: "Lecture et interprétation en escalade",
     description: "Interprétation des prises, anticipation et prise de décision : progression pédagogique fédérale.",
-    chapter: "Lecture et interprétation",
-    pages: 3,
+    chapter: "Lecture de voie et anticipation",
+    pages: 8,
     pdfUrl: "https://www.ffme.fr/wp-content/uploads/2019/09/developper-interpretation-anticipation.pdf",
   },
 ]);

@@ -6,14 +6,17 @@ import {
   filterFfmeCompetences,
   normalizeConsultedCompetences,
 } from "../lib/competences-ffme.js";
+import { COMPETENCE_LESSONS } from "../lib/competences-lessons.js";
+import CompetenceIllustration from "../components/CompetenceIllustration.jsx";
+import CompetenceLocalMedia from "../components/CompetenceLocalMedia.jsx";
 
 const STORAGE_PREFIX = "climbcrew-ffme-ressources-consultees:";
 
-export default function Competences({ accountId }) {
+export default function Competences({ accountId, standalone = false }) {
   const [category, setCategory] = React.useState("all");
   const [query, setQuery] = React.useState("");
   const [onlyUnread, setOnlyUnread] = React.useState(false);
-  const [previewId, setPreviewId] = React.useState(null);
+  const [openLessonId, setOpenLessonId] = React.useState(null);
   const [consultedIds, setConsultedIds] = React.useState([]);
   const [storageError, setStorageError] = React.useState("");
   const storageKey = accountId == null ? null : STORAGE_PREFIX + String(accountId);
@@ -56,13 +59,21 @@ export default function Competences({ accountId }) {
       <section className="card competences-intro">
         <h2>Compétences · Atlas FFME</h2>
         <p>
-          Explorez les ressources techniques et pédagogiques de l’atlas « Initiateur SAE » :
-          documents originaux FFME et vidéos associées, sans reproduction des illustrations.
+          Explorez les 12 fiches pédagogiques rédigées pour ClimbCrew à partir des thèmes
+          de l’atlas « Initiateur SAE ». Texte et schémas sont intégrés à l’application :
+          aucun PDF ni lecteur externe n’est nécessaire.
         </p>
         <p className="small">
           Ces fiches sont des supports de formation, pas une évaluation de votre aptitude
           ni une certification FFME. Pour les gestes de sécurité, pratiquez avec un encadrant
           qualifié et suivez les règles du club ainsi que les notices des fabricants.
+          Ces synthèses et schémas originaux ne reproduisent pas les documents officiels de la FFME.
+        </p>
+        <p className="small">
+          <a className="competences-offline-link" href="/competences/hors-ligne">
+            Ouvrir la bibliothèque autonome, accessible hors connexion après sa préparation
+          </a>
+          {standalone && " · Mode autonome sans compte et sans données serveur."}
         </p>
       </section>
 
@@ -75,8 +86,9 @@ export default function Competences({ accountId }) {
           {consultedIds.length} sur {FFME_COMPETENCES.length}
         </progress>
         <p className="small">
-          Suivi personnel enregistré uniquement sur cet appareil et ce navigateur,
-          sans synchronisation avec les passeports ni validation d’un encadrant.
+          Suivi personnel sur cet appareil et ce navigateur uniquement.
+          Aucun passeport ou validation d’encadrant n’est modifié.
+          Le suivi du mode autonome est distinct de celui du compte connecté.
         </p>
         {storageError && <p className="competences-error" role="alert">{storageError}</p>}
       </section>
@@ -122,7 +134,7 @@ export default function Competences({ accountId }) {
             <div className="competences-grid">
               {items.map((item) => {
                 const consulted = consultedSet.has(item.id);
-                const previewOpen = previewId === item.id;
+                const lessonOpen = openLessonId === item.id;
                 return (
                   <article className="card competence-resource" key={item.id}>
                     <div className="competence-resource-header">
@@ -130,26 +142,30 @@ export default function Competences({ accountId }) {
                       {consulted && <span className="competences-viewed">Consultée</span>}
                     </div>
                     <p>{item.description}</p>
-                    <p className="small">Chapitre : {item.chapter} · {item.pages} page{item.pages > 1 ? "s" : ""} · Source FFME</p>
+                    <p className="small">Chapitre : {item.chapter} · Thème de l’atlas FFME</p>
+                    <CompetenceIllustration category={item.category} title={item.title} />
                     <div className="competences-actions">
-                      <a href={item.pdfUrl} target="_blank" rel="noopener noreferrer" className="competences-source-link">
-                        Ouvrir le PDF FFME
-                      </a>
-                      <button type="button" onClick={() => setPreviewId(previewOpen ? null : item.id)} aria-expanded={previewOpen} aria-controls={"competences-preview-" + item.id}>
-                        {previewOpen ? "Masquer l’aperçu" : "Aperçu du PDF"}
+                      <button
+                        type="button"
+                        onClick={() => setOpenLessonId(lessonOpen ? null : item.id)}
+                        aria-expanded={lessonOpen}
+                        aria-controls={"competences-lesson-" + item.id}
+                      >
+                        {lessonOpen ? "Refermer la fiche" : "Lire la fiche intégrée"}
                       </button>
                     </div>
-                    {previewOpen && (
-                      <div id={"competences-preview-" + item.id} className="competences-preview">
-                        <iframe
-                          title={"Document FFME : " + item.title}
-                          src={item.pdfUrl + "#toolbar=1"}
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                        />
-                        <p className="small">
-                          Si l’aperçu ne s’affiche pas, utilisez le lien « Ouvrir le PDF FFME ».
-                        </p>
+                    {lessonOpen && (
+                      <div id={"competences-lesson-" + item.id} className="competences-lesson">
+                        <p><strong>Objectif :</strong> {COMPETENCE_LESSONS[item.id].objective}</p>
+                        <ul>
+                          {COMPETENCE_LESSONS[item.id].points.map((point, index) => <li key={index}>{point}</li>)}
+                        </ul>
+                        <p className="competences-warning"><strong>Vigilance :</strong> {COMPETENCE_LESSONS[item.id].vigilance}</p>
+                        <details className="competences-image-details">
+                          <summary>Ajouter une illustration personnelle</summary>
+                          <p className="small">Image autorisée, enregistrée localement ; ne remplace pas les illustrations officielles.</p>
+                          <CompetenceLocalMedia type="image" id={item.id} title={item.title} />
+                        </details>
                       </div>
                     )}
                     <label className="competences-consulted">
@@ -174,12 +190,17 @@ export default function Competences({ accountId }) {
 
       <section className="card competences-videos" aria-labelledby="competences-videos-title">
         <h3 id="competences-videos-title">Vidéos techniques FFME</h3>
-        <p className="small">Liens présents dans l’atlas joint, à visionner sur YouTube.</p>
+        <p className="small">
+          Lecteur natif intégré, sans YouTube ni connexion. Les quatre vidéos originales ne sont pas
+          incluses : importez vos propres fichiers MP4/WebM uniquement si vous disposez des droits nécessaires.
+          Les fichiers restent sur cet appareil et ne sont pas partagés avec les autres membres.
+        </p>
         <div className="competences-video-grid">
           {FFME_VIDEOS.map((video) => (
-            <a key={video.id} href={video.url} target="_blank" rel="noopener noreferrer" className="competences-video-link">
-              {video.title} <span aria-hidden="true">↗</span>
-            </a>
+            <article className="competences-video-item" key={video.id}>
+              <h4>{video.title}</h4>
+              <CompetenceLocalMedia type="video" id={video.id} title={video.title} />
+            </article>
           ))}
         </div>
       </section>
