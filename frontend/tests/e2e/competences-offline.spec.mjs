@@ -31,15 +31,20 @@ test("une fois préparée, la bibliothèque reste consultable sans réseau", asy
   expect(cached.controlled, "Le navigateur doit être contrôlé avant le passage hors-ligne").toBe(true);
   expect(cached.keys).toContain("/");
   expect(cached.keys.filter((key) => key.startsWith("/assets/")).length).toBeGreaterThan(0);
+  console.log("OFFLINE_CACHE_KEYS", JSON.stringify(cached.keys));
   await context.setOffline(true);
   try {
-    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.goto("/competences/hors-ligne", { waitUntil: "domcontentloaded" });
     const diagnostics = await page.evaluate(async () => ({
       title: document.title,
       snippet: document.body?.innerText?.slice(0, 500),
       rootHtml: document.getElementById("root")?.innerHTML?.slice(0, 350),
       controlled: Boolean(navigator.serviceWorker.controller),
       assets: [...performance.getEntriesByType("resource")].slice(-10).map((x) => x.name),
+      cachedFiles: await (async () => {
+        const names = (await caches.keys()).filter((name) => name.startsWith("climbcrew-competences-shell-"));
+        return names.length ? (await (await caches.open(names[0])).keys()).map((x) => x.url) : [];
+      })(),
     }));
     console.log("OFFLINE_BROWSER_DIAGNOSTIC", JSON.stringify({ diagnostics, failures }));
     await expect(page.getByRole("heading", { name: /Compétences · Atlas FFME/i })).toBeVisible();
