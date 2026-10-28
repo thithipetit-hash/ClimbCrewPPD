@@ -19,8 +19,7 @@ test("la bibliothèque autonome ouvre les fiches sans API ni lecteur externe", a
   await page.getByRole("button", { name: "Mise en page originale" }).click();
   await expect(page.locator(".ffme-native-sheet")).toHaveCount(2);
   await expect(page.locator(".ffme-native-span").first()).toBeVisible();
-  await expect(page.getByRole("link", { name: /Télécharger le document PDF FFME original : Contrôle croisé/i })).toHaveAttribute("href", "/assets/competences-ffme/check.pdf");
-  await expect(page.locator(".competences-local-media video")).toHaveCount(0);
+  await expect(page.locator(".competences-source-link, .competences-consulted, .competences-image-details, .competences-videos")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
