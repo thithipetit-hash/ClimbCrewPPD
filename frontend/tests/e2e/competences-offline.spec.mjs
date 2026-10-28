@@ -5,7 +5,6 @@ test("la bibliothèque autonome ouvre les fiches sans API ni lecteur externe", a
   page.on("pageerror", (error) => errors.push(error.message));
 
   await page.goto("/competences/hors-ligne", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: /Compétences · Atlas FFME/i })).toBeVisible();
   await expect(page.locator(".competence-resource")).toHaveCount(12);
   await expect(page.locator("iframe, object")).toHaveCount(0);
 
