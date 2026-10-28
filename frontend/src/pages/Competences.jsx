@@ -3,7 +3,6 @@ import {
   COMPETENCE_CATEGORIES,
   FFME_COMPETENCES,
   FFME_VIDEOS,
-  filterFfmeCompetences,
   normalizeConsultedCompetences,
   getFfmePdfPath,
 } from "../lib/competences-ffme.js";
@@ -14,9 +13,6 @@ import CompetencesPdfHtml from "../components/CompetencesPdfHtml.jsx";
 const STORAGE_PREFIX = "climbcrew-ffme-ressources-consultees:";
 
 export default function Competences({ accountId, standalone = false }) {
-  const [category, setCategory] = React.useState("all");
-  const [query, setQuery] = React.useState("");
-  const [onlyUnread, setOnlyUnread] = React.useState(false);
   const [openLessonId, setOpenLessonId] = React.useState(null);
   const [consultedIds, setConsultedIds] = React.useState([]);
   const [storageError, setStorageError] = React.useState("");
@@ -66,84 +62,11 @@ export default function Competences({ accountId, standalone = false }) {
     }
   }
 
-  const matching = filterFfmeCompetences({ category, query });
-  const displayed = onlyUnread ? matching.filter((item) => !consultedIds.includes(item.id)) : matching;
+  const displayed = FFME_COMPETENCES;
   const consultedSet = new Set(consultedIds);
 
   return (
     <div className="stack competences-page">
-      <section className="card competences-intro">
-        <h2>Compétences · Atlas FFME</h2>
-        <p>
-          Explorez les 12 fiches pédagogiques rédigées pour ClimbCrew à partir des thèmes
-          de l’atlas « Initiateur SAE ». Le texte original des documents FFME est désormais
-          consultable directement en HTML sélectionnable, avec les dessins conservés en images.
-          Une vue « Mise en page originale » préserve le positionnement des consignes et schémas.
-          Les 12 PDF restent disponibles au téléchargement local.
-        </p>
-        <p className="small">
-          Ces fiches sont des supports de formation, pas une évaluation de votre aptitude
-          ni une certification FFME. Pour les gestes de sécurité, pratiquez avec un encadrant
-          qualifié et suivez les règles du club ainsi que les notices des fabricants.
-          Les fiches explicatives sont rédigées pour le club ; les illustrations officielles FFME
-          sont reproduites à l’identique avec l’autorisation déclarée par le club.
-        </p>
-        <p className="small">
-          <a className="competences-offline-link" href="/competences/hors-ligne">
-            Ouvrir la bibliothèque autonome, accessible hors connexion après sa préparation
-          </a>
-          {standalone && " · Mode autonome sans compte et sans données serveur."}
-        </p>
-      </section>
-
-      <section className="card competences-dashboard" aria-label="Suivi des ressources">
-        <div className="competences-count">
-          <strong>{consultedIds.length} / {FFME_COMPETENCES.length}</strong>
-          <span>ressources marquées comme consultées</span>
-        </div>
-        <progress value={consultedIds.length} max={FFME_COMPETENCES.length}>
-          {consultedIds.length} sur {FFME_COMPETENCES.length}
-        </progress>
-        <p className="small">
-          Suivi personnel sur cet appareil et ce navigateur uniquement.
-          Aucun passeport ou validation d’encadrant n’est modifié.
-          Le suivi du mode autonome est distinct de celui du compte connecté.
-        </p>
-        {storageError && <p className="competences-error" role="alert">{storageError}</p>}
-      </section>
-
-      <section className="card competences-search" aria-label="Rechercher des ressources">
-        <label htmlFor="competences-query">Rechercher une compétence</label>
-        <input
-          id="competences-query"
-          type="search"
-          placeholder="Ex. : encordement, parade, pieds…"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <div className="competences-categories" aria-label="Filtrer par domaine">
-          <button type="button" aria-pressed={category === "all"} className={category === "all" ? "selected" : ""} onClick={() => setCategory("all")}>
-            Toutes
-          </button>
-          {COMPETENCE_CATEGORIES.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              aria-pressed={category === item.id}
-              className={category === item.id ? "selected" : ""}
-              onClick={() => setCategory(item.id)}
-            >
-              {item.title}
-            </button>
-          ))}
-        </div>
-        <label className="competences-unread">
-          <input type="checkbox" checked={onlyUnread} onChange={(event) => setOnlyUnread(event.target.checked)} />
-          Afficher uniquement les ressources non consultées
-        </label>
-        <p className="small" role="status">{displayed.length} ressource{displayed.length > 1 ? "s" : ""} affichée{displayed.length > 1 ? "s" : ""}</p>
-      </section>
-
       {COMPETENCE_CATEGORIES.map((domain) => {
         const items = displayed.filter((item) => item.category === domain.id);
         if (items.length === 0) return null;
