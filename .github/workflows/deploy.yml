@@ -207,7 +207,7 @@ jobs:
   deploy:
     name: Déployer la préproduction
     needs: [validate, integration, linux_validate]
-    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.validate.outputs.deploy_branch == 'main' }}
+    if: ${{ github.repository == 'thithipetit-hash/ClimbCrewPPD' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.validate.outputs.deploy_branch == 'main' }}
     runs-on: self-hosted
     timeout-minutes: 35
     env:

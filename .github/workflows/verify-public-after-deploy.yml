@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   verify:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && ((github.event.workflow_run.name == 'Validate and Deploy' && github.event.workflow_run.head_branch == 'main') || github.event.workflow_run.name == 'Deploy Production') }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && ((github.event.workflow_run.name == 'Validate and Deploy' && github.event.workflow_run.head_branch == 'main' && github.repository == 'thithipetit-hash/ClimbCrewPPD') || github.event.workflow_run.name == 'Deploy Production') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
