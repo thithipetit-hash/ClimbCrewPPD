@@ -104,3 +104,18 @@
 .ffme-native-drawing { position:absolute; display:block; object-fit:fill; }
 .ffme-native-span { position:absolute; display:block; white-space:pre; line-height:1; font-family:Arial,Helvetica,sans-serif; letter-spacing:-.015em; }
 @media(max-width:600px) { .ffme-native-page { padding:7px; } .ffme-native-toolbar { display:grid; } }
+
+/* Atlas FFME : fond papier blanc permanent, indépendamment du thème actif. */
+.competences-page .ffme-native-page,
+.competences-page .ffme-native-reader,
+.competences-page .ffme-native-figure,
+.competences-page .ffme-native-figure button,
+.competences-page .ffme-native-figure img,
+.competences-page .ffme-native-sheet,
+.competences-page .ffme-native-drawing,
+.competences-zoom-scroller,
+.competences-zoom-scroller img {
+  background-color: #fff !important;
+}
+.competences-page .ffme-native-sheet,
+.competences-page .ffme-native-reader { color: #111 !important; }
