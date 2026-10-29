@@ -44,3 +44,19 @@ test("le CPR pondère la moulinette à 85 % sans bonus lié au critère", () => 
   assert.equal(lead.currentGrade, "6a");
   assert.equal(topRope.currentGrade, "5c");
 });
+
+test("le recalcul après reset reprend l'historique existant sans modifier la formule", () => {
+  const now = new Date("2026-10-29T21:00:00Z").getTime();
+  const routesById = { voie: { id: "voie", cotationAjustee: "6b" } };
+  const realisations = [{
+    id: "ancienne",
+    voieId: "voie",
+    dateRealisation: "2026-10-20",
+    createdAt: "2026-10-20T10:00:00Z",
+    modeRealisation: "en_tete",
+    styleRealisation: "a_vue",
+  }];
+  const resetAt = "2026-10-25T12:00:00Z";
+  assert.equal(calculateSimpleCpr(realisations, routesById, now, resetAt).currentGrade, null);
+  assert.equal(calculateSimpleCpr(realisations, routesById, now, null).currentGrade, "6b");
+});
