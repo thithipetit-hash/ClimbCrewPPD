@@ -432,6 +432,19 @@ function App() {
       )),
     }));
   }
+  async function recalculateMyStatisticsAndCpr() {
+    if (!myParticipantId) throw new Error("Votre compte n'est pas associé à un grimpeur.");
+    const result = await apiFetch("/participants/me/statistics/recalculate", { method: "POST" });
+    if (result?.ok !== true || result.cprResetAt !== null) {
+      throw new Error("La confirmation serveur est manquante.");
+    }
+    const refreshed = await reloadApiState({ requireComplete: true });
+    if (!refreshed?.participants?.some((participant) => (
+      String(participant.id) === myParticipantId && !participant.cprResetAt
+    ))) {
+      throw new Error("Le CPR recalculé n'a pas pu être confirmé. Actualisez la page.");
+    }
+  }
   const { rememberQrBelayer } = useQrRealisationFlow({
     authUser,
     myParticipantId,
@@ -1395,6 +1408,7 @@ async function handleThemePreferenceChange(nextTheme) {
             normalizePassport={normalizePassport}
             updateMyProfile={updateMyProfile}
             onResetCpr={resetMyCpr}
+            onRecalculateStats={recalculateMyStatisticsAndCpr}
             exportMyRealisationsCsv={exportMyRealisationsCsv}
             onTheCragImported={() => reloadApiState({ isMounted: () => true })}
             onRealisationsChanged={() => reloadApiState({ isMounted: () => true })}
