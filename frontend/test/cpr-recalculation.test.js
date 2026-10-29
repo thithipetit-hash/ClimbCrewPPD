@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 import { recalculateOwnStatisticsAndCpr } from "../src/lib/cpr-recalculation.js";
 
@@ -56,4 +57,14 @@ test("le recalcul attend que le serveur confirme le CPR du bon grimpeur", async 
     }),
     /Actualisez la page/,
   );
+});
+
+test("le profil propose le recalcul mais plus la réinitialisation du CPR", async () => {
+  const [profil, app] = await Promise.all([
+    readFile(new URL("../src/pages/Profil.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/App.jsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(profil, /Recalculer mes statistiques et mon CPR/);
+  assert.doesNotMatch(profil, /Réinitialiser mon CPR|onResetCpr|handleResetOwnCpr|cprResetting/);
+  assert.doesNotMatch(app, /onResetCpr=|async function resetMyCpr/);
 });
