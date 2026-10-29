@@ -1,4 +1,4 @@
-import { calculateCpr } from "../../../shared/cpr.js";
+import { calculateCpr, filterCprRealisations } from "../../../shared/cpr.js";
 import { GRADES } from "../../../shared/climbing-grades.js";
 import { MAX_SESSION_PARTICIPANTS } from "../../../shared/session-rules.js";
 import { PASSPORT_STYLES } from "./ui-config.js";
@@ -223,13 +223,14 @@ export function nextBusinessDay(dateStr, delta) {
   return d.toISOString().slice(0, 10);
 }
 
-export function calculateSimpleCpr(realisations, routesById, now = Date.now()) {
+export function calculateSimpleCpr(realisations, routesById, now = Date.now(), resetAt = null) {
   return calculateCpr({
     realisations,
     routesById,
     grades: GRADES,
     isSuccessful: isSuccessfulRealisation,
     now,
+    resetAt,
   });
 }
 
@@ -238,8 +239,8 @@ export function calculateSimpleCpr(realisations, routesById, now = Date.now()) {
  * La formule reste strictement celle de calculateSimpleCpr : seule la date
  * d'observation change afin de produire une courbe historique cohérente.
  */
-export function calculateCprHistory(realisations, routesById, now = Date.now()) {
-  const validRealisations = realisations
+export function calculateCprHistory(realisations, routesById, now = Date.now(), resetAt = null) {
+  const validRealisations = filterCprRealisations(realisations, resetAt)
     .filter((realisation) => Number.isFinite(new Date(realisation.dateRealisation).getTime()))
     .filter((realisation) => new Date(realisation.dateRealisation).getTime() <= now);
 
@@ -249,7 +250,7 @@ export function calculateCprHistory(realisations, routesById, now = Date.now()) 
 
   return dates.map((date) => {
     const observationTime = new Date(`${date}T23:59:59`).getTime();
-    const cpr = calculateSimpleCpr(validRealisations, routesById, observationTime);
+    const cpr = calculateSimpleCpr(validRealisations, routesById, observationTime, resetAt);
     const dayRealisations = validRealisations.filter((realisation) => (
       String(realisation.dateRealisation).slice(0, 10) === date
     ));

@@ -100,6 +100,7 @@ export default function Profil({
   getPassportDotStyle,
   normalizePassport,
   updateMyProfile,
+  onResetCpr,
   exportMyRealisationsCsv,
   onTheCragImported,
   onRealisationsChanged,
@@ -120,6 +121,8 @@ export default function Profil({
   const [buddySaveStatus, setBuddySaveStatus] = React.useState("");
   const [pendingConfirmation, setPendingConfirmation] = React.useState(null);
   const [cprDetailsOpen, setCprDetailsOpen] = React.useState(false);
+  const [cprResetting, setCprResetting] = React.useState(false);
+  const [cprResetStatus, setCprResetStatus] = React.useState("");
 
   async function toggleKudo(realisation) {
     if (!myParticipantId || kudosPendingId) return;
@@ -243,6 +246,22 @@ export default function Profil({
     return updateMyProfile({ ...patch, sexe: normalizedSexe });
   }
 
+  async function handleResetOwnCpr() {
+    if (!isOwnProfile || cprResetting) return;
+    setCprResetting(true);
+    setCprResetStatus("");
+    setProfileError("");
+    try {
+      await onResetCpr();
+      setCprResetStatus("Votre CPR a été réinitialisé. Vos réalisations sont conservées.");
+    } catch (error) {
+      setProfileError(`Réinitialisation du CPR impossible : ${error.message || error}`);
+    } finally {
+      setCprResetting(false);
+      setPendingConfirmation(null);
+    }
+  }
+
   function toggleBuddyPreference(day, slot) {
     const preference = buddyPreferenceKey(day, slot);
     setBuddySaveStatus("");
@@ -295,6 +314,7 @@ export default function Profil({
         title={pendingConfirmation?.title}
         message={pendingConfirmation?.message}
         onConfirm={() => void pendingConfirmation?.onConfirm?.()}
+        busy={cprResetting}
         onCancel={() => setPendingConfirmation(null)}
       />
       <CprDetailsModal
@@ -421,11 +441,29 @@ export default function Profil({
                   <div className="stat"><div className="label">Séances</div><div className="value">{participations}</div></div>
                   <div className="stat"><div className="label">Kudos reçus</div><div className="value">{selectedRealisations.reduce((total, item) => total + Number(item.kudosCount || 0), 0)}</div></div>
                 </div>
+                {isOwnProfile && (
+                  <div className="group" style={{ marginTop: 12, alignItems: "center" }}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={cprResetting}
+                      onClick={() => setPendingConfirmation({
+                        title: "Réinitialiser mon CPR",
+                        message: "Le CPR repartira de zéro et sera recalculé à partir de vos nouvelles réalisations. Les anciennes voies, vos autres statistiques et les scores des autres membres sont conservés.",
+                        confirmLabel: "Réinitialiser mon CPR",
+                        onConfirm: handleResetOwnCpr,
+                      })}
+                    >
+                      {cprResetting ? "Réinitialisation…" : "Réinitialiser mon CPR"}
+                    </Button>
+                    {cprResetStatus && <span className="small" role="status">{cprResetStatus}</span>}
+                  </div>
+                )}
               </div>
 
               <ClimberProfilePanel realisations={selectedRealisations} routesById={routesById} cprGrade={cpr.currentGrade || ""} />
               <ParticipantBadges participant={selectedParticipant} realisations={selectedRealisations} allRealisations={realisations} routesById={routesById} sessions={getParticipantSessions(selectedParticipantId)} />
-              <div className="card"><CprEvolutionChart realisations={selectedRealisations} routesById={routesById} /></div>
+              <div className="card"><CprEvolutionChart realisations={selectedRealisations} routesById={routesById} resetAt={selectedParticipant.cprResetAt} /></div>
 
               {isOwnProfile && (
                 <ProfileRealisationRecorder

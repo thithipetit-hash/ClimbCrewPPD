@@ -141,7 +141,7 @@ export async function updateOwnParticipantProfile(req, res) {
         returning
           id, nom, prenom, email, login_email, passport, sexe, cotisation, ffme,
           initiateur_sae, initiateur_sne,
-          can_encadrer, can_referer, can_admin, avatar_id, crest_id, profile_public,
+          can_encadrer, can_referer, can_admin, avatar_id, crest_id, profile_public, cpr_reset_at,
           height_cm, weight_kg, arm_span_cm, standing_reach_cm, grip_strength_right_kg,
           grip_strength_left_kg, hang_20mm_seconds, jug_hang_seconds, strict_pullups, flexed_arm_hang_seconds, weighted_pullup_kg, hip_mobility_cm,
           (coalesce(custom_avatar_image, '') <> '') as has_custom_avatar
