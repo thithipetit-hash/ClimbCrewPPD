@@ -267,3 +267,32 @@ test("le Tableau d’honneur classe tous les inscrits au moins une fois et exclu
   assert.deepEqual(pointsRanking.entries.map((entry) => entry.rank), [1, 1, 1, 1]);
   assert.deepEqual(pointsRanking.entries.map((entry) => entry.displayValue), ["0 points", "0 points", "0 points", "0 points"]);
 });
+
+
+test("le reset du CPR exclut l'historique, même enregistré le jour du reset", () => {
+  const resetAt = "2026-10-29T12:00:00.000Z";
+  const now = new Date("2026-10-30T12:00:00Z").getTime();
+  const routesById = { v1: { cotationAjustee: "7c" }, v2: { cotationAjustee: "5c" } };
+  const realisations = [
+    { id: "avant", voieId: "v1", dateRealisation: "2026-10-29", createdAt: "2026-10-29T11:59:59Z", styleRealisation: "a_vue" },
+    { id: "apres", voieId: "v2", dateRealisation: "2026-10-29", createdAt: "2026-10-29T12:00:01Z", styleRealisation: "flash" },
+    { id: "importe", voieId: "v1", dateRealisation: "2026-10-28", createdAt: "2026-10-30T08:00:00Z", styleRealisation: "a_vue" },
+  ];
+  const cpr = calculateSimpleCpr(realisations, routesById, now, resetAt);
+  assert.equal(cpr.currentGrade, "5c");
+  assert.deepEqual(cpr.timeline.map((point) => point.id), ["apres"]);
+  const history = calculateCprHistory(realisations, routesById, now, resetAt);
+  assert.deepEqual(history.map((point) => point.date), ["2026-10-29"]);
+  assert.deepEqual(history[0].includedIds, ["apres"]);
+  assert.equal(calculateSimpleCpr(realisations, routesById, now).timeline.length, 3);
+});
+
+test("après reset, le CPR est non calculé tant qu'aucune nouvelle réalisation n'existe", () => {
+  const now = new Date("2026-10-29T16:00:00Z").getTime();
+  const realisations = [
+    { id: "ancien", voieId: "v1", dateRealisation: "2026-10-29", createdAt: "2026-10-29T15:00:00Z", styleRealisation: "a_vue" },
+  ];
+  const cpr = calculateSimpleCpr(realisations, { v1: { cotationAjustee: "6b" } }, now, "2026-10-29T15:30:00Z");
+  assert.equal(cpr.currentGrade, null);
+  assert.deepEqual(cpr.timeline, []);
+});

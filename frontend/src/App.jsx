@@ -341,9 +341,9 @@ function App() {
     return {
       count: selectedParticipantRealisations.length,
       bestAll,
-      cpr: calculateSimpleCpr(selectedParticipantRealisations, routesById),
+      cpr: calculateSimpleCpr(selectedParticipantRealisations, routesById, Date.now(), participantsById[state.selectedParticipantProgress]?.cprResetAt),
     };
-  }, [selectedParticipantRealisations, routesById]);
+  }, [selectedParticipantRealisations, routesById, participantsById, state.selectedParticipantProgress]);
 
   const selectedRouteRealisations = useMemo(() => {
     if (!selectedRouteProgress) return [];
@@ -405,7 +405,9 @@ function App() {
         participant.id,
         calculateSimpleCpr(
           state.realisations.filter((realisation) => String(realisation.participantId) === String(participant.id)),
-          routesById
+          routesById,
+          Date.now(),
+          participant.cprResetAt,
         ),
       ])
     );
@@ -418,6 +420,18 @@ function App() {
 
   const myParticipantId = authUser?.participantId ? String(authUser.participantId) : "";
   const myParticipant = participantsById[myParticipantId] || null;
+
+  async function resetMyCpr() {
+    if (!myParticipantId) throw new Error("Votre compte n'est pas associé à un grimpeur.");
+    const result = await apiFetch("/participants/me/cpr/reset", { method: "POST" });
+    if (!result?.cprResetAt) throw new Error("La confirmation serveur est manquante.");
+    setState((previous) => ({
+      ...previous,
+      participants: previous.participants.map((participant) => (
+        String(participant.id) === myParticipantId ? { ...participant, cprResetAt: result.cprResetAt } : participant
+      )),
+    }));
+  }
   const { rememberQrBelayer } = useQrRealisationFlow({
     authUser,
     myParticipantId,
@@ -1380,6 +1394,7 @@ async function handleThemePreferenceChange(nextTheme) {
             getPassportDotStyle={getPassportDotStyle}
             normalizePassport={normalizePassport}
             updateMyProfile={updateMyProfile}
+            onResetCpr={resetMyCpr}
             exportMyRealisationsCsv={exportMyRealisationsCsv}
             onTheCragImported={() => reloadApiState({ isMounted: () => true })}
             onRealisationsChanged={() => reloadApiState({ isMounted: () => true })}
