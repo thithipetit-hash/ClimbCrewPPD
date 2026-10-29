@@ -44,7 +44,7 @@ test("le recalcul réintègre les anciennes réalisations du seul compte connect
   let params;
   setPool({
     query: async (sql, values) => {
-      assert.match(sql, /set cpr_reset_at = null where id = \\$1/);
+      assert.match(sql, /set cpr_reset_at = null where id = \$1/);
       params = values;
       return { rowCount: 1, rows: [{ cpr_reset_at: null }] };
     },
