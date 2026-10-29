@@ -83,6 +83,7 @@ export function useAppBootstrap({
   const reloadApiState = useCallback(async ({
     isMounted = () => true,
     recentOnly = false,
+    requireComplete = false,
   } = {}) => {
     if (!recentOnly) {
       historyTokenRef.current = null;
@@ -97,6 +98,9 @@ export function useAppBootstrap({
       if (!isMounted()) return null;
 
       const summary = summarizeBootstrapResults(settledResults);
+      if (requireComplete && summary.failureCount) {
+        throw new Error("Actualisation incomplète des données : veuillez réessayer.");
+      }
       const nextState = mergeBootstrapCollections({}, settledResults);
       const realisationsIndex = BUSINESS_BOOTSTRAP_ENDPOINTS.findIndex(([key]) => key === "realisations");
       const realisationsResult = settledResults[realisationsIndex];
