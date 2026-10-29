@@ -53,7 +53,7 @@ import { installBackupRoutes } from "../backup-routes.js";
 import { createBackup, startBackupScheduler } from "../backup-service.js";
 import { installVideoAnalysisSettingsRoutes } from "../video-analysis-settings-routes.js";
 import { getPool } from "./database.js";
-import { resetOwnCpr } from "./participant-cpr-reset-service.js";
+import { recalculateOwnStatisticsAndCpr, resetOwnCpr } from "./participant-cpr-reset-service.js";
 import { sendTokenConfirmationPage } from "../token-confirmation-page.js";
 
 function showVerifyEmailConfirmation(req, res) {
@@ -153,6 +153,7 @@ export function installExplicitAdminUserRoutes(app, {
   app.put("/participants/:id", requireAuth, requireAdmin, updateParticipantWithAdminRight);
   app.patch("/participants/me/profile", requireAuth, updateOwnParticipantProfile);
   app.post("/participants/me/cpr/reset", requireAuth, resetOwnCpr);
+  app.post("/participants/me/statistics/recalculate", requireAuth, recalculateOwnStatisticsAndCpr);
   app.delete("/participants/:id", requireAuth, requireAdmin, deleteParticipantSafely);
   app.get("/realisations", requireAuth, listRealisationsWithPrivacy);
   app.put("/sessions/:id", requireAuth, updateSessionWithAuthorization);

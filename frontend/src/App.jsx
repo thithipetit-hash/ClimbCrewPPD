@@ -53,6 +53,7 @@ import {
 } from "./lib/domain.js";
 import { USE_API, apiFetch, downloadFile } from "./lib/api.js";
 import { createAuthSessionActions } from "./lib/auth-session-actions.js";
+import { recalculateOwnStatisticsAndCpr } from "./lib/cpr-recalculation.js";
 import { useOctoberPumpkin } from "./hooks/useOctoberPumpkin.js";
 import { normalizeAppData } from "./lib/normalize.js";
 import { APP_VERSION } from "./lib/version.js";
@@ -1395,6 +1396,7 @@ async function handleThemePreferenceChange(nextTheme) {
             normalizePassport={normalizePassport}
             updateMyProfile={updateMyProfile}
             onResetCpr={resetMyCpr}
+            onRecalculateStats={() => recalculateOwnStatisticsAndCpr({ participantId: myParticipantId, reloadApiState })}
             exportMyRealisationsCsv={exportMyRealisationsCsv}
             onTheCragImported={() => reloadApiState({ isMounted: () => true })}
             onRealisationsChanged={() => reloadApiState({ isMounted: () => true })}
