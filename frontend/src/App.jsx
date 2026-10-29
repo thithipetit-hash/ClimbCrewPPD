@@ -422,17 +422,6 @@ function App() {
   const myParticipantId = authUser?.participantId ? String(authUser.participantId) : "";
   const myParticipant = participantsById[myParticipantId] || null;
 
-  async function resetMyCpr() {
-    if (!myParticipantId) throw new Error("Votre compte n'est pas associé à un grimpeur.");
-    const result = await apiFetch("/participants/me/cpr/reset", { method: "POST" });
-    if (!result?.cprResetAt) throw new Error("La confirmation serveur est manquante.");
-    setState((previous) => ({
-      ...previous,
-      participants: previous.participants.map((participant) => (
-        String(participant.id) === myParticipantId ? { ...participant, cprResetAt: result.cprResetAt } : participant
-      )),
-    }));
-  }
   const { rememberQrBelayer } = useQrRealisationFlow({
     authUser,
     myParticipantId,
@@ -1395,7 +1384,6 @@ async function handleThemePreferenceChange(nextTheme) {
             getPassportDotStyle={getPassportDotStyle}
             normalizePassport={normalizePassport}
             updateMyProfile={updateMyProfile}
-            onResetCpr={resetMyCpr}
             onRecalculateStats={() => recalculateOwnStatisticsAndCpr({ participantId: myParticipantId, reloadApiState })}
             exportMyRealisationsCsv={exportMyRealisationsCsv}
             onTheCragImported={() => reloadApiState({ isMounted: () => true })}

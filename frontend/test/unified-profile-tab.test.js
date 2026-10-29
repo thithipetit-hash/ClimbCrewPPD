@@ -44,7 +44,7 @@ test("Profil affiche le tableau filtrable des voies du grimpeur", () => {
 
 test("le recalcul des statistiques et du CPR reste réservé au propriétaire du profil", () => {
   assert.match(profileSource, /onRecalculateStats,/);
-  assert.match(profileSource, /if \(!isOwnProfile \|\| cprResetting \|\| statsRecalculating\) return/);
+  assert.match(profileSource, /if \(!isOwnProfile \|\| statsRecalculating\) return/);
   assert.match(profileSource, /Recalculer mes statistiques et mon CPR/);
   assert.match(profileSource, /onConfirm: handleRecalculateOwnStats/);
   assert.match(profileSource, /await onRecalculateStats\(\)/);
