@@ -53,6 +53,7 @@ import {
 } from "./lib/domain.js";
 import { USE_API, apiFetch, downloadFile } from "./lib/api.js";
 import { createAuthSessionActions } from "./lib/auth-session-actions.js";
+import { recalculateOwnStatisticsAndCpr } from "./lib/cpr-recalculation.js";
 import { useOctoberPumpkin } from "./hooks/useOctoberPumpkin.js";
 import { normalizeAppData } from "./lib/normalize.js";
 import { APP_VERSION } from "./lib/version.js";
@@ -431,19 +432,6 @@ function App() {
         String(participant.id) === myParticipantId ? { ...participant, cprResetAt: result.cprResetAt } : participant
       )),
     }));
-  }
-  async function recalculateMyStatisticsAndCpr() {
-    if (!myParticipantId) throw new Error("Votre compte n'est pas associé à un grimpeur.");
-    const result = await apiFetch("/participants/me/statistics/recalculate", { method: "POST" });
-    if (result?.ok !== true || result.cprResetAt !== null) {
-      throw new Error("La confirmation serveur est manquante.");
-    }
-    const refreshed = await reloadApiState({ requireComplete: true });
-    if (!refreshed?.participants?.some((participant) => (
-      String(participant.id) === myParticipantId && !participant.cprResetAt
-    ))) {
-      throw new Error("Le CPR recalculé n'a pas pu être confirmé. Actualisez la page.");
-    }
   }
   const { rememberQrBelayer } = useQrRealisationFlow({
     authUser,
@@ -1408,7 +1396,7 @@ async function handleThemePreferenceChange(nextTheme) {
             normalizePassport={normalizePassport}
             updateMyProfile={updateMyProfile}
             onResetCpr={resetMyCpr}
-            onRecalculateStats={recalculateMyStatisticsAndCpr}
+            onRecalculateStats={() => recalculateOwnStatisticsAndCpr({ participantId: myParticipantId, reloadApiState })}
             exportMyRealisationsCsv={exportMyRealisationsCsv}
             onTheCragImported={() => reloadApiState({ isMounted: () => true })}
             onRealisationsChanged={() => reloadApiState({ isMounted: () => true })}
