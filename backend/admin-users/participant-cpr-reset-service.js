@@ -3,7 +3,7 @@ import { getPool } from "./database.js";
 /** Le grimpeur cible est exclusivement celui du compte authentifié. */
 async function changeOwnCprResetDate(req, res, recalculate) {
   const participantId = String(req.auth?.user?.participantId || "");
-  if (!/^[1-9]\\d*$/.test(participantId)) {
+  if (!/^[1-9]\d*$/.test(participantId)) {
     return res.status(409).json({ error: "Le compte n'est pas relié à une fiche grimpeur" });
   }
 
