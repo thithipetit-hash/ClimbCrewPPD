@@ -124,6 +124,19 @@ function email(value) {
   return normalized;
 }
 
+function optionalAdultBirthYear(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const year = Number(value);
+  const lastAdultBirthYear = new Date().getUTCFullYear() - 18;
+  if (!Number.isInteger(year) || year < 1900 || year > lastAdultBirthYear) {
+    throw new ValidationError(
+      `anneeNaissance doit être une année entre 1900 et ${lastAdultBirthYear} (participants majeurs).`,
+      { anneeNaissance: "out_of_range" },
+    );
+  }
+  return year;
+}
+
 export function validateParticipantPayload(payload = {}) {
   const requestedDiscovery = strictBoolean(
     payload.passportDecouverte,
@@ -141,6 +154,7 @@ export function validateParticipantPayload(payload = {}) {
     passportDecouverte: passportSelection.passportDecouverte,
     passeportFfme: strictBoolean(payload.passeportFfme, "passeportFfme"),
     sexe: enumValue(payload.sexe, "sexe", SEXES, ""),
+    anneeNaissance: optionalAdultBirthYear(payload.anneeNaissance),
     cotisation: strictBoolean(payload.cotisation, "cotisation"),
     ffme: strictBoolean(payload.ffme, "ffme"),
     canEncadrer: strictBoolean(payload.canEncadrer, "canEncadrer"),
