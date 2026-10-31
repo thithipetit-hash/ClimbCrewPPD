@@ -62,8 +62,8 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
     );
   }
 
-  if (!realisation.chute) return;
   const assureurId = String(realisation.assureurId || "");
+  if (!realisation.chute && !assureurId) return;
   if (!assureurId) {
     throw new RealisationIntegrityError("Le binôme assureur est obligatoire lorsqu’un vol est enregistré.", "assureurId");
   }
