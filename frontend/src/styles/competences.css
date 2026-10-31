@@ -1,0 +1,121 @@
+/* Module documentaire FFME : thème et comportement responsive de l'application. */
+.competences-page { min-width: 0; padding-bottom: 80px; }
+.competences-page .card { min-width: 0; }
+.competences-intro h2, .competences-videos h3, .competences-domain h3 { margin-top: 0; }
+.competences-dashboard progress { display: block; width: 100%; height: 12px; accent-color: var(--theme-accent); }
+.competences-count { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.competences-count strong { font-size: 1.5rem; }
+.competences-search { display: grid; gap: 10px; }
+.competences-search input[type="search"] { display: block; width: 100%; min-height: 44px; background: var(--theme-input-bg); color: var(--theme-text); border: 1px solid var(--theme-input-border); border-radius: 8px; padding: 10px; }
+.competences-categories { display: flex; flex-wrap: wrap; gap: 8px; }
+.competences-categories button, .competences-actions button { min-height: 40px; border: 1px solid var(--theme-card-border); background: var(--theme-card-soft); color: var(--theme-text); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+.competences-categories button.selected { background: var(--theme-accent); color: var(--theme-accent-text); }
+.competences-unread, .competences-consulted { display: flex; gap: 9px; align-items: center; cursor: pointer; }
+.competences-unread input, .competences-consulted input { accent-color: var(--theme-accent); width: 18px; height: 18px; flex: 0 0 auto; }
+.competences-domain { min-width: 0; }
+.competences-domain h3 { margin-bottom: 12px; }
+.competences-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 14px; }
+.competence-resource { display: flex; flex-direction: column; gap: 8px; }
+.competence-resource-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.competence-resource h4 { margin: 0; font-size: 1.08rem; line-height: 1.4; }
+.competence-resource p { margin: 0; }
+.competences-viewed { font-size: .78rem; border: 1px solid var(--theme-card-border); border-radius: 999px; padding: 3px 8px; white-space: nowrap; }
+.competences-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 10px; }
+.competences-source-link { display: inline-flex; align-items: center; min-height: 40px; border-radius: 8px; padding: 8px 12px; background: var(--theme-accent); color: var(--theme-accent-text); text-decoration: none; font-weight: 700; }
+.competences-consulted { margin-top: 10px; font-size: .92rem; }
+.competences-preview { width: 100%; min-width: 0; }
+.competences-preview iframe { display: block; width: 100%; height: 420px; border: 1px solid var(--theme-card-border); border-radius: 8px; background: #fff; }
+.competences-video-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 10px; }
+.competences-video-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; min-height: 52px; background: var(--theme-card-soft); border: 1px solid var(--theme-card-border); border-radius: 8px; color: var(--theme-text); text-decoration: none; }
+.competences-video-link:hover, .competences-video-link:focus-visible { text-decoration: underline; }
+.competences-empty { text-align: center; }
+.competences-error { color: #dc2626; font-weight: 700; }
+@media (max-width: 600px) {
+  .competences-grid { grid-template-columns: minmax(0, 1fr); }
+  .competences-actions { flex-direction: column; }
+  .competences-actions > * { justify-content: center; text-align: center; }
+  .competences-preview iframe { height: 360px; }
+}
+
+/* Fiches pédagogiques et médias entièrement internes au navigateur. */
+.competences-illustration { display: block; width: 100%; max-height: 176px; height: auto; border-radius: 12px; }
+.competences-lesson { display: grid; gap: 10px; line-height: 1.55; border-top: 1px solid var(--theme-card-border); padding-top: 12px; }
+.competences-lesson ul { padding-left: 22px; margin: 0; }
+.competences-lesson li { margin: 7px 0; }
+.competences-warning { border-left: 3px solid #d97706; padding: 9px 12px; background: var(--theme-card-soft); }
+.competences-lesson details { border: 1px solid var(--theme-card-border); border-radius: 8px; padding: 10px; }
+.competences-lesson summary { cursor: pointer; font-weight: 600; }
+.competences-offline-link { display: inline-flex; padding: 10px 14px; border: 1px solid var(--theme-card-border); border-radius: 8px; color: var(--theme-text); font-weight: 700; }
+.competences-video-item { border: 1px solid var(--theme-card-border); border-radius: 10px; padding: 14px; background: var(--theme-card-soft); min-width: 0; }
+.competences-video-item h4 { margin: 0 0 12px; }
+.competences-local-media { min-width: 0; }
+.competences-local-media video, .competences-local-media img { display: block; width: 100%; max-height: 330px; border-radius: 8px; background: #000; object-fit: contain; }
+.competences-local-media img { background: transparent; }
+.competences-media-empty { padding: 12px; border: 1px dashed var(--theme-card-border); border-radius: 8px; }
+.competences-media-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.competences-file-label { position: relative; display: inline-flex; cursor: pointer; border-radius: 8px; padding: 10px 12px; border: 1px solid var(--theme-card-border); color: var(--theme-text); font-weight: 650; background: var(--theme-card-soft); }
+.competences-file-label:focus-within { outline: 2px solid var(--theme-accent); }
+.competences-file-label input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.competences-file-label:has(input:disabled) { opacity: .6; pointer-events: none; }
+.competences-media-actions button { min-height: 40px; border: 1px solid var(--theme-card-border); border-radius: 8px; padding: 8px 12px; background: var(--theme-card-soft); color: var(--theme-text); }
+.competences-autonomous-header { max-width: 1100px; margin: 22px auto 0; padding: 12px 18px; }
+.competences-autonomous-header a { margin-left: 12px; color: inherit; }
+.competences-autonomous-main { max-width: 1100px; margin: auto; padding: 14px; }
+@media (max-width: 600px) { .competences-video-grid { grid-template-columns: minmax(0,1fr); } }
+
+/* Rendus intégraux des documents officiels : aucun changement du contenu FFME. */
+.competences-original-preview { display:block; position:relative; width:100%; min-height:142px; padding:0; overflow:hidden; border:1px solid var(--theme-card-border); background:white; border-radius:9px; cursor:pointer; text-align:center; }
+.competences-original-preview img { display:block; width:100%; height:186px; object-fit:cover; object-position:top; }
+.competences-original-preview span { display:block; padding:8px 10px; background:var(--theme-card-soft); color:var(--theme-text); font-weight:700; }
+.competences-original-pages { display:grid; gap:10px; min-width:0; padding:10px; border:1px solid var(--theme-card-border); border-radius:10px; }
+.competences-original-pages h5 { margin:0; font-size:1rem; }
+.competences-original-figure { margin:0; min-width:0; }
+.competences-original-figure button { display:block; width:100%; padding:0; border:1px solid var(--theme-card-border); border-radius:8px; overflow:hidden; cursor:zoom-in; background:#fff; }
+.competences-original-figure img { display:block; width:100%; height:auto; object-fit:contain; }
+.competences-original-figure figcaption { padding:6px 2px; text-align:center; font-size:.85rem; }
+.competences-zoom-dialog { position:fixed; width:min(98vw,1200px); height:min(94vh,1100px); max-width:none; max-height:none; border:1px solid #668197; border-radius:12px; padding:10px; background:#f4f7fa; color:#132f48; overflow:hidden; }
+.competences-zoom-dialog::backdrop { background:rgba(1,8,24,.8); }
+.competences-zoom-controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:7px 8px; min-height:46px; }
+.competences-zoom-controls strong { margin-right:auto; }
+.competences-zoom-controls button { min-height:40px; min-width:44px; border-radius:8px; background:white; color:#102f46; border:1px solid #95aabf; font-weight:700; }
+.competences-zoom-scroller { height:calc(100% - 64px); min-width:0; overflow:auto; }
+.competences-zoom-scroller img { display:block; height:auto; max-width:none; border:0; }
+@media (max-width:600px) { .competences-zoom-dialog { padding:6px; height:96vh; } .competences-zoom-controls { gap:5px; } .competences-zoom-controls strong { flex-basis:100%; } .competences-zoom-scroller { height:calc(100% - 105px); } }
+
+/* Documents FFME reconstruits à partir des blocs de texte et des illustrations
+   des PDF originaux, sans rendu des pages complètes comme des JPEG. */
+.ffme-native-document { display:grid; gap:12px; min-width:0; }
+.ffme-native-toolbar { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.ffme-native-switch { display:flex; flex-wrap:wrap; gap:6px; }
+.ffme-native-switch button { min-height:42px; border-radius:8px; border:1px solid var(--theme-card-border); color:var(--theme-text); background:var(--theme-card-soft); padding:7px 11px; }
+.ffme-native-switch button[aria-pressed="true"] { background:var(--theme-accent); color:var(--theme-accent-text); }
+.ffme-native-pages { display:grid; gap:16px; }
+.ffme-native-page { min-width:0; border:1px solid var(--theme-card-border); border-radius:10px; padding:12px; }
+.ffme-native-page-label { margin:0 0 10px; font-size:.95rem; }
+.ffme-native-reader { display:grid; gap:10px; line-height:1.55; }
+.ffme-native-reader p, .ffme-native-reader h5 { margin:0; overflow-wrap:anywhere; white-space:pre-line; }
+.ffme-native-reader .ffme-html-heading { font-size:1.05rem; font-weight:750; }
+.ffme-native-reader .ffme-html-list { padding-left:14px; border-left:3px solid var(--theme-card-border); }
+.ffme-native-figure { margin:6px 0 0; }
+.ffme-native-figure button { width:100%; border:1px solid var(--theme-card-border); background:#fff; border-radius:8px; overflow:hidden; padding:5px; cursor:zoom-in; }
+.ffme-native-figure img { display:block; width:100%; height:auto; max-height:620px; object-fit:contain; }
+.ffme-native-figure figcaption { font-size:.8rem; padding:6px; opacity:.85; }
+.ffme-native-sheet { width:100%; min-width:0; position:relative; overflow:hidden; container-type:inline-size; background:white; border:1px solid #dce4ea; }
+.ffme-native-drawing { position:absolute; display:block; object-fit:fill; }
+.ffme-native-span { position:absolute; display:block; white-space:pre; line-height:1; font-family:Arial,Helvetica,sans-serif; letter-spacing:-.015em; }
+@media(max-width:600px) { .ffme-native-page { padding:7px; } .ffme-native-toolbar { display:grid; } }
+
+/* Atlas FFME : fond papier blanc permanent, indépendamment du thème actif. */
+.competences-page .ffme-native-page,
+.competences-page .ffme-native-reader,
+.competences-page .ffme-native-figure,
+.competences-page .ffme-native-figure button,
+.competences-page .ffme-native-figure img,
+.competences-page .ffme-native-sheet,
+.competences-page .ffme-native-drawing,
+.competences-zoom-scroller,
+.competences-zoom-scroller img {
+  background-color: #fff !important;
+}
+.competences-page .ffme-native-sheet,
+.competences-page .ffme-native-reader { color: #111 !important; }

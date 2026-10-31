@@ -1,15 +1,21 @@
 import "dotenv/config";
+import { readFileSync } from "node:fs";
 import express from "express";
 import { installRouteManagementRoutes } from "./route-management-routes.js";
 import { installRealisationManagementRoutes } from "./realisation-management-routes.js";
+import { installRealisationKudoRoutes } from "./realisation-kudo-routes.js";
 import { installRealisationTechnicalAnalysisRoutes } from "./realisation-technical-analysis-routes.js";
 import { installSessionReadRoutes } from "./session-read-routes.js";
 import { installParticipantCreationRoute } from "./participant-creation-route.js";
 import { installBroadcastMessageRoutes } from "./broadcast-message-routes.js";
 import { installEvolutionRequestRoutes } from "./evolution-request-routes.js";
+import { installChallengeRoutes } from "./challenge-routes.js";
+import { installChatRoutes } from "./chat-routes.js";
+import { installBuddyRoutes } from "./buddy-routes.js";
 import { installAuthSessionRoutes } from "./auth-session-routes.js";
 import { installAdminAccessLogRoutes } from "./admin-access-log-routes.js";
 import { installAdminAccountDeleteRoute } from "./admin-account-delete-route.js";
+import { installAdminRouteArchiveRoute } from "./admin-route-archive-route.js";
 import { createAuthMiddleware } from "./auth-middleware.js";
 import { installDatabaseMaintenanceRoutes } from "./database-maintenance-routes.js";
 import { runDatabaseMigrations } from "./database/migrate.js";
@@ -42,6 +48,16 @@ import {
 const config = createRuntimeConfig();
 const pool = createDatabasePool(config);
 const app = express();
+
+const applicationVersion = (() => {
+  try {
+    return readFileSync(new URL("./VERSION", import.meta.url), "utf8").trim();
+  } catch {
+    return process.env.APP_VERSION || "unknown";
+  }
+})();
+const deploymentCommit = process.env.DEPLOYMENT_COMMIT || process.env.GITHUB_SHA || "unknown";
+const deploymentEnvironment = process.env.DEPLOYMENT_ENVIRONMENT || (process.env.NODE_ENV === "production" ? "production" : process.env.NODE_ENV || "development");
 
 const getRequestToken = createRequestTokenReader(config.sessionCookieName);
 const { setCsrfCookie, clearSessionCookie } = createCookieWriters(config);
@@ -118,12 +134,27 @@ installExplicitAdminUserRoutes(app, {
 });
 installBroadcastMessageRoutes(app, { requireAuth, requireAdmin, pool });
 installEvolutionRequestRoutes(app, { requireAuth, requireAdmin, pool });
+installChallengeRoutes(app, { requireAuth, requireAdmin, pool });
+installChatRoutes(app, { requireAuth, requireAdmin, pool });
+installBuddyRoutes(app, { requireAuth, pool });
 installRealisationManagementRoutes(app, { requireAuth, pool });
+installRealisationKudoRoutes(app, { requireAuth, pool });
 installRealisationTechnicalAnalysisRoutes(app, { requireAuth, pool });
+installAdminRouteArchiveRoute(app, { requireAuth, requireAdmin, pool, logAccess });
 installRouteManagementRoutes(app, { requireAuth, requireAdmin, pool });
 
 app.get("/", (_req, res) => {
   res.send("ClimbCrew API running");
+});
+
+app.get("/version", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({
+    application: "ClimbCrew",
+    version: applicationVersion,
+    environment: deploymentEnvironment,
+    commit: deploymentCommit,
+  });
 });
 
 installDatabaseMaintenanceRoutes(app, {

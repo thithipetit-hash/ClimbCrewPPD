@@ -6,7 +6,7 @@ const MIGRATION_FILE_PATTERN = /^\d{3,}_[a-z0-9][a-z0-9_-]*\.sql$/i;
 const MIGRATION_LOCK_ID = 947_220_830;
 const MIGRATION_DIRECTORY = fileURLToPath(new URL("./migrations/", import.meta.url));
 
-// Ces noms appartiennent à l'historique consolidé avant .020. Ils conservent
+// Ces noms appartiennent à l'historique consolidé. Ils conservent
 // leurs préfixes parfois dupliqués afin de ne jamais réécrire schema_migrations.
 const HISTORICAL_MIGRATIONS = new Set([
   "001_baseline.sql",
@@ -20,7 +20,13 @@ const HISTORICAL_MIGRATIONS = new Set([
   "006_realisation_technical_analysis.sql",
   "007_runtime_schema_consolidation.sql",
   "008_video_upload_cleanup.sql",
+  "021_realisation_kudos.sql",
+  "022_chat_replies.sql",
 ]);
+
+const SEQUENTIAL_MIGRATION_START = 9;
+const SEQUENTIAL_MIGRATION_END_BEFORE_HISTORICAL_GAP = 18;
+const NEXT_MIGRATION_AFTER_HISTORICAL_GAP = 23;
 
 // Ces trois versions appartenaient historiquement au premier répertoire de
 // migrations et étaient exécutées avant toutes les migrations admin héritées.
@@ -47,25 +53,52 @@ function compareMigrationVersions(a, b) {
 }
 
 export function validateMigrationNumbering(filenames) {
-  const futureByNumber = new Map();
+  const migrationsByNumber = new Map();
 
   for (const filename of filenames) {
     if (HISTORICAL_MIGRATIONS.has(filename)) continue;
     const number = Number.parseInt(filename.slice(0, filename.indexOf("_")), 10);
-    if (!Number.isInteger(number) || number < 9) {
-      throw new Error(`Nouvelle migration PostgreSQL invalide : ${filename}. Utiliser 009 puis les numéros suivants.`);
+    if (!Number.isInteger(number) || number < SEQUENTIAL_MIGRATION_START) {
+      throw new Error(
+        `Nouvelle migration PostgreSQL invalide : ${filename}. Utiliser 009 à 018 pour l'historique existant, puis 023 et les numéros suivants.`,
+      );
     }
-    if (futureByNumber.has(number)) {
+    if (
+      number > SEQUENTIAL_MIGRATION_END_BEFORE_HISTORICAL_GAP
+      && number < NEXT_MIGRATION_AFTER_HISTORICAL_GAP
+    ) {
+      throw new Error(
+        `Numéro de migration PostgreSQL réservé par l'historique : ${String(number).padStart(3, "0")}. Utiliser 023 puis les numéros suivants.`,
+      );
+    }
+    if (migrationsByNumber.has(number)) {
       throw new Error(`Numéro de migration PostgreSQL dupliqué : ${String(number).padStart(3, "0")}.`);
     }
-    futureByNumber.set(number, filename);
+    migrationsByNumber.set(number, filename);
   }
 
-  const futureNumbers = [...futureByNumber.keys()].sort((a, b) => a - b);
-  futureNumbers.forEach((number, index) => {
-    const expected = 9 + index;
+  const numbers = [...migrationsByNumber.keys()].sort((a, b) => a - b);
+  const beforeHistoricalGap = numbers.filter(
+    (number) => number <= SEQUENTIAL_MIGRATION_END_BEFORE_HISTORICAL_GAP,
+  );
+  beforeHistoricalGap.forEach((number, index) => {
+    const expected = SEQUENTIAL_MIGRATION_START + index;
     if (number !== expected) {
-      throw new Error(`Séquence de migrations PostgreSQL interrompue : ${String(expected).padStart(3, "0")} attendu avant ${String(number).padStart(3, "0")}.`);
+      throw new Error(
+        `Séquence de migrations PostgreSQL interrompue : ${String(expected).padStart(3, "0")} attendu avant ${String(number).padStart(3, "0")}.`,
+      );
+    }
+  });
+
+  const afterHistoricalGap = numbers.filter(
+    (number) => number >= NEXT_MIGRATION_AFTER_HISTORICAL_GAP,
+  );
+  afterHistoricalGap.forEach((number, index) => {
+    const expected = NEXT_MIGRATION_AFTER_HISTORICAL_GAP + index;
+    if (number !== expected) {
+      throw new Error(
+        `Séquence de migrations PostgreSQL interrompue : ${String(expected).padStart(3, "0")} attendu avant ${String(number).padStart(3, "0")}.`,
+      );
     }
   });
 }

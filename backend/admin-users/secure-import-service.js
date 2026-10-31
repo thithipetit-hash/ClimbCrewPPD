@@ -159,18 +159,20 @@ export async function importBusinessDataSafely(req, res) {
       const result = await client.query(
         `
           insert into participants (
-            nom, prenom, email, login_email, passport, sexe, cotisation, ffme,
+            nom, prenom, email, login_email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme,
             initiateur_sae, initiateur_sne, can_encadrer, can_referer, can_admin,
-            avatar_id, crest_id, profile_public, custom_avatar_image
+            avatar_id, crest_id, profile_public, custom_avatar_image, annee_naissance
           )
-          values ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10,$11,false,$12,$13,$14,$15)
+          values ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,false,$14,$15,$16,$17,$18)
           returning id
         `,
         [
           String(participant.nom || "").trim() || "?",
           String(participant.prenom || "").trim() || "?",
           cleanEmail(participant.email),
-          String(participant.passport || "sans").trim() || "sans",
+          String(participant.passport || "sans").trim() || "gris",
+          Boolean(participant.passportDecouverte),
+          Boolean(participant.passeportFfme),
           String(participant.sexe || "").trim().toLowerCase(),
           Boolean(participant.cotisation),
           Boolean(participant.ffme),
@@ -182,6 +184,7 @@ export async function importBusinessDataSafely(req, res) {
           String(participant.crestId || participant.crest_id || "cristal"),
           participant.profilePublic !== false && participant.profile_public !== false,
           String(participant.customAvatarImage || participant.custom_avatar_image || ""),
+          participant.anneeNaissance,
         ],
       );
       participantIdMap.set(String(participant.id), String(result.rows[0].id));
@@ -288,8 +291,8 @@ export async function importBusinessDataSafely(req, res) {
         `
           insert into realisations (
             id, participant_id, session_id, voie_id, date_realisation, style_realisation,
-            commentaire, cotation_proposee, nb_essais, rating, chute, assureur_id
-          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+            commentaire, cotation_proposee, nb_essais, mode_realisation, rating, chute, assureur_id
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
           on conflict (id) do update set
             participant_id = excluded.participant_id,
             session_id = excluded.session_id,
@@ -299,6 +302,7 @@ export async function importBusinessDataSafely(req, res) {
             commentaire = excluded.commentaire,
             cotation_proposee = excluded.cotation_proposee,
             nb_essais = excluded.nb_essais,
+            mode_realisation = excluded.mode_realisation,
             rating = excluded.rating,
             chute = excluded.chute,
             assureur_id = excluded.assureur_id,
@@ -314,6 +318,7 @@ export async function importBusinessDataSafely(req, res) {
           realisation.commentaire || "",
           realisation.cotationProposee || "",
           realisation.nbEssais || "",
+          realisation.modeRealisation || "en_tete",
           realisation.rating || null,
           Boolean(realisation.chute),
           mappedAssureurId,

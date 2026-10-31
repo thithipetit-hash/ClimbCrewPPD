@@ -2,6 +2,9 @@ const MAX_TECHNICAL_ANALYSIS_BYTES = 128 * 1024;
 const MAX_ANALYSIS_SECONDS = 8 * 60;
 const MAX_INTERVALS = 2000;
 const MAX_RECOMMENDATIONS = 20;
+const MAX_EVENTS = 1000;
+const MAX_TRAJECTORY_POINTS = 240;
+const MAX_MOVEMENT_SEGMENTS = 500;
 const EXPECTED_ENGINE = "MediaPipe Pose Landmarker Lite";
 
 const RULE_LIMITS = Object.freeze({
@@ -130,7 +133,72 @@ function normalizeMetrics(value) {
     footAdjustments: { left: footLeft, right: footRight, total: footTotal },
     dynamicMoves: finiteNumber(metrics.dynamicMoves, "metrics.dynamicMoves", { min: 0, max: 5000, integer: true }),
     armAsymmetryRatio: finiteNumber(metrics.armAsymmetryRatio, "metrics.armAsymmetryRatio", { min: 0, max: 1 }),
+    ...normalizeMotionExtras(metrics, duration),
   };
+}
+
+function normalizeMotionExtras(metrics, duration) {
+  const output = {};
+  if (metrics.hipMotion !== undefined) {
+    const hip = objectValue(metrics.hipMotion, "metrics.hipMotion");
+    output.hipMotion = {
+      travelTorso: finiteNumber(hip.travelTorso, "metrics.hipMotion.travelTorso", { min: 0, max: 10000 }),
+      verticalProgressTorso: finiteNumber(hip.verticalProgressTorso, "metrics.hipMotion.verticalProgressTorso", { min: 0, max: 10000 }),
+      pathEfficiency: finiteNumber(hip.pathEfficiency, "metrics.hipMotion.pathEfficiency", { min: 0, max: 1 }),
+      meanSpeedTorsoPerSecond: finiteNumber(hip.meanSpeedTorsoPerSecond, "metrics.hipMotion.meanSpeedTorsoPerSecond", { min: 0, max: 100 }),
+      maxSpeedTorsoPerSecond: finiteNumber(hip.maxSpeedTorsoPerSecond, "metrics.hipMotion.maxSpeedTorsoPerSecond", { min: 0, max: 100 }),
+    };
+  }
+  if (metrics.bodyPosition !== undefined) {
+    const body = objectValue(metrics.bodyPosition, "metrics.bodyPosition");
+    output.bodyPosition = {
+      meanHipLateralOffsetHipWidths: finiteNumber(body.meanHipLateralOffsetHipWidths, "metrics.bodyPosition.meanHipLateralOffsetHipWidths", { min: 0, max: 20 }),
+      maxHipLateralOffsetHipWidths: finiteNumber(body.maxHipLateralOffsetHipWidths, "metrics.bodyPosition.maxHipLateralOffsetHipWidths", { min: 0, max: 20 }),
+      meanShoulderHipOffsetTorso: finiteNumber(body.meanShoulderHipOffsetTorso, "metrics.bodyPosition.meanShoulderHipOffsetTorso", { min: 0, max: 20 }),
+      maxShoulderHipOffsetTorso: finiteNumber(body.maxShoulderHipOffsetTorso, "metrics.bodyPosition.maxShoulderHipOffsetTorso", { min: 0, max: 20 }),
+      compactSeconds: finiteNumber(body.compactSeconds, "metrics.bodyPosition.compactSeconds", { min: 0, max: duration }),
+    };
+  }
+  if (metrics.meanKneeAngleDegrees !== undefined && metrics.meanKneeAngleDegrees !== null) output.meanKneeAngleDegrees = finiteNumber(metrics.meanKneeAngleDegrees, "metrics.meanKneeAngleDegrees", { min: 0, max: 180 });
+  if (metrics.observationConfidence !== undefined) output.observationConfidence = finiteNumber(metrics.observationConfidence, "metrics.observationConfidence", { min: 0, max: 1 });
+  if (metrics.events !== undefined) {
+    if (!Array.isArray(metrics.events) || metrics.events.length > MAX_EVENTS) throw badRequest("metrics.events est invalide.");
+    output.events = metrics.events.map((item, index) => {
+      const event = objectValue(item, `metrics.events[${index}]`);
+      const type = boundedString(event.type, `metrics.events[${index}].type`, 40, { required: true });
+      if (!["pause", "dynamic", "foot-adjustment", "cross", "foot-switch", "flag-candidate", "movement", "movement-peak", "stabilization"].includes(type)) throw badRequest(`metrics.events[${index}].type est invalide.`);
+      const normalized = { type, time: finiteNumber(event.time, `metrics.events[${index}].time`, { min: 0, max: duration }), confidence: finiteNumber(event.confidence, `metrics.events[${index}].confidence`, { min: 0, max: 1 }) };
+      if (event.end !== undefined) normalized.end = finiteNumber(event.end, `metrics.events[${index}].end`, { min: normalized.time, max: duration });
+      if (event.phase !== undefined) {
+        const phase = boundedString(event.phase, `metrics.events[${index}].phase`, 20);
+        if (!["preparation", "execution", "stabilization"].includes(phase)) throw badRequest(`metrics.events[${index}].phase est invalide.`);
+        normalized.phase = phase;
+      }
+      if (event.side !== undefined) {
+        const side = boundedString(event.side, `metrics.events[${index}].side`, 10);
+        if (!["left", "right"].includes(side)) throw badRequest(`metrics.events[${index}].side est invalide.`);
+        normalized.side = side;
+      }
+      return normalized;
+    });
+  }
+  if (metrics.movementSegments !== undefined) {
+    if (!Array.isArray(metrics.movementSegments) || metrics.movementSegments.length > MAX_MOVEMENT_SEGMENTS) throw badRequest("metrics.movementSegments est invalide.");
+    output.movementSegments = metrics.movementSegments.map((item, index) => {
+      const segment = objectValue(item, `metrics.movementSegments[${index}]`);
+      const start = finiteNumber(segment.start, `metrics.movementSegments[${index}].start`, { min: 0, max: duration });
+      const end = finiteNumber(segment.end, `metrics.movementSegments[${index}].end`, { min: start, max: duration });
+      return { start, peak: finiteNumber(segment.peak ?? start, `metrics.movementSegments[${index}].peak`, { min: start, max: end }), end, peakSpeed: finiteNumber(segment.peakSpeed, `metrics.movementSegments[${index}].peakSpeed`, { min: 0, max: 100 }) };
+    });
+  }
+  if (metrics.hipTrajectory !== undefined) {
+    if (!Array.isArray(metrics.hipTrajectory) || metrics.hipTrajectory.length > MAX_TRAJECTORY_POINTS) throw badRequest("metrics.hipTrajectory est invalide.");
+    output.hipTrajectory = metrics.hipTrajectory.map((point, index) => {
+      const p = objectValue(point, `metrics.hipTrajectory[${index}]`);
+      return { t: finiteNumber(p.t, `metrics.hipTrajectory[${index}].t`, { min: 0, max: duration }), x: finiteNumber(p.x, `metrics.hipTrajectory[${index}].x`, { min: -2, max: 3 }), y: finiteNumber(p.y, `metrics.hipTrajectory[${index}].y`, { min: -2, max: 3 }) };
+    });
+  }
+  return output;
 }
 
 function normalizeRecommendations(value) {

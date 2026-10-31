@@ -758,3 +758,19 @@
         transition-duration:.01ms!important;
       }
     }
+
+
+/* Tableau des voies : métadonnées sur une ligne compacte quand la largeur le permet. */
+.route-summary { gap: 1px !important; }
+.route-meta-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.1;
+}
+.route-meta-line .route-characteristic,
+.route-meta-line .rating-average,
+.route-meta-line .route-characteristics-empty { margin: 0; }

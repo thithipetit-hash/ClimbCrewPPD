@@ -32,6 +32,7 @@ test("le module conserve les protections et comportements de session", () => {
   assert.match(authSessionSource, /setCsrfCookie\(res, csrfToken, expiresAt\)/);
   assert.match(authSessionSource, /app\.put\("\/auth\/theme", requireAuth, async/);
   assert.match(authSessionSource, /ALLOWED_THEMES\.has\(nextTheme\)/);
+  assert.match(authSessionSource, /"daltonien"/);
   assert.match(authSessionSource, /update users[\s\S]*set theme_preference = \$2[\s\S]*where id = \$1/);
   assert.match(authSessionSource, /serializeUser\(result\.rows\[0\]\)/);
   assert.match(authSessionSource, /app\.post\("\/auth\/logout", requireAuth, async/);

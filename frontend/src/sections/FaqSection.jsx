@@ -3,7 +3,7 @@ import DemandesEvolution from "../pages/DemandesEvolution.jsx";
 
 const HELP_ITEMS = [
   {
-    title: "A quoi sert CristalClimbClub ?",
+    title: "À quoi sert CristalClimbClub ?",
     content: "CristalClimbClub gère les séances, les inscriptions, les participants, les voies, les profils et la progression des grimpeurs du site SAE de Cristal. Les séances sont disponibles en vues Jour et Semaine et peuvent être Libres, Encadrées, Passeport, Challenge, Renouvellement ou Fermées.",
   },
   {
@@ -15,6 +15,10 @@ const HELP_ITEMS = [
     content: "Dans Voies, le bouton Réalisation ouvre la saisie. Depuis son propre profil, Nouvelle réalisation permet aussi d'enregistrer une voie. Le mode En tête ou Moulinette et le critère À vue, Flash, Travaillée, Avec repos, Projet, Non enchaînée ou Essai/test sont indépendants. Une voie moulinette uniquement impose automatiquement Moulinette.",
   },
   {
+    title: "Que signifient les critères de réalisation ?",
+    content: "À vue : voie enchaînée dès le premier essai, sans chute ni repos sur la corde et sans information préalable sur la méthode. Flash : voie enchaînée au premier essai, sans chute ni repos, mais après avoir observé un autre grimpeur ou reçu des indications. Travaillée : voie enchaînée sans chute ni repos après un ou plusieurs essais précédents. Avec repos : voie parcourue avec un ou plusieurs repos en charge sur la corde ; elle n'est pas considérée comme une réussite. Projet : voie en cours de travail, pas encore enchaînée. Non enchaînée : tentative qui ne permet pas de réaliser toute la voie d'une traite. Essai / test : passage exploratoire pour essayer la voie, les mouvements ou les prises. Dans les statistiques de réussite, seuls À vue, Flash et Travaillée sont comptés comme des réussites.",
+  },
+  {
     title: "Quel grimpeur est affiché par défaut dans Profil ?",
     content: "Le profil associé au compte connecté est sélectionné automatiquement et placé en tête de la liste. Les actions personnelles restent disponibles uniquement lorsque son propre profil est affiché.",
   },
@@ -24,11 +28,11 @@ const HELP_ITEMS = [
   },
   {
     title: "Comment sont présentés les participants et les voies ?",
-    content: "La bille d'un participant indique son passeport. Le cadre reflète cotisation et licence FFME. En séance Libre, un fond hachuré signale une inscription sans passeport requis. Pour une voie, le fond reprend la couleur des prises et un cadre rouge indique une voie uniquement en moulinette.",
+    content: "La pastille d'un participant indique la couleur de son passeport : gris clair (sans passeport), jaune, orange, bleu ou vert. La lettre D noire signale l'option Découverte. La pastille grise reste toujours entièrement remplie, même sans licence FFME ; pour les autres couleurs, une demi-pastille indique l'absence de licence FFME. Le cadre signale la cotisation (vert si payée, rouge sinon). En séance Libre, un fond hachuré peut signaler une inscription sans passeport requis. Pour une voie, le fond reprend la couleur des prises et un cadre rouge indique une voie uniquement en moulinette.",
   },
   {
     title: "Comment fonctionnent les avatars et l'image de profil ?",
-    content: "Chaque grimpeur peut choisir un avatar ou une image personnelle. L'avatar évolue selon le niveau récent calculé par l'application. Une image PNG, JPEG ou WebP peut être recadrée en carré 512 × 512. Ces éléments sont ludiques et ne modifient ni les droits, ni les statistiques, ni les classements.",
+    content: "Dans Profil, cliquez sur l'avatar pour choisir un personnage ou importer une image personnelle. Les avatars évoluent sur huit niveaux selon la cotation récente du grimpeur. Le Crocodile grimpeur propose cinq illustrations réparties sur ces huit niveaux. Une image personnelle PNG, JPEG ou WebP est recadrée en carré 512 × 512. Ces éléments sont ludiques : ils ne modifient ni les droits, ni le CPR, ni les points, ni les classements.",
   },
   {
     title: "A quoi sert le choix du sexe dans le profil ?",
@@ -36,7 +40,7 @@ const HELP_ITEMS = [
   },
   {
     title: "Comment fonctionnent les vidéos associées aux voies ?",
-    content: "Une voie peut contenir plusieurs vidéos accessibles depuis son titre. Les administrateurs les gèrent depuis Modifier : liens HTTP/HTTPS ou fichiers locaux MP4, WebM, OGG et MOV. Les chargements locaux sont tracés dans les journaux administrateur.",
+    content: "Une voie peut contenir plusieurs vidéos accessibles depuis son titre. Les formats vidéo pris en charge permettent de consulter les séquences associées aux voies et aux réalisations lorsqu’elles sont disponibles.",
   },
   {
     title: "Comment fonctionnent les badges ?",
@@ -48,7 +52,7 @@ const HELP_ITEMS = [
   },
   {
     title: "Que signifie CPR ?",
-    content: "Le CPR représente le niveau récent du grimpeur. Il utilise les réalisations des 90 derniers jours, pondérées par cotation, mode et critère, puis conserve les dix meilleures performances. Une voie facile d'échauffement n'abaisse donc pas le CPR si elle ne fait pas partie de ces dix performances.",
+    content: "Le CPR représente le niveau récent du grimpeur. Il utilise les voies réussies au cours des 90 derniers jours et conserve jusqu’aux dix meilleures réalisations. Seules les réussites sont prises en compte : le mode ou le critère de réalisation ne gonfle pas artificiellement la cotation. Une voie facile d'échauffement n'abaisse donc pas le CPR si elle ne fait pas partie de ces dix meilleures réalisations.",
   },
   {
     title: "Comment est calculée la cotation consensus ?",
@@ -67,19 +71,16 @@ const HELP_ITEMS = [
     content: "Chaque voie distribue exactement 1 000 points entre les grimpeurs distincts qui l'ont réussie en tête avec un critère de réussite. Refaire la même voie ne donne pas une part supplémentaire et une réussite en moulinette ne distribue pas de points d'ascension en tête.",
   },
   {
+    title: "Comment renseigner le profil physique ?",
+    content: "Dans Profil > Profil physique, saisissez les valeurs au clavier. La valeur est enregistrée lorsque vous quittez le champ ou appuyez sur Entrée. Taille, envergure et portée se mesurent en centimètres, le poids en kilogrammes. L’Ape Index correspond à envergure moins taille ; l’allonge relative à envergure divisée par taille ; l’IMC est calculé à partir de la taille et du poids. Un avertissement signale les valeurs qui paraissent incohérentes afin de repérer surtout les erreurs de saisie ou d’unité.",
+  },
+  {
+    title: "Comment réaliser les tests physiques ?",
+    content: "Faites les tests échauffé, reposé et dans des conditions reproductibles. Préhension : dynamomètre tenu bras le long du corps, meilleure valeur de 2 essais par main. Suspension 20 mm : deux mains sur une réglette de 20 mm, bras tendus, chronométrer jusqu’au lâcher ; si délesté, conserver le même délestage lors des comparaisons. Suspension sur bac : deux mains sur une prise franche, bras tendus, chronométrer jusqu’au lâcher. Tractions strictes : départ bras tendus, monter sans élan jusqu’au menton au-dessus des mains, compter uniquement les répétitions complètes. Suspension à 90° : partir coudes fléchis à environ 90° et chronométrer jusqu’à la perte nette de l’angle. Mobilité des hanches : utilisez toujours le même protocole et le même repère de mesure en cm ; la valeur sert surtout au suivi individuel. Arrêtez un test en cas de douleur.",
+  },
+  {
     title: "Comment exporter ses réalisations vers theCrag ?",
     content: "Depuis son propre profil, Exporter pour theCrag génère un fichier CSV adapté à l'import. Le bouton n'est proposé que pour le profil associé au compte connecté.",
-  },
-];
-
-const ADMIN_ITEMS = [
-  {
-    title: "Qui peut accéder à Administration, Gestion des comptes et Administration Serveur ?",
-    content: "Ces pages sont réservées aux administrateurs et ne sont pas affichées dans la navigation des utilisateurs standards.",
-  },
-  {
-    title: "A quoi servent Gestion des comptes et Administration Serveur ?",
-    content: "Gestion des comptes permet d'approuver, révoquer, réactiver, associer et administrer les accès. Administration Serveur regroupe notamment sauvegardes, restauration, messagerie, diffusion et journaux techniques. Les actions sensibles sont tracées.",
   },
 ];
 
@@ -92,7 +93,7 @@ function FaqItem({ title, content }) {
   );
 }
 
-export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, authUser }) {
+export default function FaqSection({ APP_VERSION, USE_API, authUser }) {
   const [activeSection, setActiveSection] = useState("aide");
 
   return (
@@ -126,7 +127,6 @@ export default function FaqSection({ APP_VERSION, canAccessAdminTabs, USE_API, a
       {activeSection === "aide" && (
         <>
           {HELP_ITEMS.map((item) => <FaqItem key={item.title} {...item} />)}
-          {canAccessAdminTabs && ADMIN_ITEMS.map((item) => <FaqItem key={item.title} {...item} />)}
         </>
       )}
 

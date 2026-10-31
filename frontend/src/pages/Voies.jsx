@@ -1,8 +1,19 @@
 import React from "react";
 import Button from "../components/Button.jsx";
-import { API_BASE, apiFetch, apiUpload } from "../lib/api.js";
+import ConfirmDialog from "../components/ConfirmDialog.jsx";
+import RouteQrCode from "../components/RouteQrCode.jsx";
+import { API_BASE, apiFetch, apiUploadVideoInChunks } from "../lib/api.js";
+import { REALISATIONS_PAGE_SIZE, fetchPaginatedCollection } from "../lib/bootstrap-data.js";
 import { GRADES, formatRouteName, getRouteCardStyle, normalizeRopeNumber } from "../lib/domain.js";
+import {
+  ROUTE_REALISATION_EXCLUSION_OPTIONS,
+  ROUTE_REALISATION_FILTER_OPTIONS,
+  filterRouteDisplayGroups,
+  formatRouteProgress,
+  groupParticipantRealisationsByRoute,
+} from "../lib/route-progress.js";
 import { ROPE_NUMBERS, ROUTE_COLORS, ROUTE_TAGS } from "../lib/ui-config.js";
+import "../styles/route-realisation-filters.css";
 
 function parseVideoUrls(text) {
   return [...new Set(String(text || "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean))];
@@ -54,6 +65,7 @@ export default function Voies({
   cancelRouteEdition,
   deleteRoute,
   savingRouteId,
+  participants = [],
 }) {
   const [videoRouteId, setVideoRouteId] = React.useState("");
   const [videoDraftByRouteId, setVideoDraftByRouteId] = React.useState({});
@@ -63,15 +75,117 @@ export default function Voies({
   const [videoDeletingUrl, setVideoDeletingUrl] = React.useState("");
   const [selectedComparisonVideos, setSelectedComparisonVideos] = React.useState([]);
   const [comparisonOpen, setComparisonOpen] = React.useState(false);
+  const [videoDeleteCandidate, setVideoDeleteCandidate] = React.useState(null);
+  const [qrRouteId, setQrRouteId] = React.useState("");
+  const [routeRealisationFilter, setRouteRealisationFilter] = React.useState([]);
+  const [routeRealisationExclusionFilter, setRouteRealisationExclusionFilter] = React.useState([]);
+  const [currentParticipantId, setCurrentParticipantId] = React.useState("");
+  const [myRouteRealisations, setMyRouteRealisations] = React.useState([]);
+  const [routeProgressError, setRouteProgressError] = React.useState("");
+  const [expandedRouteIds, setExpandedRouteIds] = React.useState(() => new Set());
 
   const allRoutes = routeDisplayGroups.flatMap((group) => group.routes);
   const videoRoute = allRoutes.find((route) => String(route.id) === String(videoRouteId)) || null;
+  const qrRoute = adminUnlocked
+    ? allRoutes.find((route) => String(route.id) === String(qrRouteId)) || null
+    : null;
+  const realisationsByRoute = React.useMemo(
+    () => groupParticipantRealisationsByRoute(myRouteRealisations, currentParticipantId),
+    [myRouteRealisations, currentParticipantId],
+  );
+  const filteredRouteDisplayGroups = React.useMemo(
+    () => filterRouteDisplayGroups(
+      routeDisplayGroups, realisationsByRoute, routeRealisationFilter, routeRealisationExclusionFilter,
+    ),
+    [routeDisplayGroups, realisationsByRoute, routeRealisationFilter, routeRealisationExclusionFilter],
+  );
+
+  const loadMyRouteRealisations = React.useCallback(async () => {
+    try {
+      setRouteProgressError("");
+      const auth = await apiFetch("/auth/me");
+      const participantId = String(auth?.user?.participantId || "");
+      setCurrentParticipantId(participantId);
+      if (!participantId) {
+        setMyRouteRealisations([]);
+        return;
+      }
+      const allRealisations = await fetchPaginatedCollection(
+        ({ limit, offset }) => apiFetch(`/realisations?limit=${limit}&offset=${offset}`),
+        { pageSize: REALISATIONS_PAGE_SIZE },
+      );
+      setMyRouteRealisations(allRealisations.filter(
+        (realisation) => String(realisation?.participantId || "") === participantId,
+      ));
+    } catch (error) {
+      setRouteProgressError(error.message || "Impossible de charger vos réalisations.");
+      setMyRouteRealisations([]);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void loadMyRouteRealisations();
+  }, [loadMyRouteRealisations]);
+
+  React.useEffect(() => {
+    const refresh = () => void loadMyRouteRealisations();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [loadMyRouteRealisations]);
 
   React.useEffect(() => {
     setSelectedComparisonVideos([]);
     setComparisonOpen(false);
     setVideoSaveStatus("");
   }, [videoRouteId]);
+
+  function toggleRouteRealisationType(value) {
+    setRouteRealisationExclusionFilter((selected) => selected.filter((type) => type !== value));
+    setRouteRealisationFilter((selected) => (
+      selected.includes(value)
+        ? selected.filter((type) => type !== value)
+        : [...selected, value]
+    ));
+  }
+
+  function toggleRouteRealisationExclusion(value) {
+    setRouteRealisationFilter((selected) => selected.filter((type) => type !== value));
+    setRouteRealisationExclusionFilter((selected) => (
+      selected.includes(value)
+        ? selected.filter((type) => type !== value)
+        : [...selected, value]
+    ));
+  }
+
+  const selectedRouteFilterLabels = [
+    ...routeRealisationFilter.map((value) => (
+      ROUTE_REALISATION_FILTER_OPTIONS.find((option) => option.value === value)?.label || value
+    )),
+    ...routeRealisationExclusionFilter.map((value) => (
+      ROUTE_REALISATION_EXCLUSION_OPTIONS.find((option) => option.value === value)?.label || value
+    )),
+  ];
+  const selectedRealisationFilterLabel = selectedRouteFilterLabels.length === 0
+    ? "Toutes les voies"
+    : selectedRouteFilterLabels.length === 1
+      ? selectedRouteFilterLabels[0]
+      : `${selectedRouteFilterLabels.length} filtres actifs`;
+
+  function toggleRouteDetails(routeId) {
+  const key = String(routeId);
+  setExpandedRouteIds((current) => {
+    const next = new Set(current);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
+}
+
+function handleRouteSummaryKeyDown(event, routeId) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  toggleRouteDetails(routeId);
+}
 
   function effectiveVideoUrls(route) {
     const local = videoDraftByRouteId[route.id];
@@ -109,7 +223,9 @@ export default function Voies({
     try {
       setVideoUploadingRouteId(route.id);
       setVideoSaveStatus("");
-      const result = await apiUpload(`/routes/${encodeURIComponent(route.id)}/videos`, file);
+      const result = await apiUploadVideoInChunks(`/routes/${encodeURIComponent(route.id)}/video-uploads`, file, {
+        onProgress: ({ uploadedParts, totalParts }) => setVideoSaveStatus(`Chargement vidéo… ${uploadedParts}/${totalParts}`),
+      });
       const savedUrls = Array.isArray(result?.route?.videoUrls)
         ? result.route.videoUrls
         : [...effectiveVideoUrls(route), result.url].filter(Boolean);
@@ -122,10 +238,7 @@ export default function Voies({
     }
   }
 
-  async function deleteVideo(route, url) {
-    const confirmed = window.confirm("Supprimer définitivement cette vidéo de la voie ?");
-    if (!confirmed) return;
-
+  async function performDeleteVideo(route, url) {
     try {
       setVideoDeletingUrl(url);
       setVideoSaveStatus("");
@@ -157,7 +270,12 @@ export default function Voies({
       setVideoSaveStatus(error.message || "Suppression de la vidéo impossible.");
     } finally {
       setVideoDeletingUrl("");
+      setVideoDeleteCandidate(null);
     }
+  }
+
+  function deleteVideo(route, url) {
+    setVideoDeleteCandidate({ route, url });
   }
 
   function toggleComparisonVideo(url) {
@@ -212,6 +330,13 @@ export default function Voies({
     const comparisonVideos = selectedComparisonVideos.filter((url) => videoUrls.includes(url)).slice(0, 2);
     return (
       <div className="card">
+        <ConfirmDialog
+          open={Boolean(videoDeleteCandidate)}
+          title="Supprimer la vidéo"
+          message="Supprimer définitivement cette vidéo de la voie ?"
+          onConfirm={() => videoDeleteCandidate && void performDeleteVideo(videoDeleteCandidate.route, videoDeleteCandidate.url)}
+          onCancel={() => setVideoDeleteCandidate(null)}
+        />
         <div className="card-header">
           <div>
             <h2>Vidéos · {formatRouteName(videoRoute)}</h2>
@@ -342,7 +467,7 @@ export default function Voies({
             <div><label>Couleur voie</label><select value={newRoute.couleurPrises} onChange={(e) => setNewRoute((p) => ({ ...p, couleurPrises: e.target.value }))}><option value="" disabled>Choisir une couleur</option>{ROUTE_COLORS.map((couleur) => <option key={couleur} value={couleur}>{couleur}</option>)}</select></div>
             <div><label>Cotation</label><select value={newRoute.cotationReference} onChange={(e) => setNewRoute((p) => ({ ...p, cotationReference: e.target.value }))}><option value="" disabled>Choisir une cotation</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
             <div><label>Nom de la voie</label><input value={newRoute.nomVoie} onChange={(e) => setNewRoute((p) => ({ ...p, nomVoie: e.target.value }))} /></div>
-            <div><label>Ouvreur</label><input value={newRoute.nomOuvreur} onChange={(e) => setNewRoute((p) => ({ ...p, nomOuvreur: e.target.value }))} /></div>
+            <div><label>Ouvreur</label><input list="climbcrew-opener-users" placeholder="Choisir un utilisateur ou saisir un nom" value={newRoute.nomOuvreur} onChange={(e) => setNewRoute((p) => ({ ...p, nomOuvreur: e.target.value }))} /><datalist id="climbcrew-opener-users">{participants.map((p) => { const name = `${p.prenom || ""} ${p.nom || ""}`.trim(); return name ? <option key={p.id || name} value={name} /> : null; })}</datalist></div>
             <div><label className="checkbox-field"><input type="checkbox" checked={newRoute.moulinetteOnly} onChange={(event) => setNewRoute((p) => ({ ...p, moulinetteOnly: event.target.checked }))} /><span>Moulinette uniquement</span></label></div>
           </div>
           <div className="realisation-tags" style={{ marginTop: 10 }}>
@@ -356,10 +481,52 @@ export default function Voies({
       <div className="card">
         <div className="card-header">
           <h2>Tableau des voies</h2>
-          <div className="group"><label htmlFor="route-sort-mode">Trier par</label><select id="route-sort-mode" value={routeSortMode} onChange={(event) => setRouteSortMode(event.target.value)} style={{ width: "auto", minWidth: 150 }}><option value="corde">Corde</option><option value="cotation">Cotation</option></select></div>
+          <div className="group">
+            <label htmlFor="route-sort-mode">Trier par</label>
+            <select id="route-sort-mode" value={routeSortMode} onChange={(event) => setRouteSortMode(event.target.value)} style={{ width: "auto", minWidth: 130 }}><option value="corde">Corde</option><option value="cotation">Cotation</option></select>
+            <details className="route-realisation-filters">
+              <summary id="route-realisation-filter">Réalisation : {selectedRealisationFilterLabel}</summary>
+              <fieldset className="route-realisation-filter-options">
+                <legend>Inclure : au moins un des types sélectionnés</legend>
+                {ROUTE_REALISATION_FILTER_OPTIONS.filter((option) => option.value !== "all").map((option) => (
+                  <label className="checkbox-field" key={option.value}>
+                    <input
+                      type="checkbox"
+                      checked={routeRealisationFilter.includes(option.value)}
+                      onChange={() => toggleRouteRealisationType(option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </fieldset>
+              <fieldset className="route-realisation-filter-options">
+                <legend>Exclure : aucune réalisation du type sélectionné</legend>
+                {ROUTE_REALISATION_EXCLUSION_OPTIONS.map((option) => (
+                  <label className="checkbox-field" key={option.value}>
+                    <input
+                      type="checkbox"
+                      checked={routeRealisationExclusionFilter.includes(option.value)}
+                      onChange={() => toggleRouteRealisationExclusion(option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </fieldset>
+              <div className="small">« Jamais : En tête » exclut les voies « Moulinette uniquement ».</div>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => { setRouteRealisationFilter([]); setRouteRealisationExclusionFilter([]); }}
+                disabled={routeRealisationFilter.length === 0 && routeRealisationExclusionFilter.length === 0}
+              >
+                Effacer les filtres
+              </button>
+            </details>
+          </div>
         </div>
+        {routeProgressError && <div className="small" role="status" style={{ marginBottom: 10 }}>{routeProgressError}</div>}
         <div className="stack">
-          {routeDisplayGroups.map((group) => (
+          {filteredRouteDisplayGroups.map((group) => (
             <div className="subcard" key={group.key}>
               <div className="card-header"><strong>{group.label}</strong><span className="badge">{group.routes.length} voie(s)</span></div>
               {group.routes.length === 0 ? <div className="small">Aucune voie.</div> : (
@@ -368,6 +535,8 @@ export default function Voies({
                     const routeRating = routeRatingsById[route.id] || { average: 0, count: 0 };
                     const videoCount = effectiveVideoUrls(route).length;
                     const videoInputId = `route-video-upload-${route.id}`;
+                    const myRouteProgress = realisationsByRoute.get(String(route.id)) || [];
+                    const isExpanded = expandedRouteIds.has(String(route.id));
                     return (
                       <div className={`route-card ${route.moulinetteOnly ? "moulinette-only" : ""}`} key={route.id} style={getRouteCardStyle(route.couleurPrises)}>
                         {adminUnlocked && editingRouteId === route.id && routeEditDraft ? (
@@ -377,7 +546,7 @@ export default function Voies({
                               <div><label>Couleur</label><select value={routeEditDraft.couleurPrises} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, couleurPrises: event.target.value }))}>{ROUTE_COLORS.map((couleur) => <option key={couleur} value={couleur}>{couleur}</option>)}</select></div>
                               <div><label>Cotation</label><select value={routeEditDraft.cotationReference} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, cotationReference: event.target.value }))}>{GRADES.map((grade) => <option key={grade} value={grade}>{grade}</option>)}</select></div>
                               <div><label>Nom de la voie</label><input value={routeEditDraft.nomVoie} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, nomVoie: event.target.value }))} /></div>
-                              <div><label>Ouvreur</label><input value={routeEditDraft.nomOuvreur} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, nomOuvreur: event.target.value }))} /></div>
+                              <div><label>Ouvreur</label><input list="climbcrew-opener-users" placeholder="Choisir un utilisateur ou saisir un nom" value={routeEditDraft.nomOuvreur} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, nomOuvreur: event.target.value }))} /></div>
                               <div><label className="checkbox-field"><input type="checkbox" checked={routeEditDraft.moulinetteOnly} onChange={(event) => setRouteEditDraft((draft) => ({ ...draft, moulinetteOnly: event.target.checked }))} /><span>Moulinette uniquement</span></label></div>
                             </div>
                             <div className="realisation-tags" style={{ marginTop: 8 }}>
@@ -403,17 +572,47 @@ export default function Voies({
                           </>
                         ) : (
                           <div className="card-header">
-                            <div className="route-summary">
+                            <div
+                    className="route-summary"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    aria-label={`${isExpanded ? "Masquer" : "Afficher"} les détails de ${formatRouteName(route)}`}
+                    onClick={() => toggleRouteDetails(route.id)}
+                    onKeyDown={(event) => handleRouteSummaryKeyDown(event, route.id)}
+                    style={{ cursor: "pointer", flex: 1 }}
+                  >
                               <strong className="route-primary-line">
-                                {routeSortMode !== "corde" && <>Corde {normalizeRopeNumber(route.numeroCorde)} · </>}{route.cotationAjustee} · {" "}
-                                <a href={`#voie-videos-${route.id}`} onClick={(event) => { event.preventDefault(); setVideoRouteId(route.id); }} style={{ color: "inherit", textDecoration: "underline", textUnderlineOffset: 2 }} title="Voir les vidéos de cette voie">{formatRouteName(route)}</a>
-                                {videoCount > 0 && <span className="small"> · 🎬 {videoCount}</span>}
-                              </strong>
-                              <div className="route-secondary-line"><span>Consensus {routeAggregatesById[route.id]?.consensusGrade || "nc"}</span>{route.moulinetteOnly && <span className="pill moulinette-badge" title="Moulinette uniquement">Moulinette</span>}</div>
-                              <div className="route-characteristics" aria-label="Caractéristiques de la voie"><span className="route-characteristics-label">Caractéristiques :</span>{route.tags?.length > 0 ? route.tags.map((tag) => <span className="route-characteristic" key={tag}>{ROUTE_TAGS.find((item) => item.value === tag)?.label || tag}</span>) : <span className="route-characteristics-empty">non renseignées</span>}</div>
-                              <div className="route-rating"><span className="rating-average">{routeRating.count ? `★ ${routeRating.average.toFixed(1)} (${routeRating.count} réalisation${routeRating.count > 1 ? "s" : ""})` : "Pas encore notée (0 réalisation)"}</span></div>
+                      {route.cotationAjustee || route.cotationReference || "nc"} · {route.couleurPrises || "Sans couleur"}
+                      <span className="small" aria-hidden="true" style={{ marginLeft: 8 }}>{isExpanded ? "▴" : "▾"}</span>
+                    </strong>
+                              <div className="route-meta-line" aria-label="Réalisation du grimpeur connecté">{formatRouteProgress(myRouteProgress, route)}</div>
+                    {isExpanded && (
+                      <div
+                        className="route-expanded-details"
+                        aria-label="Détails complets de la voie"
+                        style={{ marginTop: 10, display: "grid", gap: 4 }}
+                      >
+                        <div><strong>Nom :</strong> {route.nomVoie || "Sans nom"}</div>
+                        <div><strong>Corde :</strong> {normalizeRopeNumber(route.numeroCorde)}</div>
+                        <div><strong>Couleur :</strong> {route.couleurPrises || "Sans couleur"}</div>
+                        <div><strong>Ouvreur :</strong> {route.nomOuvreur || "Non renseigné"}</div>
+                        <div><strong>Cotation de référence :</strong> {route.cotationReference || "nc"}</div>
+                        <div><strong>Cotation ajustée :</strong> {route.cotationAjustee || route.cotationReference || "nc"}</div>
+                        <div><strong>Consensus :</strong> {routeAggregatesById[route.id]?.consensusGrade || "nc"}</div>
+                        <div><strong>Type :</strong> {route.moulinetteOnly ? "Moulinette uniquement" : "En tête / Moulinette"}</div>
+                        <div><strong>Caractéristiques :</strong> {route.tags?.length > 0 ? route.tags.map((tag) => ROUTE_TAGS.find((item) => item.value === tag)?.label || tag).join(", ") : "Aucune"}</div>
+                        <div><strong>Note :</strong> {routeRating.count ? `★ ${Number(routeRating.average || 0).toFixed(1)} · ${routeRating.count} avis` : "Aucun avis"}</div>
+                        <div><strong>Vidéos :</strong> {videoCount}</div>
+                      </div>
+                    )}
                             </div>
-                            <div className="group"><Button variant="secondary" onClick={() => openRealisationModal(route.id, selectedParticipantProgress)}>Réalisation</Button>{adminUnlocked && <Button variant="secondary" onClick={() => startRouteEdition(route)}>Modifier</Button>}</div>
+                            <div className="group">
+                              <Button variant="secondary" onClick={() => openRealisationModal(route.id, selectedParticipantProgress)}>Réalisation</Button>
+                              {videoCount > 0 && <Button variant="secondary" onClick={() => setVideoRouteId(route.id)}>Vidéos · {videoCount}</Button>}
+                              {adminUnlocked && <Button variant="secondary" onClick={() => setQrRouteId(route.id)}>QR code</Button>}
+                              {adminUnlocked && <Button variant="secondary" onClick={() => startRouteEdition(route)}>Modifier</Button>}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -425,6 +624,7 @@ export default function Voies({
           ))}
         </div>
       </div>
+      <RouteQrCode route={qrRoute} onClose={() => setQrRouteId("")} />
     </>
   );
 }

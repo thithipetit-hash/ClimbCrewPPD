@@ -1,4 +1,6 @@
-export const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const apiEnvironment = import.meta.env || {};
+
+export const API_BASE = (apiEnvironment.VITE_API_URL || apiEnvironment.VITE_API_BASE_URL || "").replace(/\/$/, "");
 export const USE_API = Boolean(API_BASE);
 
 export const VIDEO_UPLOAD_CHUNK_BYTES = 768 * 1024;

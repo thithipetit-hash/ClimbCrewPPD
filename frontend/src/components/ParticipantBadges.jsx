@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { BADGE_FAMILY_LABELS, calculateParticipantBadges, calculateSafetyBadges } from "../lib/badges.js";
+import { apiFetch } from "../lib/api.js";
 import BadgeIllustration from "./BadgeIllustration.jsx";
 
 export const BADGE_IMAGE_PATH = Object.freeze({
@@ -45,13 +46,8 @@ function BadgeRealImage({ src }) {
 function BadgeVisual({ badge }) {
   const src = BADGE_IMAGE_PATH[badge.id];
   if (!src) return <BadgeIllustration badge={badge} />;
-
   return (
-    <span
-      className="participant-badge-artwork participant-badge-artwork--real"
-      role="img"
-      aria-label={`Illustration du badge ${badge.name}`}
-    >
+    <span className="participant-badge-artwork participant-badge-artwork--real" role="img" aria-label={`Illustration du badge ${badge.name}`}>
       <BadgeRealImage src={src} />
     </span>
   );
@@ -85,43 +81,11 @@ function BadgeTile({ badge, pending = false, onOpen }) {
 
 function BadgeDetail({ badge, onClose }) {
   if (!badge) return null;
-
   return (
-    <div
-      role="presentation"
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 10000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-        background: "rgba(0, 0, 0, 0.68)",
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="badge-detail-title"
-        onClick={(event) => event.stopPropagation()}
-        style={{
-          width: "min(92vw, 430px)",
-          maxHeight: "86vh",
-          overflowY: "auto",
-          borderRadius: 24,
-          padding: 24,
-          background: "var(--surface, #ffffff)",
-          color: "var(--text, #172033)",
-          boxShadow: "0 24px 70px rgba(0,0,0,.42)",
-          textAlign: "center",
-        }}
-      >
+    <div role="presentation" onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(0, 0, 0, 0.68)" }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="badge-detail-title" onClick={(event) => event.stopPropagation()} style={{ width: "min(92vw, 430px)", maxHeight: "86vh", overflowY: "auto", borderRadius: 24, padding: 24, background: "var(--surface, #ffffff)", color: "var(--text, #172033)", boxShadow: "0 24px 70px rgba(0,0,0,.42)", textAlign: "center" }}>
         <style>{`.participant-badge-detail-art .participant-badge-artwork{width:min(160px,46vw)!important;height:min(160px,46vw)!important;max-width:36vh!important;max-height:36vh!important;aspect-ratio:1 / 1!important;margin:0 auto;display:block;flex:0 0 auto!important;background-size:500% 400%;}`}</style>
-        <div className="participant-badge-detail-art" style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-          <BadgeVisual badge={badge} />
-        </div>
+        <div className="participant-badge-detail-art" style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><BadgeVisual badge={badge} /></div>
         <h2 id="badge-detail-title" style={{ margin: "4px 0 6px" }}>{badge.name}</h2>
         <div className="small" style={{ marginBottom: 14 }}>{BADGE_FAMILY_LABELS[badge.family]}</div>
         <div className="muted-box" style={{ textAlign: "left", marginBottom: 16 }}>
@@ -135,69 +99,71 @@ function BadgeDetail({ badge, onClose }) {
 }
 
 function normalizedPersonName(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function participantRoleBadges(participant, routesById) {
   if (!participant) return [];
   const participantName = normalizedPersonName(`${participant.prenom || ""} ${participant.nom || ""}`);
-  const isOpener = Boolean(participantName) && Object.values(routesById || {}).some(
-    (route) => normalizedPersonName(route?.nomOuvreur) === participantName,
-  );
-
+  const isOpener = Boolean(participantName) && Object.values(routesById || {}).some((route) => normalizedPersonName(route?.nomOuvreur) === participantName);
   return [
-    participant.initiateurSae && {
-      id: "role_initiateur_sae",
-      name: "Initiateur SAE",
-      family: "contribution",
-      condition: "Qualification Initiateur SAE enregistrée par le club.",
-      earned: true,
-    },
-    participant.initiateurSne && {
-      id: "role_initiateur_sne",
-      name: "Initiateur SNE",
-      family: "contribution",
-      condition: "Qualification d’initiateur escalade en SNE enregistrée par le club.",
-      earned: true,
-    },
-    participant.canEncadrer && {
-      id: "role_encadrant",
-      name: "Encadrant",
-      family: "contribution",
-      condition: "Autorisé à encadrer les séances du club.",
-      earned: true,
-    },
-    participant.canReferer && {
-      id: "role_referent",
-      name: "Référent",
-      family: "contribution",
-      condition: "Autorisé à être référent d’une séance libre.",
-      earned: true,
-    },
-    isOpener && {
-      id: "role_ouvreur",
-      name: "Ouvreur",
-      family: "contribution",
-      condition: "Identifié comme ouvreur d’au moins une voie.",
-      earned: true,
-    },
+    participant.initiateurSae && { id: "role_initiateur_sae", name: "Initiateur SAE", family: "contribution", condition: "Qualification Initiateur SAE enregistrée par le club.", earned: true },
+    participant.initiateurSne && { id: "role_initiateur_sne", name: "Initiateur SNE", family: "contribution", condition: "Qualification d’initiateur escalade en SNE enregistrée par le club.", earned: true },
+    participant.canEncadrer && { id: "role_encadrant", name: "Encadrant", family: "contribution", condition: "Autorisé à encadrer les séances du club.", earned: true },
+    participant.canReferer && { id: "role_referent", name: "Référent", family: "contribution", condition: "Autorisé à être référent d’une séance libre.", earned: true },
+    isOpener && { id: "role_ouvreur", name: "Ouvreur", family: "contribution", condition: "Identifié comme ouvreur d’au moins une voie.", earned: true },
   ].filter(Boolean);
+}
+
+function challengeBadgeDescriptors(items) {
+  return (Array.isArray(items) ? items : []).map((item) => {
+    const distinction = String(item.metadata?.distinction || "participation");
+    const podiumLabel = { or: "Or", argent: "Argent", bronze: "Bronze" }[distinction] || "";
+    const challengeName = item.label || item.metadata?.challengeName || "Challenge";
+    const rank = item.metadata?.rank;
+    return {
+      id: `challenge_${item.sourceId}`,
+      name: challengeName,
+      family: "prestige",
+      shape: "ribbon",
+      condition: podiumLabel
+        ? `${podiumLabel} du challenge « ${challengeName} » — rang #${rank}.`
+        : `Participation au challenge « ${challengeName} »${rank ? ` — rang #${rank}` : ""}.`,
+      earned: true,
+    };
+  });
 }
 
 export default function ParticipantBadges({ realisations, allRealisations = [], routesById, sessions, participant }) {
   const [selectedBadge, setSelectedBadge] = useState(null);
+  const [persistedChallengeBadges, setPersistedChallengeBadges] = useState([]);
+
+  useEffect(() => {
+    const participantId = String(participant?.id || "");
+    if (!participantId) {
+      setPersistedChallengeBadges([]);
+      return undefined;
+    }
+    let mounted = true;
+    apiFetch(`/challenge-badges/${encodeURIComponent(participantId)}`)
+      .then((items) => { if (mounted) setPersistedChallengeBadges(challengeBadgeDescriptors(items)); })
+      .catch((error) => {
+        if (mounted) {
+          setPersistedChallengeBadges([]);
+          console.error("Impossible de charger les badges Challenge.", error);
+        }
+      });
+    return () => { mounted = false; };
+  }, [participant?.id]);
+
   const badges = useMemo(
     () => [
       ...participantRoleBadges(participant, routesById),
+      ...persistedChallengeBadges,
       ...calculateSafetyBadges({ participantId: participant?.id, realisations, allRealisations }),
       ...calculateParticipantBadges({ realisations, routesById, sessions }),
     ],
-    [participant, realisations, allRealisations, routesById, sessions],
+    [participant, persistedChallengeBadges, realisations, allRealisations, routesById, sessions],
   );
 
   const earnedBadges = badges.filter((badge) => badge.earned);
@@ -206,28 +172,19 @@ export default function ParticipantBadges({ realisations, allRealisations = [], 
   return (
     <section className="card participant-badges-card" aria-labelledby="participant-badges-title">
       <div className="card-header participant-badges-header">
-        <h3 id="participant-badges-title">
-          Badges <span className="badge participant-badges-count">{earnedBadges.length} / {badges.length}</span>
-        </h3>
+        <h3 id="participant-badges-title">Badges <span className="badge participant-badges-count">{earnedBadges.length} / {badges.length}</span></h3>
       </div>
-
       {earnedBadges.length === 0 ? (
         <div className="muted-box">Aucun badge obtenu pour le moment. La première voie réussie donnera « Première croix ».</div>
       ) : (
-        <div className="participant-badges-grid">
-          {earnedBadges.map((badge) => <BadgeTile key={badge.id} badge={badge} onOpen={setSelectedBadge} />)}
-        </div>
+        <div className="participant-badges-grid">{earnedBadges.map((badge) => <BadgeTile key={badge.id} badge={badge} onOpen={setSelectedBadge} />)}</div>
       )}
-
       {pendingBadges.length > 0 && (
         <details className="participant-badges-pending">
           <summary>Badges à obtenir ({pendingBadges.length})</summary>
-          <div className="participant-badges-grid participant-badges-grid--pending">
-            {pendingBadges.map((badge) => <BadgeTile key={badge.id} badge={badge} pending onOpen={setSelectedBadge} />)}
-          </div>
+          <div className="participant-badges-grid participant-badges-grid--pending">{pendingBadges.map((badge) => <BadgeTile key={badge.id} badge={badge} pending onOpen={setSelectedBadge} />)}</div>
         </details>
       )}
-
       <BadgeDetail badge={selectedBadge} onClose={() => setSelectedBadge(null)} />
     </section>
   );

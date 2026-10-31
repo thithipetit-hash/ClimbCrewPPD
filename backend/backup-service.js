@@ -4,6 +4,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { getPool } from "./admin-users/database.js";
 import { sendBackupEmail } from "./admin-users/email-service.js";
+import { markSchedulerDegraded, markSchedulerDisabled, markSchedulerHealthy } from "./scheduler-health.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -390,15 +391,20 @@ async function schedulerTick() {
 
 export function startBackupScheduler() {
   if (!BACKUP_ENABLED) {
+    markSchedulerDisabled("backup");
     console.log("[backup] planification désactivée sur cet environnement");
     return;
   }
   if (globalThis[BACKUP_SCHEDULER_FLAG]) return;
   globalThis[BACKUP_SCHEDULER_FLAG] = true;
+  markSchedulerHealthy("backup");
 
-  const run = () => schedulerTick().catch((error) => {
-    console.error("[backup] échec de la sauvegarde planifiée :", error);
-  });
+  const run = () => schedulerTick()
+    .then(() => markSchedulerHealthy("backup"))
+    .catch((error) => {
+      markSchedulerDegraded("backup");
+      console.error("[backup] échec de la sauvegarde planifiée :", error);
+    });
 
   setTimeout(run, 10_000);
   const timer = setInterval(run, 60_000);

@@ -3,7 +3,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 test("les principales écritures affichent une confirmation accessible", async () => {
-  const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const sources = await Promise.all([
+    "../src/App.jsx",
+    "../src/hooks/useSessionPersistence.js",
+    "../src/hooks/useRealisationPersistence.js",
+    "../src/hooks/useRouteManagement.js",
+    "../src/hooks/useParticipantManagement.js",
+  ].map((path) => readFile(new URL(path, import.meta.url), "utf8")));
+  const source = sources.join("\n");
 
   for (const message of [
     "Séance enregistrée.",
@@ -19,5 +26,6 @@ test("les principales écritures affichent une confirmation accessible", async (
 
   assert.match(source, /role="status"/);
   assert.match(source, /aria-live="polite"/);
+  assert.match(source, /role="alert"/);
   assert.match(source, /setTimeout\(\(\) => setConfirmationMessage\(""\), 3000\)/);
 });

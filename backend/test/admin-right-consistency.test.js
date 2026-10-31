@@ -17,7 +17,7 @@ const routesSource = await readFile(
 
 test("la mise à jour d'un participant pilote aussi le rôle réel du compte", () => {
   assert.match(routesSource, /app\.put\("\/participants\/:id", requireAuth, requireAdmin, updateParticipantWithAdminRight\)/);
-  assert.match(participantRights, /update participants[\s\S]*can_admin = \$11/);
+  assert.match(participantRights, /update participants[\s\S]*can_admin = \$13/);
   assert.match(participantRights, /update users[\s\S]*role = case when \$2 then 'admin' else 'user' end/);
   assert.match(participantRights, /is_admin = \$2/);
 });

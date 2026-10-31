@@ -26,6 +26,56 @@ test("valide et normalise un participant", () => {
   assert.equal(participant.cotisation, true);
   assert.equal(participant.sexe, "f");
   assert.equal(participant.ffme, false);
+  assert.equal(participant.passportDecouverte, false);
+});
+
+test("l'année de naissance d'un participant adulte est facultative et contrôlée", () => {
+  const base = { nom: "Martin", prenom: "Alice", passport: "sans" };
+  assert.equal(validateParticipantPayload(base).anneeNaissance, null);
+  const year = new Date().getUTCFullYear() - 40;
+  assert.equal(validateParticipantPayload({ ...base, anneeNaissance: String(year) }).anneeNaissance, year);
+  assert.throws(
+    () => validateParticipantPayload({ ...base, anneeNaissance: new Date().getUTCFullYear() - 17 }),
+    /participants majeurs/,
+  );
+  assert.throws(
+    () => validateParticipantPayload({ ...base, anneeNaissance: "inconnue" }),
+    ValidationError,
+  );
+});
+
+test("sépare la couleur du passeport de l'option Découverte", () => {
+  for (const passport of ["sans", "jaune", "orange", "bleu", "vert"]) {
+    const participant = validateParticipantPayload({
+      nom: "Dupont",
+      prenom: "Alice",
+      passport,
+      passportDecouverte: true,
+    });
+    assert.equal(participant.passport, passport);
+    assert.equal(participant.passportDecouverte, true);
+  }
+});
+
+test("normalise les anciennes variantes D sans perdre l'information Découverte", () => {
+  const legacyVariants = [
+    ["sans", "sans", false],
+    ["jaune_d", "jaune", true],
+    ["orange_d", "orange", true],
+    ["vert_d", "vert", true],
+    ["bleu_d", "bleu", true],
+    ["decouverte", "sans", true],
+  ];
+
+  for (const [legacyPassport, passport, passportDecouverte] of legacyVariants) {
+    const participant = validateParticipantPayload({
+      nom: "Dupont",
+      prenom: "Alice",
+      passport: legacyPassport,
+    });
+    assert.equal(participant.passport, passport);
+    assert.equal(participant.passportDecouverte, passportDecouverte);
+  }
 });
 
 test("refuse un email et un passeport invalides", () => {
@@ -100,7 +150,7 @@ test("valide séparément le mode et le critère des réalisations", () => {
   });
   assert.equal(realisation.modeRealisation, "moulinette");
   assert.equal(realisation.styleRealisation, "a_vue");
-  assert.equal(realisation.nbEssais, "moulinette");
+  assert.equal(realisation.nbEssais, "");
 
   assert.throws(
     () => validateRealisationPayload({
@@ -150,7 +200,7 @@ test("un patch de réalisation ne valide que les champs fournis", () => {
     { partial: true },
   );
   assert.equal(modePatch.modeRealisation, "en_tete");
-  assert.equal(modePatch.nbEssais, "en_tete");
+  assert.equal(modePatch.nbEssais, undefined);
 });
 
 test("normalise un import legacy avant toute transaction", () => {
@@ -185,6 +235,8 @@ test("normalise un import legacy avant toute transaction", () => {
     }],
   });
 
+  assert.equal(payload.participants[0].passport, "sans");
+  assert.equal(payload.participants[0].passportDecouverte, false);
   assert.equal(payload.routes[0].numeroCorde, 0);
   assert.equal(payload.ropes[0].numeroCorde, 0);
   assert.equal(payload.routes[0].nomOuvreur, "Inconnu");

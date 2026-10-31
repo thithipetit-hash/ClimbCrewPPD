@@ -5,6 +5,8 @@ import { readFile } from "node:fs/promises";
 const serverSource = await readFile(new URL("../server.js", import.meta.url), "utf8");
 const explicitRoutesSource = await readFile(new URL("../admin-users/explicit-routes.js", import.meta.url), "utf8");
 const routeManagementSource = await readFile(new URL("../route-management-routes.js", import.meta.url), "utf8");
+const routeCoreSource = await readFile(new URL("../route-core-routes.js", import.meta.url), "utf8");
+const routeVideoSource = await readFile(new URL("../route-video-routes.js", import.meta.url), "utf8");
 const realisationManagementSource = await readFile(new URL("../realisation-management-routes.js", import.meta.url), "utf8");
 const sessionReadSource = await readFile(new URL("../session-read-routes.js", import.meta.url), "utf8");
 const participantCreationSource = await readFile(new URL("../participant-creation-route.js", import.meta.url), "utf8");
@@ -73,9 +75,12 @@ test("les routes actives restent implémentées dans des modules explicites", ()
   assert.match(realisationManagementSource, /app\.delete\("\/realisations\/:id", requireAuth, async/);
 
   assert.match(serverSource, /installRouteManagementRoutes\(app, \{ requireAuth, requireAdmin, pool \}\)/);
-  assert.match(routeManagementSource, /app\.get\("\/ropes", requireAuth, async/);
-  assert.match(routeManagementSource, /app\.get\("\/routes", requireAuth, async/);
-  assert.match(routeManagementSource, /app\.post\("\/routes", requireAuth, requireAdmin, async/);
-  assert.match(routeManagementSource, /app\.put\("\/routes\/:id", requireAuth, requireAdmin, async/);
-  assert.match(routeManagementSource, /app\.delete\("\/routes\/:id", requireAuth, requireAdmin, async/);
+  assert.match(routeManagementSource, /installRouteCoreRoutes\(app, dependencies\)/);
+  assert.match(routeManagementSource, /installRouteVideoRoutes\(app, dependencies\)/);
+  assert.match(routeCoreSource, /app\.get\("\/ropes", requireAuth, async/);
+  assert.match(routeCoreSource, /app\.get\("\/routes", requireAuth, async/);
+  assert.match(routeCoreSource, /app\.post\("\/routes", requireAuth, requireAdmin, async/);
+  assert.match(routeCoreSource, /app\.put\("\/routes\/:id", requireAuth, requireAdmin, async/);
+  assert.match(routeCoreSource, /app\.delete\("\/routes\/:id", requireAuth, requireAdmin, async/);
+  assert.match(routeVideoSource, /app\.get\("\/routes\/:id\/videos\/:videoId", requireAuth, async/);
 });

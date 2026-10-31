@@ -12,6 +12,7 @@ export const THEME_OPTIONS = [
   { value: "bloc_neon", label: "Bloc néon" },
   { value: "glacier", label: "Glacier" },
   { value: "cristal", label: "Cristal" },
+  { value: "daltonien", label: "Daltonien - contraste & motifs" },
 ];
 
 const THEME_VALUES = THEME_OPTIONS.filter((option) => option.value !== "auto").map((option) => option.value);

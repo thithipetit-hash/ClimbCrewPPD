@@ -130,19 +130,22 @@ export async function updateParticipantWithAdminRight(req, res) {
             email = $4,
             login_email = case when $4 = '' then login_email else $4 end,
             passport = $5,
-            sexe = $6,
-            cotisation = $7,
-            ffme = $8,
-            can_encadrer = $9,
-            can_referer = $10,
-            can_admin = $11,
-            avatar_id = $12,
-            crest_id = $13,
-            profile_public = $14
+            passport_decouverte = $6,
+            passeport_ffme = $7,
+            sexe = $8,
+            cotisation = $9,
+            ffme = $10,
+            can_encadrer = $11,
+            can_referer = $12,
+            can_admin = $13,
+            avatar_id = $14,
+            crest_id = $15,
+            profile_public = $16,
+            annee_naissance = $17
         where id = $1
-        returning id, nom, prenom, email, login_email, passport, sexe, cotisation, ffme,
+        returning id, nom, prenom, email, login_email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme,
                   initiateur_sae, initiateur_sne, can_encadrer, can_referer, can_admin,
-                  avatar_id, crest_id, profile_public, custom_avatar_image
+                  avatar_id, crest_id, profile_public, custom_avatar_image, annee_naissance
       `,
       [
         participantId,
@@ -150,6 +153,8 @@ export async function updateParticipantWithAdminRight(req, res) {
         participant.prenom,
         cleanEmail(participant.email),
         participant.passport,
+        participant.passportDecouverte,
+        participant.passeportFfme,
         participant.sexe,
         participant.cotisation,
         participant.ffme,
@@ -159,6 +164,7 @@ export async function updateParticipantWithAdminRight(req, res) {
         avatarId,
         crestId,
         profilePublic,
+        participant.anneeNaissance,
       ],
     );
 
@@ -217,6 +223,13 @@ export async function setUserParticipantAssociationWithAdminRight(req, res) {
     if (!user) {
       await client.query("rollback");
       return res.status(404).json({ error: "Compte introuvable" });
+    }
+
+    if (participantId !== null && user.status === "pending" && !user.email_verified_at) {
+      await client.query("rollback");
+      return res.status(409).json({
+        error: "L’adresse e-mail doit être confirmée avant d’associer ce compte à une fiche grimpeur.",
+      });
     }
 
     let targetParticipant = null;

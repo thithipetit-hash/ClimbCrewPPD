@@ -1,4 +1,4 @@
-name: Verify production video chunks
+name: Verify preproduction video chunks
 
 on:
   workflow_run:
@@ -12,23 +12,23 @@ permissions:
   contents: read
 
 concurrency:
-  group: climbcrew-production-video-chunk-probe
+  group: climbcrew-preprod-video-chunk-probe
   cancel-in-progress: false
 
 jobs:
-  verify_video_chunk:
-    name: Vérifier le passage d'un bloc vidéo de 768 Kio
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'production') }}
+  verify_local_nginx:
+    name: Vérifier Nginx PPD et un bloc local de 768 Kio
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: self-hosted
     timeout-minutes: 5
 
     steps:
-      - name: Vérifier Nginx local et le frontal public de production
+      - name: Vérifier le proxy Nginx local
         shell: bash
         run: |
           set -euo pipefail
 
-          DOMAIN="climbcrew.dip-tcs.com"
+          DOMAIN="pre-climbcrew.dip-tcs.com"
           NGINX_DUMP="$(sudo nginx -T 2>&1)"
 
           echo "=== Proxy Nginx local ==="
@@ -36,16 +36,49 @@ jobs:
             | grep -E '^(# configuration file |[[:space:]]*(server_name|proxy_pass|client_max_body_size)[[:space:]])' \
             | head -n 250 || true
 
-          if ! printf '%s\n' "$NGINX_DUMP" | grep -qE 'server_name[[:space:]]+climbcrew\.dip-tcs\.com'; then
-            echo "ERROR: le runner ne publie pas climbcrew.dip-tcs.com."
+          printf '%s\n' "$NGINX_DUMP" | grep -qE 'client_max_body_size[[:space:]]+55m;' || {
+            echo "ERROR: limite Nginx 55m absente."
+            exit 1
+          }
+          printf '%s\n' "$NGINX_DUMP" | grep -qE 'server_name[[:space:]]+[^;]*pre-climbcrew\.dip-tcs\.com[^;]*;' || {
+            echo "ERROR: domaine PPD absent de la configuration Nginx active."
+            exit 1
+          }
+
+          PROBE_FILE="$(mktemp)"
+          BODY_FILE="$(mktemp)"
+          trap 'rm -f "$PROBE_FILE" "$BODY_FILE"' EXIT
+          dd if=/dev/zero of="$PROBE_FILE" bs=1K count=768 status=none
+
+          HTTP_CODE="$(curl --silent --show-error --output "$BODY_FILE" \
+            --write-out '%{http_code}' --max-time 60 \
+            -X POST \
+            -H "Host: ${DOMAIN}" \
+            -H 'Content-Type: application/octet-stream' \
+            --data-binary "@$PROBE_FILE" \
+            "http://127.0.0.1/api/realisations/proxy-limit-probe/video-uploads/proxy-probe-1234/chunks/0" || true)"
+
+          echo "Bloc local 768 Kio -> HTTP ${HTTP_CODE}"
+          if [ "$HTTP_CODE" = "413" ] || [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" = "000" ] || [[ "$HTTP_CODE" =~ ^5 ]]; then
+            echo "ERROR: le proxy local PPD ne laisse pas correctement passer le bloc."
             exit 1
           fi
 
-          if ! printf '%s\n' "$NGINX_DUMP" | grep -qE 'client_max_body_size[[:space:]]+55m;'; then
-            echo "ERROR: le Nginx local ClimbCrew n'est pas configuré avec la limite 55m attendue."
-            exit 1
-          fi
+          echo "OK: le bloc traverse le proxy local de préproduction."
 
+  verify_public_chunk:
+    name: Vérifier le bloc de 768 Kio depuis Internet
+    needs: verify_local_nginx
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Vérifier le frontal HTTPS public
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DOMAIN="pre-climbcrew.dip-tcs.com"
           PROBE_FILE="$(mktemp)"
           BODY_FILE="$(mktemp)"
           trap 'rm -f "$PROBE_FILE" "$BODY_FILE"' EXIT
@@ -57,14 +90,14 @@ jobs:
             --data-binary "@$PROBE_FILE" \
             "https://${DOMAIN}/api/realisations/proxy-limit-probe/video-uploads/proxy-probe-1234/chunks/0" || true)"
 
-          echo "Bloc 768 Kio -> HTTP ${HTTP_CODE}"
+          echo "Bloc public 768 Kio -> HTTP ${HTTP_CODE}"
           if [ "$HTTP_CODE" = "413" ]; then
-            echo "ERROR: le frontal refuse un bloc de 768 Kio."
+            echo "ERROR: le frontal public refuse un bloc de 768 Kio."
             exit 1
           fi
           if [ -z "$HTTP_CODE" ] || [ "$HTTP_CODE" = "000" ] || [[ "$HTTP_CODE" =~ ^5 ]]; then
-            echo "ERROR: le contrôle du frontal n'a pas abouti correctement."
+            echo "ERROR: le contrôle HTTPS public n'a pas abouti correctement."
             exit 1
           fi
 
-          echo "OK: un bloc de 768 Kio traverse le frontal de production."
+          echo "OK: un bloc de 768 Kio traverse le frontal HTTPS public."

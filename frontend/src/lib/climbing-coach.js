@@ -1,4 +1,4 @@
-const COACH_VERSION = 1;
+const COACH_VERSION = 2;
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -26,6 +26,11 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
   const bentSide = bentLeftRatio > bentRightRatio ? "gauche" : "droit";
   const armAsymmetryRatio = Math.max(0, finite(metrics.armAsymmetryRatio, 0));
   const dynamicMoves = Math.max(0, finite(metrics.dynamicMoves, 0));
+  const observationConfidence = Math.max(0, Math.min(1, finite(metrics.observationConfidence, detectionRatio)));
+  const hipPathEfficiency = Math.max(0, Math.min(1, finite(metrics.hipMotion?.pathEfficiency, 0)));
+  const hipTravel = Math.max(0, finite(metrics.hipMotion?.travelTorso, 0));
+  const hipLateral = Math.max(0, finite(metrics.bodyPosition?.meanHipLateralOffsetHipWidths, 0));
+  const compactRatio = ratio(metrics.bodyPosition?.compactSeconds, analyzedSeconds);
   const candidates = [];
 
   if (longPauses.length > 0 || pauses.length >= 3) {
@@ -94,6 +99,45 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
     ));
   }
 
+  if (hipLateral >= 0.55) {
+    candidates.push(priority(
+      "coach-hip-position",
+      78 + Math.min(12, Math.round((hipLateral - 0.55) * 20)),
+      "Placement du bassin",
+      `Le bassin est fréquemment décalé latéralement par rapport aux épaules (indice moyen ${hipLateral.toFixed(2)} largeur de bassin).`,
+      "Observer si ce décalage sert une opposition, un drapeau ou une prise latérale ; sinon tester un recentrage ou une rotation du bassin.",
+      "Sur 2 passages faciles, comparer volontairement une version bassin recentré et une version avec rotation de hanche, puis conserver celle qui réduit l’effort des bras.",
+      "2 passages comparés.",
+      "Un décalage latéral peut être techniquement excellent : le tracé et les prises doivent confirmer l’interprétation.",
+    ));
+  }
+
+  if (compactRatio >= 0.35) {
+    candidates.push(priority(
+      "coach-leg-extension",
+      68 + Math.min(12, Math.round(compactRatio * 20)),
+      "Extension des jambes",
+      `Les genoux restent fortement fléchis environ ${Math.round(compactRatio * 100)} % du temps analysable.`,
+      "Chercher les moments où une poussée de jambe peut remplacer une traction prolongée des bras.",
+      "Sur une voie facile, marquer chaque mouvement en initiant la montée par la poussée du pied avant de tirer avec le bras.",
+      "2 voies faciles.",
+      "Une position compacte peut être nécessaire en toit, en dévers ou avant un mouvement dynamique.",
+    ));
+  }
+
+  if (hipTravel >= 1.5 && hipPathEfficiency > 0 && hipPathEfficiency < 0.42) {
+    candidates.push(priority(
+      "coach-hip-trajectory",
+      72 + Math.min(15, Math.round((0.42 - hipPathEfficiency) * 100)),
+      "Trajectoire du bassin",
+      `La trajectoire observée du bassin est assez indirecte (indice de progression ${Math.round(hipPathEfficiency * 100)} %).`,
+      "Revoir les changements de direction du bassin et chercher si certains déplacements latéraux peuvent être préparés plus tôt.",
+      "Sur une voie facile, grimper lentement en observant le chemin du bassin et chercher une trajectoire plus continue, sans imposer une position unique.",
+      "2 passages comparés en vidéo.",
+      "Cet indice décrit une trajectoire 2D du bassin, pas le centre de gravité réel ni la distance à la paroi.",
+    ));
+  }
+
   candidates.sort((a, b) => b.score - a.score || a.code.localeCompare(b.code));
   const priorities = candidates.slice(0, 2);
 
@@ -119,8 +163,10 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
       ? `Priorité entraîneur : ${titles[0]}.`
       : `Priorités entraîneur : ${titles[0]}, puis ${titles[1]}.`,
     priorities,
+    confidence: observationConfidence,
+    confidenceLabel: observationConfidence >= 0.8 ? "élevée" : observationConfidence >= 0.6 ? "moyenne" : "faible",
     note: lowDetection
       ? "La détection du corps est partielle : utiliser ces priorités comme pistes à confirmer visuellement ou sur une autre vidéo."
-      : "Les priorités sont déduites des mesures de cette vidéo et doivent être interprétées avec le contexte de la voie.",
+      : "Les priorités sont déduites des mesures de cette vidéo et doivent être interprétées avec le contexte de la voie. La trajectoire du bassin reste une mesure 2D et ne mesure pas directement le centre de gravité ni les forces.",
   };
 }

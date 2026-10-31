@@ -26,6 +26,30 @@ test("un seul répertoire canonique conserve toutes les versions historiques dan
     "006_realisation_technical_analysis.sql",
     "007_runtime_schema_consolidation.sql",
     "008_video_upload_cleanup.sql",
+    "009_realisations_grade_scale.sql",
+    "010_participant_passeport_ffme.sql",
+    "011_participant_physical_metrics.sql",
+    "012_chat_messages.sql",
+    "013_chat_attachments.sql",
+    "014_chat_reactions.sql",
+    "015_chat_social.sql",
+    "016_buddy_availability.sql",
+    "017_buddy_daily_session_preferences.sql",
+    "018_chat_reply_schema_repair.sql",
+    "021_realisation_kudos.sql",
+    "022_chat_replies.sql",
+    "023_grade_scale_alignment.sql",
+    "024_realisation_mode_route_history.sql",
+    "025_typed_business_dates.sql",
+    "026_email_confirmation_schema_repair.sql",
+    "027_unify_realisation_chat_kudos.sql",
+    "028_session_participant_integrity_convergence.sql",
+    "029_account_request_schema_repair.sql",
+    "030_passport_color_discovery.sql",
+    "031_challenges.sql",
+    "032_challenge_badge_names.sql",
+    "033_participant_cpr_reset.sql",
+    "034_participant_birth_year_ffme.sql",
   ]);
   assert.equal(new Set(versions).size, versions.length);
   assert.ok(migrations.every((migration) => migration.source === "database"));
@@ -34,6 +58,15 @@ test("un seul répertoire canonique conserve toutes les versions historiques dan
     access(legacyMigrationsUrl, constants.F_OK),
     /ENOENT/,
   );
+});
+
+test("la migration 018 répare de façon idempotente le schéma des réponses du chat", async () => {
+  const repair = await readFile(
+    new URL("../database/migrations/018_chat_reply_schema_repair.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(repair, /add column if not exists reply_to_id/i);
+  assert.match(repair, /create index if not exists chat_messages_reply_to_idx/i);
 });
 
 test("la version historique 005 reste traçable mais ne rejoue plus le DDL de 002", async () => {

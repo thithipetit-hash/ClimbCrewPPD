@@ -1,3 +1,7 @@
+import { GRADES } from "../shared/climbing-grades.js";
+import { MAX_SESSION_PARTICIPANTS } from "../shared/session-rules.js";
+import { PASSPORT_VALUES, resolvePassportSelection } from "../shared/passports.js";
+
 /**
  * Validation des données reçues par l'API.
  *
@@ -5,11 +9,8 @@
  * lorsqu'une valeur ne peut pas être acceptée sans ambiguïté.
  */
 
-export const GRADES = [
-  "4", "4a", "4b", "4c", "5a", "5a+", "5b", "5b+", "5c", "5c+", "6a", "6a+",
-  "6b", "6b+", "6c", "6c+", "7a", "7a+", "7b", "7c",
-];
-export const PASSPORTS = ["sans", "jaune", "orange", "vert", "bleu", "decouverte"];
+export { GRADES };
+export const PASSPORTS = PASSPORT_VALUES;
 export const SEXES = ["", "h", "f"];
 export const SESSION_SLOTS = ["matin", "midi", "soir"];
 export const SESSION_STATUSES = [
@@ -21,7 +22,7 @@ export const REALISATION_STYLES = [
   "travaillee", "projet", "non_enchainee", "test",
 ];
 export const ROUTE_TAGS = [
-  "dalle", "devers", "physique", "technique", "a_doigts",
+  "dalle", "devers", "diedre", "physique", "technique", "a_doigts",
   "continuite", "morphologique", "engagee",
 ];
 
@@ -123,14 +124,37 @@ function email(value) {
   return normalized;
 }
 
+function optionalAdultBirthYear(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const year = Number(value);
+  const lastAdultBirthYear = new Date().getUTCFullYear() - 18;
+  if (!Number.isInteger(year) || year < 1900 || year > lastAdultBirthYear) {
+    throw new ValidationError(
+      `anneeNaissance doit être une année entre 1900 et ${lastAdultBirthYear} (participants majeurs).`,
+      { anneeNaissance: "out_of_range" },
+    );
+  }
+  return year;
+}
+
 export function validateParticipantPayload(payload = {}) {
+  const requestedDiscovery = strictBoolean(
+    payload.passportDecouverte,
+    "passportDecouverte",
+    false,
+  );
+  const passportSelection = resolvePassportSelection(payload.passport, requestedDiscovery);
+
   return {
     ...payload,
     nom: requiredString(payload.nom, "nom", 120),
     prenom: requiredString(payload.prenom, "prenom", 120),
     email: email(payload.email),
-    passport: enumValue(payload.passport, "passport", PASSPORTS, "sans"),
+    passport: enumValue(passportSelection.passport, "passport", PASSPORTS, "sans"),
+    passportDecouverte: passportSelection.passportDecouverte,
+    passeportFfme: strictBoolean(payload.passeportFfme, "passeportFfme"),
     sexe: enumValue(payload.sexe, "sexe", SEXES, ""),
+    anneeNaissance: optionalAdultBirthYear(payload.anneeNaissance),
     cotisation: strictBoolean(payload.cotisation, "cotisation"),
     ffme: strictBoolean(payload.ffme, "ffme"),
     canEncadrer: strictBoolean(payload.canEncadrer, "canEncadrer"),
@@ -225,6 +249,15 @@ export function validateSessionPayload(payload = {}, idFromPath = "") {
       participantIds: "invalid_array",
     });
   }
+  const normalizedParticipantIds = [...new Set(
+    participantIds.map((value) => identifier(value, "participantId")),
+  )];
+  if (normalizedParticipantIds.length > MAX_SESSION_PARTICIPANTS) {
+    throw new ValidationError(
+      `Une séance ne peut pas dépasser ${MAX_SESSION_PARTICIPANTS} participants.`,
+      { participantIds: "too_many_items" },
+    );
+  }
 
   return {
     ...payload,
@@ -236,10 +269,46 @@ export function validateSessionPayload(payload = {}, idFromPath = "") {
       : null,
     encadrantId: stringValue(payload.encadrantId) || null,
     referentId: stringValue(payload.referentId) || null,
-    participantIds: [...new Set(
-      participantIds.map((value) => identifier(value, "participantId")),
-    )],
+    participantIds: normalizedParticipantIds,
   };
+}
+
+export function validateChatMessage(value, { required = true, maxLength = 2000 } = {}) {
+  const normalized = optionalString(value, "message", maxLength);
+  if (required && !normalized) {
+    throw new ValidationError("Le message est obligatoire.", { message: "required" });
+  }
+  return normalized;
+}
+
+export function validateChatPinned(value) {
+  return strictBoolean(value, "pinned", false);
+}
+
+export function validateChatReaction(value) {
+  return requiredString(value, "reaction", 24);
+}
+
+export function validateChatPoll(payload = {}) {
+  const question = requiredString(payload.question, "question", 500);
+  if (!Array.isArray(payload.options)) {
+    throw new ValidationError("options doit être un tableau.", { options: "invalid_array" });
+  }
+  const options = [...new Set(payload.options.map((value) => optionalString(value, "option", 120)).filter(Boolean))];
+  if (options.length < 2 || options.length > 8) {
+    throw new ValidationError("Un sondage doit contenir entre 2 et 8 réponses distinctes.", {
+      options: "invalid_count",
+    });
+  }
+  return { question, options };
+}
+
+export function validateChatPollOption(value, poll) {
+  const optionId = Number(value);
+  if (!Number.isInteger(optionId) || !(poll?.options || []).some((option) => Number(option.id) === optionId)) {
+    throw new ValidationError("Option de sondage invalide.", { optionId: "invalid_option" });
+  }
+  return optionId;
 }
 
 export function validateRealisationPayload(payload = {}, { partial = false } = {}) {
@@ -276,10 +345,10 @@ export function validateRealisationPayload(payload = {}, { partial = false } = {
     );
   }
 
-  // nbEssais n'est plus affiché dans l'application. Il reste lu pour les
-  // imports historiques et sert de stockage de compatibilité au mode explicite
-  // tant que la table legacy n'a pas encore de colonne dédiée.
-  if ((!partial || payload.nbEssais !== undefined) && payload.modeRealisation === undefined) {
+  // nbEssais reste une donnée legacy indépendante du mode. Les anciens
+  // exports continuent d'être acceptés, mais les nouvelles écritures utilisent
+  // désormais la colonne dédiée mode_realisation.
+  if (!partial || payload.nbEssais !== undefined) {
     validated.nbEssais = optionalString(payload.nbEssais, "nbEssais", 50);
   }
 
@@ -292,9 +361,6 @@ export function validateRealisationPayload(payload = {}, { partial = false } = {
       REALISATION_MODES,
       fallbackMode,
     );
-    // server.js persiste déjà nbEssais dans la colonne nb_essais : on conserve
-    // ainsi la compatibilité sans migration risquée de la base en production.
-    validated.nbEssais = validated.modeRealisation;
   }
 
   if (payload.rating !== undefined && payload.rating !== null && payload.rating !== "") {

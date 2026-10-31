@@ -24,10 +24,10 @@ test("la normalisation des passeports ignore casse, espaces et accents", () => {
 });
 
 test("React expose directement le statut et le passeport nécessaires à l'affichage", async () => {
-  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const sessionCard = await readFile(new URL("../src/components/SessionCard.jsx", import.meta.url), "utf8");
 
-  assert.match(app, /session-status-\$\{String\(session\.status \|\| "fermee"\)\.trim\(\)\.toLowerCase\(\)\}/);
-  assert.match(app, /data-passport=\{normalizePassport\(p\.passport\)\}/);
+  assert.match(sessionCard, /session-status-\$\{String\(session\.status \|\| "fermee"\)\.trim\(\)\.toLowerCase\(\)\}/);
+  assert.match(sessionCard, /data-passport=\{normalizePassport\(participant\.passport\)\}/);
 });
 
 test("les passeports incompatibles d'une séance libre sont hachurés sans script DOM", async () => {
@@ -51,4 +51,17 @@ test("les couleurs de fond respectent la convention des inscriptions et restent 
   assert.match(css, /session-status-challenge[\s\S]*100, 116, 139[\s\S]*!important/); // gris
   assert.match(themeCss, /\.toolbar,[\s\S]*\.card,[\s\S]*background:\s*var\(--theme-card-bg\)\s*!important/);
   assert.match(main, /styles\/session-status-colors\.css/);
+});
+
+
+test("une séance libre ou encadrée sans responsable est neutralisée en gris", async () => {
+  const css = await readFile(new URL("../src/styles/session-status-colors.css", import.meta.url), "utf8");
+  const sessionCard = await readFile(new URL("../src/components/SessionCard.jsx", import.meta.url), "utf8");
+
+  assert.match(sessionCard, /session\.status === "encadree" && !session\.encadrantId/);
+  assert.match(sessionCard, /session\.status === "libre" && !session\.referentId/);
+  assert.match(sessionCard, /session-card-missing-supervisor/);
+  assert.match(css, /session-status-libre\.session-card-missing-supervisor/);
+  assert.match(css, /session-status-encadree\.session-card-missing-supervisor/);
+  assert.match(css, /background:\s*#6b7280\s*!important/);
 });

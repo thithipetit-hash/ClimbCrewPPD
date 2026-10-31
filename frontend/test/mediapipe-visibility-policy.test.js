@@ -15,6 +15,13 @@ test("un repère non visible produit une mesure absente et non une vitesse nulle
 test("les intervalles techniques sont fermés au dernier échantillon visible", () => {
   assert.match(source, /finishTrackedIntervals\(previousTime\)/);
   assert.doesNotMatch(source, /finishInterval\(pauses, pauseStart, duration/);
-  assert.match(source, /engineVersion: "1\.0\.3"/);
+  assert.match(source, /engineVersion: "1\.3\.2"/);
   assert.match(source, /previousPose\.leftAnkle && pose\.leftAnkle/);
+});
+
+
+test("le décalage latéral du bassin filtre les largeurs anatomiquement aberrantes", () => {
+  assert.match(source, /hipWidthToTorso >= 0\.25 && hipWidthToTorso <= 1\.6/);
+  assert.match(source, /lateral <= 6/);
+  assert.match(source, /sortedHipLateral/);
 });

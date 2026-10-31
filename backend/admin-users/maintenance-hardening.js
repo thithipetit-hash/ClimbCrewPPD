@@ -1,4 +1,5 @@
 import { getPool } from "./database.js";
+import { getSchedulerHealthSnapshot } from "../scheduler-health.js";
 
 /**
  * Refuse les jetons de maintenance placés dans l'URL.
@@ -30,7 +31,12 @@ export function rejectMaintenanceTokenInQuery(req, res, next) {
 export async function safeHealthCheck(_req, res) {
   try {
     await getPool().query("select 1");
-    return res.json({ ok: true });
+    const schedulerHealth = getSchedulerHealthSnapshot();
+    return res.json({
+      ok: true,
+      degraded: schedulerHealth.degraded,
+      schedulers: schedulerHealth.schedulers,
+    });
   } catch (error) {
     console.error("Health check PostgreSQL en échec :", error);
     return res.status(503).json({ ok: false, error: "Service temporairement indisponible" });

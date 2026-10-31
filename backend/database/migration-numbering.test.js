@@ -5,23 +5,14 @@ import { listMigrationFiles, validateMigrationNumbering } from "./migrate.js";
 test("l'historique consolidé reste accepté", async () => {
   const migrations = await listMigrationFiles();
   assert.ok(migrations.some((migration) => migration.version === "008_video_upload_cleanup.sql"));
+  assert.ok(migrations.some((migration) => migration.version === "021_realisation_kudos.sql"));
+  assert.ok(migrations.some((migration) => migration.version === "022_chat_replies.sql"));
 });
 
-test("les nouvelles migrations commencent à 009 et restent séquentielles", () => {
+test("la séquence 009 à 018 reste continue", () => {
   assert.doesNotThrow(() => validateMigrationNumbering([
-    "001_baseline.sql",
-    "001_integrity_constraints.sql",
-    "002_participant_initiator_qualifications.sql",
-    "002_video_analysis.sql",
-    "003_route_grade_scale.sql",
-    "003_video_privacy_cleanup.sql",
-    "004_gmail_email_normalization.sql",
-    "005_video_analysis.sql",
-    "006_realisation_technical_analysis.sql",
-    "007_runtime_schema_consolidation.sql",
-    "008_video_upload_cleanup.sql",
-    "009_next_change.sql",
-    "010_followup.sql",
+    "009_a.sql", "010_b.sql", "011_c.sql", "012_d.sql", "013_e.sql",
+    "014_f.sql", "015_g.sql", "016_h.sql", "017_i.sql", "018_j.sql",
   ]));
 
   assert.throws(
@@ -35,5 +26,25 @@ test("les nouvelles migrations commencent à 009 et restent séquentielles", () 
   assert.throws(
     () => validateMigrationNumbering(["004_new_history_rewrite.sql"]),
     /009/i,
+  );
+});
+
+test("après le saut historique 021-022, la prochaine migration est 023", () => {
+  assert.doesNotThrow(() => validateMigrationNumbering([
+    "023_next.sql",
+    "024_followup.sql",
+  ]));
+
+  assert.throws(
+    () => validateMigrationNumbering(["019_wrong.sql"]),
+    /023/i,
+  );
+  assert.throws(
+    () => validateMigrationNumbering(["020_wrong.sql"]),
+    /023/i,
+  );
+  assert.throws(
+    () => validateMigrationNumbering(["024_skips_023.sql"]),
+    /023 attendu/i,
   );
 });

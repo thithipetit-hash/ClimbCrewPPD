@@ -111,7 +111,7 @@ test("une réalisation accepte au maximum trois vidéos appartenant à sa voie",
         return { rows: [{ video_urls: allowed }], rowCount: 1 };
       }
       if (normalized.startsWith("insert into realisations")) {
-        insertedVideoUrls = JSON.parse(params[12]);
+        insertedVideoUrls = JSON.parse(params[13]);
         return { rows: [], rowCount: 1 };
       }
       throw new Error(`Requête PostgreSQL inattendue : ${normalized}`);

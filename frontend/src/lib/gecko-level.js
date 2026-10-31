@@ -1,28 +1,27 @@
-const GRADE_LEVELS = {
-  "4a": 1,
-  "4b": 1,
-  "4c": 1,
-  "5a": 1,
-  "5b": 2,
-  "5c": 2,
-  "6a": 3,
-  "6a+": 3,
-  "6b": 4,
-  "6b+": 4,
-  "6c": 5,
-  "6c+": 6,
-  "7a": 7,
-  "7a+": 7,
-  "7b": 8,
-};
+import { GRADES } from "../../../shared/climbing-grades.js";
+
+// Les seuils sont inclusifs : le niveau 8 est acquis dès 7a.
+const LEVEL_START_GRADES = ["4", "5a", "5c", "6a", "6b", "6c", "6c+", "7a"];
+const LEVEL_START_INDICES = LEVEL_START_GRADES.map((grade) => GRADES.indexOf(grade));
+
+export const GECKO_LEVEL_LABELS = Object.freeze([
+  "Découverte", "Initiation", "Autonome", "Confirmé",
+  "Technique", "Expert", "Maître", "Élite",
+]);
 
 const LEVEL_LABELS = {
-  neutral: ["Novice", "Grimpeur", "Encordé", "En tête", "Confirmé", "Expert", "Maître", "Cristal"],
-  feminine: ["Novice", "Grimpeuse", "Encordée", "En tête", "Confirmée", "Experte", "Maîtresse", "Cristal"],
+  neutral: GECKO_LEVEL_LABELS,
+  feminine: ["Découverte", "Initiation", "Autonome", "Confirmée", "Technique", "Experte", "Maîtresse", "Élite"],
 };
 
 export function getGeckoLevel(grade) {
-  return GRADE_LEVELS[String(grade || "").trim().toLowerCase()] || 1;
+  const gradeIndex = GRADES.indexOf(String(grade || "").trim().toLowerCase());
+  if (gradeIndex < 0) return 1;
+
+  for (let index = LEVEL_START_INDICES.length - 1; index >= 0; index -= 1) {
+    if (gradeIndex >= LEVEL_START_INDICES[index]) return index + 1;
+  }
+  return 1;
 }
 
 export function getGeckoVariant(sexe) {

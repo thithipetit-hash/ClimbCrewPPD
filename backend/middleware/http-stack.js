@@ -73,10 +73,11 @@ export function normalizeApiPath(url) {
   return `${normalizedPath}${query}`;
 }
 
-export function publicServerErrorBody(requestId = null) {
+export function publicServerErrorBody(requestId = null, diagnosticStage = null) {
   return {
     error: "Erreur interne du serveur",
     requestId: requestId || null,
+    diagnosticStage: diagnosticStage || null,
   };
 }
 
@@ -99,9 +100,51 @@ function installOutboundErrorSanitizer(req, res) {
   res.send = function hardenedSend(body) {
     if (Number(res.statusCode) >= 500) {
       res.setHeader("Content-Type", "application/json; charset=utf-8");
-      return originalSend(JSON.stringify(publicServerErrorBody(req.requestId)));
+      return originalSend(JSON.stringify(publicServerErrorBody(
+        req.requestId,
+        req.requestDiagnosticStage,
+      )));
     }
     return originalSend(body);
+  };
+}
+
+const ACCOUNT_DIAGNOSTIC_PATHS = new Set([
+  "/auth/request-access",
+  "/api/auth/request-access",
+  "/v1/auth/request-access",
+  "/auth/verify-email",
+  "/api/auth/verify-email",
+  "/v1/auth/verify-email",
+]);
+
+const TOKEN_CONFIRMATION_FORM_PATHS = new Set([
+  "/auth/verify-email",
+  "/auth/change-email/confirm",
+]);
+
+function isTokenConfirmationFormPost(req) {
+  if (String(req?.method || "").toUpperCase() !== "POST") return false;
+  const requestUrl = String(req?.url || "/");
+  const path = requestUrl.split("?", 1)[0];
+  if (!TOKEN_CONFIRMATION_FORM_PATHS.has(path)) return false;
+
+  const token = new URL(requestUrl, "http://localhost").searchParams.get("token");
+  if (!String(token || "").trim()) return false;
+
+  const contentType = String(req?.headers?.["content-type"] || "").toLowerCase();
+  return contentType.startsWith("application/x-www-form-urlencoded");
+}
+
+function isAccountRequest(req) {
+  const path = String(req?.url || "/").split("?", 1)[0];
+  return ACCOUNT_DIAGNOSTIC_PATHS.has(path);
+}
+
+function markAccountRequestStage(stage) {
+  return (req, _res, next) => {
+    if (isAccountRequest(req)) req.requestDiagnosticStage = stage;
+    next();
   };
 }
 
@@ -148,15 +191,33 @@ function createRateLimiter({ keyPrefix, windowMs, max, getClientIp }) {
   };
 }
 
+export function normalizeOrigin(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return raw.replace(/\/$/, "");
+  }
+}
+
+export function publicRequestOrigin(req) {
+  const forwardedProto = String(req.headers?.["x-forwarded-proto"] || "").split(",")[0].trim();
+  const forwardedHost = String(req.headers?.["x-forwarded-host"] || "").split(",")[0].trim();
+  const protocol = forwardedProto || String(req.protocol || "").trim();
+  const host = forwardedHost || String(req.headers?.host || "").trim();
+  if (!protocol || !host) return "";
+  return normalizeOrigin(`${protocol}://${host}`);
+}
+
 export function installHttpStack(app, config, { isSafeMethod, getClientIp }) {
   installExpress4AsyncSafety(app);
   app.disable("x-powered-by");
-  app.use(sanitizeMalformedCookieHeader);
-  app.use(createCrossOriginCsrfBridge());
   app.set("trust proxy", config.trustProxy);
 
   app.use((req, res, next) => {
     req.requestId = crypto.randomUUID();
+    req.requestDiagnosticStage = "http.request_received";
     installOutboundErrorSanitizer(req, res);
     res.setHeader("X-Request-Id", req.requestId);
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -172,8 +233,14 @@ export function installHttpStack(app, config, { isSafeMethod, getClientIp }) {
     next();
   });
 
+  app.use(markAccountRequestStage("http.cookie_sanitizer"));
+  app.use(sanitizeMalformedCookieHeader);
+  app.use(markAccountRequestStage("http.csrf_bridge"));
+  app.use(createCrossOriginCsrfBridge());
+
   app.use((req, _res, next) => {
     req.url = normalizeApiPath(req.url);
+    if (isAccountRequest(req)) req.requestDiagnosticStage = "http.path_normalized";
     next();
   });
 
@@ -181,19 +248,39 @@ export function installHttpStack(app, config, { isSafeMethod, getClientIp }) {
     app.use(installProductionRequestMetrics);
   }
 
+  app.use(markAccountRequestStage("http.prebody_guard"));
   app.use(preBodyRequestGuard);
+  app.use(markAccountRequestStage("http.trusted_client_ip"));
   app.use(trustedClientIpMiddleware);
+  app.use(markAccountRequestStage("http.rate_limit_log"));
   app.use(rateLimitLogMiddleware);
-  app.use(cors({
-    origin(origin, callback) {
-      if (!origin) return callback(null, true);
-      const normalizedOrigin = origin.replace(/\/$/, "");
-      if (config.corsOrigins.includes(normalizedOrigin)) return callback(null, true);
-      return callback(new Error("Origine CORS non autorisée"));
-    },
-    credentials: true,
+  app.use(markAccountRequestStage("http.cors"));
+  app.use(cors((req, callback) => {
+    const origin = normalizeOrigin(req.headers?.origin);
+
+    // Certains navigateurs/webviews ouverts depuis un e-mail soumettent le
+    // formulaire de confirmation avec une origine opaque ("null"). Le jeton
+    // secret présent dans l'URL authentifie cette action ; on ne désactive
+    // CORS que pour ce cas précis, jamais pour une origine externe réelle.
+    if (origin === "null" && isTokenConfirmationFormPost(req)) {
+      return callback(null, { origin: false, credentials: false });
+    }
+
+    if (!origin) return callback(null, { origin: true, credentials: true });
+
+    const requestOrigin = publicRequestOrigin(req);
+    const configuredOrigins = config.corsOrigins.map(normalizeOrigin);
+    if (origin === requestOrigin || configuredOrigins.includes(origin)) {
+      return callback(null, { origin, credentials: true });
+    }
+
+    const error = new Error("Origine CORS non autorisée");
+    error.status = 403;
+    return callback(error);
   }));
+  app.use(markAccountRequestStage("http.json_body_parser"));
   app.use(express.json({ limit: config.maxJsonBodySize }));
+  app.use(markAccountRequestStage("http.json_body_parsed"));
 
   const authRateLimit = createRateLimiter({ keyPrefix: "auth", windowMs: 15 * 60 * 1000, max: 20, getClientIp });
   const resetRateLimit = createRateLimiter({ keyPrefix: "reset", windowMs: 60 * 60 * 1000, max: 10, getClientIp });
@@ -204,10 +291,12 @@ export function installHttpStack(app, config, { isSafeMethod, getClientIp }) {
     getClientIp,
   });
 
+  app.use(markAccountRequestStage("http.write_rate_limit"));
   app.use((req, res, next) => {
     if (isSafeMethod(req.method)) return next();
     return writeRateLimit(req, res, next);
   });
+  app.use(markAccountRequestStage("http.route_dispatch"));
 
   return { authRateLimit, resetRateLimit };
 }

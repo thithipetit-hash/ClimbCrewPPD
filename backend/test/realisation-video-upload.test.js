@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const sourceUrl = new URL("../realisation-management-routes.js", import.meta.url);
+const policyUrl = new URL("../video-upload-policy.js", import.meta.url);
 
 test("le chargement vidéo d'une réalisation reste limité au propriétaire et transactionnel", async () => {
   const source = await readFile(sourceUrl, "utf8");
@@ -21,12 +22,13 @@ test("le chargement vidéo d'une réalisation reste limité au propriétaire et 
 
 test("le chargement vidéo contrôle format, taille et journalisation", async () => {
   const source = await readFile(sourceUrl, "utf8");
+  const policy = await readFile(policyUrl, "utf8");
 
-  assert.match(source, /LOCAL_VIDEO_MAX_BYTES = 50 \* 1024 \* 1024/);
-  assert.match(source, /video\/mp4/);
-  assert.match(source, /video\/webm/);
-  assert.match(source, /video\/ogg/);
-  assert.match(source, /video\/quicktime/);
+  assert.match(policy, /LOCAL_VIDEO_MAX_BYTES = 50 \* 1024 \* 1024/);
+  assert.match(policy, /video\/mp4/);
+  assert.match(policy, /video\/webm/);
+  assert.match(policy, /video\/ogg/);
+  assert.match(policy, /video\/quicktime/);
   assert.match(source, /'realisation_video_upload'/);
   assert.match(source, /realisation_id: realisationId/);
   assert.match(source, /route_id: realisation\.voie_id/);

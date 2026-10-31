@@ -1,4 +1,5 @@
 import { getPool } from "./database.js";
+import { getFfmeAgeCategory } from "../../shared/ffme-age-categories.js";
 
 // Marqueur compact conservé pour compatibilité avec le flux de mise à jour du
 // frontend. Il remplace l'ancien contenu Base64 dans les réponses JSON.
@@ -59,7 +60,11 @@ export function serializeParticipant(row) {
     prenom: row.prenom,
     email: row.login_email || row.email || "",
     passport: row.passport,
+    passportDecouverte: Boolean(row.passport_decouverte),
+    passeportFfme: Boolean(row.passeport_ffme),
     sexe: row.sexe,
+    anneeNaissance: row.annee_naissance ?? null,
+    categorieFfme: getFfmeAgeCategory(row.annee_naissance),
     cotisation: Boolean(row.cotisation),
     ffme: Boolean(row.ffme),
     initiateurSae: Boolean(row.initiateur_sae),
@@ -67,9 +72,23 @@ export function serializeParticipant(row) {
     canEncadrer: Boolean(row.can_encadrer),
     canReferer: Boolean(row.can_referer),
     canAdmin: Boolean(row.can_admin),
+    accountAssociated: Boolean(row.account_associated),
     avatarId: row.avatar_id || "gecko",
     crestId: row.crest_id || "cristal",
     profilePublic: row.profile_public !== false,
+    cprResetAt: row.cpr_reset_at || null,
+    heightCm: row.height_cm == null ? null : Number(row.height_cm),
+    weightKg: row.weight_kg == null ? null : Number(row.weight_kg),
+    armSpanCm: row.arm_span_cm == null ? null : Number(row.arm_span_cm),
+    standingReachCm: row.standing_reach_cm == null ? null : Number(row.standing_reach_cm),
+    gripStrengthRightKg: row.grip_strength_right_kg == null ? null : Number(row.grip_strength_right_kg),
+    gripStrengthLeftKg: row.grip_strength_left_kg == null ? null : Number(row.grip_strength_left_kg),
+    hang20mmSeconds: row.hang_20mm_seconds == null ? null : Number(row.hang_20mm_seconds),
+    jugHangSeconds: row.jug_hang_seconds == null ? null : Number(row.jug_hang_seconds),
+    strictPullups: row.strict_pullups == null ? null : Number(row.strict_pullups),
+    flexedArmHangSeconds: row.flexed_arm_hang_seconds == null ? null : Number(row.flexed_arm_hang_seconds),
+    weightedPullupKg: row.weighted_pullup_kg == null ? null : Number(row.weighted_pullup_kg),
+    hipMobilityCm: row.hip_mobility_cm == null ? null : Number(row.hip_mobility_cm),
     ...avatarMetadata(row),
   };
 }
@@ -89,7 +108,10 @@ export function serializePublicParticipant(row) {
     prenom: row.prenom,
     email: "",
     passport: row.passport,
+    passportDecouverte: Boolean(row.passport_decouverte),
+    passeportFfme: Boolean(row.passeport_ffme),
     sexe: row.sexe,
+    categorieFfme: getFfmeAgeCategory(row.annee_naissance),
     cotisation: Boolean(row.cotisation),
     ffme: Boolean(row.ffme),
     initiateurSae: Boolean(row.initiateur_sae),
@@ -100,6 +122,17 @@ export function serializePublicParticipant(row) {
     avatarId: row.avatar_id || "gecko",
     crestId: row.crest_id || "cristal",
     profilePublic: true,
+    cprResetAt: row.cpr_reset_at || null,
+    heightCm: row.height_cm == null ? null : Number(row.height_cm),
+    weightKg: row.weight_kg == null ? null : Number(row.weight_kg),
+    armSpanCm: row.arm_span_cm == null ? null : Number(row.arm_span_cm),
+    standingReachCm: row.standing_reach_cm == null ? null : Number(row.standing_reach_cm),
+    gripStrengthRightKg: row.grip_strength_right_kg == null ? null : Number(row.grip_strength_right_kg),
+    gripStrengthLeftKg: row.grip_strength_left_kg == null ? null : Number(row.grip_strength_left_kg),
+    hang20mmSeconds: row.hang_20mm_seconds == null ? null : Number(row.hang_20mm_seconds),
+    strictPullups: row.strict_pullups == null ? null : Number(row.strict_pullups),
+    weightedPullupKg: row.weighted_pullup_kg == null ? null : Number(row.weighted_pullup_kg),
+    hipMobilityCm: row.hip_mobility_cm == null ? null : Number(row.hip_mobility_cm),
     ...avatarMetadata(row),
   };
 }
@@ -119,6 +152,8 @@ export function serializePrivateParticipant(row) {
     prenom: row.prenom,
     email: "",
     passport: row.passport,
+    passportDecouverte: Boolean(row.passport_decouverte),
+    passeportFfme: Boolean(row.passeport_ffme),
     sexe: "",
     cotisation: Boolean(row.cotisation),
     ffme: Boolean(row.ffme),
@@ -149,10 +184,14 @@ export async function listParticipantsWithPrivacy(req, res) {
   try {
     const result = await getPool().query(`
       select
-        id, nom, prenom, email, login_email, passport, sexe, cotisation, ffme,
+        id, nom, prenom, email, login_email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme,
+        annee_naissance,
         initiateur_sae, initiateur_sne,
         can_encadrer, can_referer, can_admin, avatar_id, crest_id,
-        profile_public,
+        exists(select 1 from users u where u.participant_id::text = participants.id::text) as account_associated,
+        profile_public, cpr_reset_at, height_cm, weight_kg, arm_span_cm, standing_reach_cm,
+        grip_strength_right_kg, grip_strength_left_kg, hang_20mm_seconds, jug_hang_seconds, strict_pullups,
+        flexed_arm_hang_seconds, weighted_pullup_kg, hip_mobility_cm,
         (coalesce(custom_avatar_image, '') <> '') as has_custom_avatar
       from participants
       order by prenom asc, nom asc
@@ -209,14 +248,27 @@ export async function listRealisationsWithPrivacy(req, res) {
           r.session_id as "sessionId",
           r.voie_id as "voieId",
           r.date_realisation as "dateRealisation",
+          r.created_at as "createdAt",
           r.style_realisation as "styleRealisation",
           r.commentaire,
           r.cotation_proposee as "cotationProposee",
           r.nb_essais as "nbEssais",
+          r.mode_realisation as "modeRealisation",
           r.rating,
           r.chute,
           r.assureur_id as "assureurId",
-          r.video_urls as "videoUrls"
+          r.video_urls as "videoUrls",
+          (select count(*)::integer from realisation_kudos k where k.realisation_id = r.id) as "kudosCount",
+          array(
+            select k.participant_id::text
+            from realisation_kudos k
+            where k.realisation_id = r.id
+            order by k.created_at asc, k.participant_id asc
+          ) as "kudosParticipantIds",
+          exists(
+            select 1 from realisation_kudos k
+            where k.realisation_id = r.id and k.participant_id::text = $2
+          ) as "kudosByMe"
         from realisations r
         left join participants p on p.id::text = r.participant_id::text
         where $1::boolean = true

@@ -36,7 +36,8 @@ test("l'activation est refusée sans participant et compte administrateurs actif
 
 test("la confirmation e-mail utilise le service de notification configurable sans auto-activer le compte", () => {
   assert.match(routes, /verifyEmailPendingAdminApproval/);
-  assert.match(routes, /app\.get\("\/auth\/verify-email", verifyEmailPendingAdminApproval\)/);
+  assert.match(routes, /app\.get\("\/auth\/verify-email", showVerifyEmailConfirmation\)/);
+  assert.match(routes, /app\.post\("\/auth\/verify-email", verifyEmailPendingAdminApproval\)/);
   assert.match(approvalFlow, /notifyAccountRequestReviewers/);
   assert.match(service, /notifyAccountRequestReviewers/);
   assert.doesNotMatch(approvalFlow, /status = case when status = 'pending' then 'active'/);
