@@ -348,6 +348,7 @@ export default function Profil({
               <span className="pill">Passeport FFME : {selectedParticipant.passeportFfme ? "Oui" : "Non"}</span>
               <span className="pill">Cotisation : {selectedParticipant.cotisation ? "Oui" : "Non"}</span>
               <span className="pill">Licence FFME : {selectedParticipant.ffme ? "Oui" : "Non"}</span>
+              {selectedParticipant.categorieFfme && <span className="pill">Catégorie FFME : {selectedParticipant.categorieFfme}</span>}
               <span className="pill">Sexe : {selectedParticipant.sexe ? String(selectedParticipant.sexe).toUpperCase() : "Non précisé"}</span>
             </div>
           </div>
