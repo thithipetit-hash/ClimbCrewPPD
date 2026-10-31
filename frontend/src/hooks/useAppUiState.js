@@ -33,6 +33,7 @@ export function useAppUiState({ useApi }) {
   const [statsSortField, setStatsSortField] = useState("name");
   const [statsSortDirection, setStatsSortDirection] = useState("asc");
   const [wallOfFameSexFilter, setWallOfFameSexFilter] = useState("all");
+  const [wallOfFameAgeFilter, setWallOfFameAgeFilter] = useState("all");
   const [recentlyAddedParticipantIds, setRecentlyAddedParticipantIds] = useState([]);
   const [adminInput, setAdminInput] = useState("");
   const [adminUnlocked, setAdminUnlocked] = useState(false);
@@ -46,7 +47,8 @@ export function useAppUiState({ useApi }) {
   return {
     tab, setTab, viewMode, setViewMode, sidebarOpen, setSidebarOpen,
     statsSortField, setStatsSortField, statsSortDirection, setStatsSortDirection,
-    wallOfFameSexFilter, setWallOfFameSexFilter, recentlyAddedParticipantIds, setRecentlyAddedParticipantIds,
+    wallOfFameSexFilter, setWallOfFameSexFilter, wallOfFameAgeFilter, setWallOfFameAgeFilter,
+    recentlyAddedParticipantIds, setRecentlyAddedParticipantIds,
     adminInput, setAdminInput, adminUnlocked, setAdminUnlocked, adminError, setAdminError,
     routeError, setRouteError, importMessage, setImportMessage, syncMessage, setSyncMessage,
     confirmationMessage, setConfirmationMessage, isSyncing, setIsSyncing,
