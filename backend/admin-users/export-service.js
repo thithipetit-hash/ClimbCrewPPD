@@ -36,6 +36,7 @@ function serializeParticipant(row) {
     passportDecouverte: Boolean(row.passport_decouverte),
     passeportFfme: Boolean(row.passeport_ffme),
     sexe: row.sexe || "",
+    anneeNaissance: row.annee_naissance ?? null,
     cotisation: Boolean(row.cotisation),
     ffme: Boolean(row.ffme),
     initiateurSae: Boolean(row.initiateur_sae),
