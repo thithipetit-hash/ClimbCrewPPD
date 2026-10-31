@@ -29,6 +29,21 @@ test("valide et normalise un participant", () => {
   assert.equal(participant.passportDecouverte, false);
 });
 
+test("l'année de naissance d'un participant adulte est facultative et contrôlée", () => {
+  const base = { nom: "Martin", prenom: "Alice", passport: "sans" };
+  assert.equal(validateParticipantPayload(base).anneeNaissance, null);
+  const year = new Date().getUTCFullYear() - 40;
+  assert.equal(validateParticipantPayload({ ...base, anneeNaissance: String(year) }).anneeNaissance, year);
+  assert.throws(
+    () => validateParticipantPayload({ ...base, anneeNaissance: new Date().getUTCFullYear() - 17 }),
+    /participants majeurs/,
+  );
+  assert.throws(
+    () => validateParticipantPayload({ ...base, anneeNaissance: "inconnue" }),
+    ValidationError,
+  );
+});
+
 test("sépare la couleur du passeport de l'option Découverte", () => {
   for (const passport of ["sans", "jaune", "orange", "bleu", "vert"]) {
     const participant = validateParticipantPayload({
