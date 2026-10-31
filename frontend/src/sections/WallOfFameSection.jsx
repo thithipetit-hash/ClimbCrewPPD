@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { fullName } from "../lib/domain.js";
 import { buildKudoRanking } from "../lib/kudo-ranking.js";
+import { FFME_ADULT_CATEGORIES } from "../../../shared/ffme-age-categories.js";
+import { UNSPECIFIED_FFME_CATEGORY } from "../lib/wall-of-fame-filters.js";
 
 export default function WallOfFameSection({
   wallOfFameCategories,
@@ -11,6 +13,8 @@ export default function WallOfFameSection({
   normalizePassport,
   wallOfFameSexFilter,
   setWallOfFameSexFilter,
+  wallOfFameAgeFilter,
+  setWallOfFameAgeFilter,
 }) {
   const [expandedCategories, setExpandedCategories] = useState({});
   const [kudoMetric, setKudoMetric] = useState("received");
@@ -63,6 +67,18 @@ export default function WallOfFameSection({
             <option value="all">Tous</option>
             <option value="h">H</option>
             <option value="f">F</option>
+          </select>
+          <select
+            id="wall-of-fame-age-filter"
+            aria-label="Filtrer le Tableau d’honneur par catégorie FFME"
+            value={wallOfFameAgeFilter}
+            onChange={(event) => setWallOfFameAgeFilter(event.target.value)}
+          >
+            <option value="all">Toutes les catégories</option>
+            {FFME_ADULT_CATEGORIES.map((category) => (
+              <option key={category} value={category}>{category}</option>
+            ))}
+            <option value={UNSPECIFIED_FFME_CATEGORY}>Non renseignée</option>
           </select>
         </div>
       </div>
