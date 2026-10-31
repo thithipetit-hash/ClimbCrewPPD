@@ -45,6 +45,7 @@ export default function Progression({
   toggleAllProgressRealisations,
   allRealisations,
   myParticipantId,
+  isAdmin = false,
   onKudosChanged,
 }) {
   const defaultParticipantApplied = React.useRef(false);
@@ -115,7 +116,7 @@ export default function Progression({
 
       <div className="card" style={{ marginTop: 12 }}>
         <div className="card-header progression-entry-actions">
-          <Button onClick={() => openRealisationModal("", myParticipantId)} disabled={!myParticipantId}>Nouvelle réalisation</Button>
+          <Button onClick={() => openRealisationModal("", isAdmin ? selectedParticipantProgress : myParticipantId)} disabled={!myParticipantId && !isAdmin}>Nouvelle réalisation</Button>
         </div>
       </div>
 
@@ -166,7 +167,7 @@ export default function Progression({
             const route = routesById[realisation.voieId];
             const availableSessionsForRealisation = getParticipantSessions(realisation.participantId);
             const displayedRating = ratingStars(realisation.rating);
-            const canEditRealisation = String(realisation.participantId) === String(myParticipantId);
+            const canEditRealisation = isAdmin || String(realisation.participantId) === String(myParticipantId);
             const isIncludedInCpr = Boolean(cprByParticipantId[realisation.participantId]?.timeline.some((performance) => String(performance.id) === String(realisation.id)));
             const modeRealisation = getRealisationMode(realisation, route);
             const criterionRealisation = getRealisationCriterion(realisation);
