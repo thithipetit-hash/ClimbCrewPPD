@@ -161,9 +161,9 @@ export async function importBusinessDataSafely(req, res) {
           insert into participants (
             nom, prenom, email, login_email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme,
             initiateur_sae, initiateur_sne, can_encadrer, can_referer, can_admin,
-            avatar_id, crest_id, profile_public, custom_avatar_image
+            avatar_id, crest_id, profile_public, custom_avatar_image, annee_naissance
           )
-          values ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,false,$14,$15,$16,$17)
+          values ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,false,$14,$15,$16,$17,$18)
           returning id
         `,
         [
@@ -184,6 +184,7 @@ export async function importBusinessDataSafely(req, res) {
           String(participant.crestId || participant.crest_id || "cristal"),
           participant.profilePublic !== false && participant.profile_public !== false,
           String(participant.customAvatarImage || participant.custom_avatar_image || ""),
+          participant.anneeNaissance,
         ],
       );
       participantIdMap.set(String(participant.id), String(result.rows[0].id));
