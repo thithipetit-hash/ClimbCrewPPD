@@ -9,6 +9,8 @@ export default function WallOfFame({
   normalizePassport,
   wallOfFameSexFilter,
   setWallOfFameSexFilter,
+  wallOfFameAgeFilter,
+  setWallOfFameAgeFilter,
 }) {
   const [kudoStats, setKudoStats] = React.useState([]);
   const [kudoStatsError, setKudoStatsError] = React.useState("");
@@ -42,6 +44,8 @@ export default function WallOfFame({
       normalizePassport={normalizePassport}
       wallOfFameSexFilter={wallOfFameSexFilter}
       setWallOfFameSexFilter={setWallOfFameSexFilter}
+      wallOfFameAgeFilter={wallOfFameAgeFilter}
+      setWallOfFameAgeFilter={setWallOfFameAgeFilter}
     />
   );
 }
