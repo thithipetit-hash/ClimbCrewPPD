@@ -55,7 +55,9 @@ test("le Wall of Fame peut être filtré par sexe", async () => {
   const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   const wallOfFame = await readFile(new URL("../src/sections/WallOfFameSection.jsx", import.meta.url), "utf8");
 
-  assert.match(source, /wallOfFameSexFilter === "all" \|\| participant\.sexe === wallOfFameSexFilter/);
+  const filters = await readFile(new URL("../src/lib/wall-of-fame-filters.js", import.meta.url), "utf8");
+  assert.match(source, /filterWallOfFameParticipants\(state\.participants/);
+  assert.match(filters, /sex !== "all" && participant\.sexe !== sex/);
   assert.match(wallOfFame, /id="wall-of-fame-sex-filter"/);
   assert.match(wallOfFame, /<option value="all">Tous<\/option>/);
   assert.match(wallOfFame, /<option value="h">H<\/option>/);
