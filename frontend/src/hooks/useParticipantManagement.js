@@ -10,6 +10,7 @@ const EMPTY_PARTICIPANT_DRAFT = {
   passportDecouverte: false,
   passeportFfme: false,
   sexe: "",
+  anneeNaissance: null,
   cotisation: false,
   ffme: false,
   canEncadrer: false,
