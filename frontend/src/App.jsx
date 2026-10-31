@@ -85,6 +85,7 @@ import {
   resolveSessionIdForRealisation,
 } from "./lib/realisation-workflow.js";
 import { normalizeSessionRoles } from "../../shared/session-rules.js";
+import { filterWallOfFameParticipants } from "./lib/wall-of-fame-filters.js";
 
 const ADMIN_CODE = import.meta.env.VITE_LEGACY_ADMIN_CODE || "";
 
@@ -96,6 +97,7 @@ function App() {
     statsSortField, setStatsSortField,
     statsSortDirection, setStatsSortDirection,
     wallOfFameSexFilter, setWallOfFameSexFilter,
+    wallOfFameAgeFilter, setWallOfFameAgeFilter,
     recentlyAddedParticipantIds, setRecentlyAddedParticipantIds,
     adminInput, setAdminInput,
     adminUnlocked, setAdminUnlocked,
@@ -600,16 +602,17 @@ function App() {
 
   const wallOfFameCategories = useMemo(
     () => calculateWallOfFameCategories({
-      participants: state.participants.filter((participant) => (
-        wallOfFameSexFilter === "all" || participant.sexe === wallOfFameSexFilter
-      )),
+      participants: filterWallOfFameParticipants(state.participants, {
+        sex: wallOfFameSexFilter,
+        ageCategory: wallOfFameAgeFilter,
+      }),
       realisations: state.realisations,
       routesById,
       cprByParticipantId,
       pointsByParticipantId,
       participationCount: sessionStats.participationCount,
     }),
-    [state.participants, state.realisations, routesById, cprByParticipantId, pointsByParticipantId, sessionStats.participationCount, wallOfFameSexFilter],
+    [state.participants, state.realisations, routesById, cprByParticipantId, pointsByParticipantId, sessionStats.participationCount, wallOfFameSexFilter, wallOfFameAgeFilter],
   );
 
   function setSelectedDate(date) {
@@ -1500,6 +1503,8 @@ async function handleThemePreferenceChange(nextTheme) {
             normalizePassport={normalizePassport}
             wallOfFameSexFilter={wallOfFameSexFilter}
             setWallOfFameSexFilter={setWallOfFameSexFilter}
+            wallOfFameAgeFilter={wallOfFameAgeFilter}
+            setWallOfFameAgeFilter={setWallOfFameAgeFilter}
           />
         )}
 
