@@ -26,7 +26,7 @@ export function createRealisationPersistenceActions({
 
   function deleteRealisation(realisation) {
     if (!realisation?.id) return;
-    if (String(realisation.participantId) !== String(myParticipantId)) {
+    if (authUser?.role !== "admin" && String(realisation.participantId) !== String(myParticipantId)) {
       onError?.("Erreur : vous pouvez supprimer uniquement vos propres réalisations.");
       return;
     }
@@ -78,7 +78,7 @@ export function useRealisationPersistence({
 }) {
   return async function updateRealisation(realisationId, patch) {
     const target = state.realisations.find((item) => String(item.id) === String(realisationId));
-    if (!target || String(target.participantId) !== String(myParticipantId)) {
+    if (!target || (authUser?.role !== "admin" && String(target.participantId) !== String(myParticipantId))) {
       onError?.("Erreur : vous pouvez modifier uniquement vos propres réalisations.");
       return;
     }
