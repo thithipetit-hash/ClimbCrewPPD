@@ -139,7 +139,7 @@ export async function updateOwnParticipantProfile(req, res) {
             hip_mobility_cm = case when $30::boolean then $31 else hip_mobility_cm end
         where id = $1
         returning
-          id, nom, prenom, email, login_email, passport, sexe, cotisation, ffme,
+          id, nom, prenom, email, login_email, passport, sexe, cotisation, ffme, annee_naissance,
           initiateur_sae, initiateur_sne,
           can_encadrer, can_referer, can_admin, avatar_id, crest_id, profile_public, cpr_reset_at,
           height_cm, weight_kg, arm_span_cm, standing_reach_cm, grip_strength_right_kg,

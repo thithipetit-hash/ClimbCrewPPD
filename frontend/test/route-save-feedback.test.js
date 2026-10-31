@@ -51,7 +51,7 @@ test("les réalisations sont repliables et la voie est choisie dans la fenêtre"
   const source = await readFile(new URL("../src/pages/Progression.jsx", import.meta.url), "utf8");
   assert.match(source, /<details className="subcard editable-realisation-card progression-realisation-card"/);
   assert.match(source, /<summary className="card-header realisation-summary progression-realisation-summary">/);
-  assert.match(source, /openRealisationModal\("", myParticipantId\)/);
+  assert.match(source, /openRealisationModal\("", isAdmin \? selectedParticipantProgress : myParticipantId\)/);
   assert.doesNotMatch(source, /progressEntryRouteId/);
   assert.match(source, /!selectedParticipantProgress && `\$\{fullName\(participant\)\} — `/);
   assert.match(source, /\{\(selectedParticipantProgress \|\| selectedRouteProgress\) && <div className="card"/);

@@ -56,6 +56,19 @@ test("la date doit être celle de la séance", async () => {
   );
 });
 
+test("un binôme reste facultatif hors vol mais doit être inscrit s'il est renseigné", async () => {
+  await assert.doesNotReject(
+    assertRealisationIntegrity({ pool: poolFor(), realisation: base, participantId: "1" }),
+  );
+  await assert.rejects(
+    assertRealisationIntegrity({ pool: poolFor({ belayer: false }), realisation: { ...base, assureurId: "2" }, participantId: "1" }),
+    /même séance/,
+  );
+  await assert.doesNotReject(
+    assertRealisationIntegrity({ pool: poolFor(), realisation: { ...base, assureurId: "2" }, participantId: "1" }),
+  );
+});
+
 test("un vol exige un assureur distinct inscrit à la même séance", async () => {
   await assert.rejects(
     assertRealisationIntegrity({ pool: poolFor(), realisation: { ...base, chute: true, assureurId: "1" }, participantId: "1" }),

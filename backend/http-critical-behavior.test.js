@@ -140,7 +140,7 @@ test("HTTP réalisations : POST, PUT et DELETE appliquent l'identité authentifi
       const normalized = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
       calls.push({ sql: normalized, params });
       if (normalized.startsWith("delete from realisations")) {
-        const owned = params[0] === "owned" && String(params[1]) === "7";
+        const owned = params[0] === "owned" && params[1] === false && String(params[2]) === "7";
         return { rows: [], rowCount: owned ? 1 : 0 };
       }
       if (normalized.includes("select id from routes where id = $1")) {
@@ -152,7 +152,7 @@ test("HTTP réalisations : POST, PUT et DELETE appliquent l'identité authentifi
       if (normalized.startsWith("insert into realisations")) {
         return { rows: [], rowCount: 1 };
       }
-      if (normalized.includes("from realisations") && normalized.includes("participant_id = $2")) {
+      if (normalized.includes("from realisations") && normalized.includes("participant_id::text = $3")) {
         return { rows: [], rowCount: 0 };
       }
       throw new Error(`Requête PostgreSQL inattendue dans le test réalisation : ${normalized}`);
@@ -207,5 +207,5 @@ test("HTTP réalisations : POST, PUT et DELETE appliquent l'identité authentifi
   assert.equal(String(insertCall?.params?.[1]), "7");
 
   const deleteCalls = calls.filter((call) => call.sql.startsWith("delete from realisations"));
-  assert.deepEqual(deleteCalls.map((call) => call.params), [["owned", "7"], ["other", "7"]]);
+  assert.deepEqual(deleteCalls.map((call) => call.params), [["owned", false, "7"], ["other", false, "7"]]);
 });

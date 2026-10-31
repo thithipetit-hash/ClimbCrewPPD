@@ -193,8 +193,11 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
 
   app.post("/realisations", requireAuth, async (req, res) => {
     try {
-      const participantId = req.auth?.user?.participantId;
-      if (!participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
+      const isAdmin = req.auth?.user?.role === "admin";
+      const participantId = isAdmin
+        ? (req.body?.participantId || req.auth?.user?.participantId)
+        : req.auth?.user?.participantId;
+      if (!participantId) return res.status(403).json({ error: "Choisissez un grimpeur pour cette réalisation." });
       const realisation = validateRealisationPayload({
         ...(req.body || {}),
         participantId: String(participantId),
@@ -555,26 +558,28 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
   app.put("/realisations/:id", requireAuth, async (req, res) => {
     try {
       const participantId = req.auth?.user?.participantId;
-      if (!participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
+      const isAdmin = req.auth?.user?.role === "admin";
+      if (!isAdmin && !participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
       const patch = validateRealisationPayload(req.body || {}, { partial: true });
       delete patch.participantId;
 
       const currentResult = await pool.query(
         `
-          select session_id, voie_id, date_realisation, chute, assureur_id, video_urls
+          select participant_id, session_id, voie_id, date_realisation, chute, assureur_id, video_urls
           from realisations
-          where id = $1 and participant_id = $2
+          where id = $1 and ($2::boolean or participant_id::text = $3)
           limit 1
         `,
-        [req.params.id, participantId],
+        [req.params.id, isAdmin, String(participantId || "")],
       );
       if (currentResult.rowCount === 0) {
         return res.status(403).json({ error: "Cette réalisation ne vous appartient pas" });
       }
 
       const current = currentResult.rows[0];
-      const candidate = rowToIntegrityCandidate(current, patch, participantId);
-      await assertRealisationIntegrity({ pool, realisation: candidate, participantId });
+      const ownerParticipantId = String(current.participant_id);
+      const candidate = rowToIntegrityCandidate(current, patch, ownerParticipantId);
+      await assertRealisationIntegrity({ pool, realisation: candidate, participantId: ownerParticipantId });
 
       let videoUrlsForUpdate = null;
       if (req.body?.videoUrls !== undefined) {
@@ -608,7 +613,7 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
           patch.styleRealisation ?? null, patch.commentaire ?? null, patch.cotationProposee ?? null,
           patch.nbEssais ?? null, patch.modeRealisation ?? null, patch.rating ?? null, patch.chute ?? null,
           patch.assureurId ?? null, videoUrlsForUpdate === null ? null : JSON.stringify(videoUrlsForUpdate),
-          participantId,
+          ownerParticipantId,
         ],
       );
       if (result.rowCount === 0) return res.status(403).json({ error: "Cette réalisation ne vous appartient pas" });
@@ -658,10 +663,11 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
   app.delete("/realisations/:id", requireAuth, async (req, res) => {
     try {
       const participantId = req.auth?.user?.participantId;
-      if (!participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
+      const isAdmin = req.auth?.user?.role === "admin";
+      if (!isAdmin && !participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
       const result = await pool.query(
-        `delete from realisations where id = $1 and participant_id = $2`,
-        [req.params.id, participantId],
+        `delete from realisations where id = $1 and ($2::boolean or participant_id::text = $3)`,
+        [req.params.id, isAdmin, String(participantId || "")],
       );
       if (result.rowCount === 0) return res.status(403).json({ error: "Cette réalisation ne vous appartient pas" });
       res.json({ ok: true });

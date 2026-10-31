@@ -1,4 +1,5 @@
 import { validateParticipantPayload } from "./validation.js";
+import { getFfmeAgeCategory } from "../shared/ffme-age-categories.js";
 
 function participantDbToApi(row) {
   return {
@@ -10,6 +11,8 @@ function participantDbToApi(row) {
     passportDecouverte: Boolean(row.passport_decouverte),
     passeportFfme: Boolean(row.passeport_ffme),
     sexe: row.sexe || "",
+    anneeNaissance: row.annee_naissance ?? null,
+    categorieFfme: getFfmeAgeCategory(row.annee_naissance),
     cotisation: row.cotisation,
     ffme: row.ffme,
     canEncadrer: row.can_encadrer,
@@ -34,6 +37,7 @@ export function installParticipantCreationRoute(app, { requireAuth, requireAdmin
         passportDecouverte,
         passeportFfme,
         sexe,
+        anneeNaissance,
         cotisation,
         ffme,
         canEncadrer,
@@ -47,9 +51,9 @@ export function installParticipantCreationRoute(app, { requireAuth, requireAdmin
       const result = await pool.query(
         `
           insert into participants
-          (nom, prenom, email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme, can_encadrer, can_referer, can_admin, avatar_id, crest_id, profile_public)
-          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-          returning id, nom, prenom, email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme, can_encadrer, can_referer, can_admin, avatar_id, crest_id, profile_public
+          (nom, prenom, email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme, can_encadrer, can_referer, can_admin, avatar_id, crest_id, profile_public, annee_naissance)
+          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          returning id, nom, prenom, email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme, can_encadrer, can_referer, can_admin, avatar_id, crest_id, profile_public, annee_naissance
         `,
         [
           nom,
@@ -67,6 +71,7 @@ export function installParticipantCreationRoute(app, { requireAuth, requireAdmin
           avatarId,
           crestId,
           profilePublic,
+          anneeNaissance,
         ]
       );
 

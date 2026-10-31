@@ -20,6 +20,7 @@ export default function RealisationModal({
   onClose,
   onSubmit,
   saving = false,
+  isAdmin = false,
 }) {
   const forcedMoulinette = Boolean(route?.moulinetteOnly);
   const selectedMode = forcedMoulinette
@@ -63,6 +64,26 @@ export default function RealisationModal({
         </div>
 
         <div className="grid three">
+          {isAdmin && (
+            <div>
+              <label>Grimpeur</label>
+              <select
+                value={newRealisation.participantId}
+                onChange={(event) => setNewRealisation((prev) => ({
+                  ...prev,
+                  participantId: event.target.value,
+                  selectedDay: "",
+                  sessionId: "",
+                  assureurId: "",
+                }))}
+              >
+                <option value="">Choisir un grimpeur</option>
+                {eligibleParticipants.map((participant) => (
+                  <option key={participant.id} value={participant.id}>{fullName(participant)}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label>Jour</label>
             <select
@@ -85,12 +106,13 @@ export default function RealisationModal({
           </div>
 
           <div>
-            <label>Binôme</label>
+            <label>Binôme {newRealisation.chute ? "(obligatoire en cas de vol)" : "(facultatif)"}</label>
             <select
+              required={Boolean(newRealisation.chute)}
               value={newRealisation.assureurId}
               onChange={(event) => setNewRealisation((prev) => ({ ...prev, assureurId: event.target.value }))}
             >
-              <option value="">Choisir le binôme</option>
+              <option value="">Aucun binôme</option>
               {eligibleBelayers.length === 0 ? (
                 <option value="" disabled>Aucun binôme éligible</option>
               ) : (
@@ -100,7 +122,7 @@ export default function RealisationModal({
               )}
             </select>
             <div className="small" style={{ marginTop: 6, color: "inherit" }}>
-              La réalisation est automatiquement attribuée au détenteur du compte.
+              {isAdmin ? "La réalisation est attribuée au grimpeur sélectionné." : "La réalisation est attribuée à votre compte."}
             </div>
           </div>
 
@@ -216,7 +238,7 @@ export default function RealisationModal({
           <Button
             onClick={onSubmit}
             aria-busy={saving}
-            disabled={saving || !newRealisation.selectedDay || !newRealisation.participantId || !newRealisation.voieId || !newRealisation.assureurId || eligibleParticipants.length === 0}
+            disabled={saving || !newRealisation.selectedDay || !newRealisation.participantId || !newRealisation.voieId || (newRealisation.chute && !newRealisation.assureurId) || eligibleParticipants.length === 0}
           >
             {saving ? "Enregistrement…" : "Enregistrer"}
           </Button>

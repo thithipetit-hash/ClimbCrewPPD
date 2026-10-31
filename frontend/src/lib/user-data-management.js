@@ -1,4 +1,5 @@
 import { PASSPORT_OPTIONS } from "../../../shared/passports.js";
+import { FFME_ADULT_CATEGORIES, getFfmeAgeCategory } from "../../../shared/ffme-age-categories.js";
 
 export const USER_DATA_BOOLEAN_KEYS = new Set([
   "accountAssociated",
@@ -19,6 +20,8 @@ export const USER_DATA_COLUMNS = [
   ["email", "E-mail"],
   ["accountAssociated", "Compte associé"],
   ["sexe", "Sexe"],
+  ["anneeNaissance", "Année naissance"],
+  ["categorieFfme", "Catégorie FFME"],
   ["passport", "Couleur passeport"],
   ["passportDecouverte", "Découverte"],
   ["passeportFfme", "Passeport FFME"],
@@ -37,6 +40,7 @@ export const USER_DATA_PASSPORT_OPTIONS = PASSPORT_OPTIONS;
 export const USER_DATA_FILTER_CHOICES = {
   sexe: [["h", "H"], ["f", "F"]],
   passport: PASSPORT_OPTIONS.map(({ value, label }) => [value, label]),
+  categorieFfme: FFME_ADULT_CATEGORIES.map((label) => [label, label]),
 };
 
 export const USER_DATA_COLUMN_WIDTHS = {
@@ -45,6 +49,8 @@ export const USER_DATA_COLUMN_WIDTHS = {
   email: "15%",
   accountAssociated: "6%",
   sexe: "4%",
+  anneeNaissance: "6%",
+  categorieFfme: "7%",
   passport: "7%",
   passportDecouverte: "6%",
   passeportFfme: "6%",
@@ -64,6 +70,9 @@ export function yesNo(value) {
 
 export function displayUserDataValue(participant, key) {
   if (USER_DATA_BOOLEAN_KEYS.has(key)) return yesNo(Boolean(participant[key]));
+  if (key === "categorieFfme") {
+    return getFfmeAgeCategory(participant.anneeNaissance) || "Non renseignée";
+  }
   if (key === "sexe") {
     if (participant[key] === "h") return "H";
     if (participant[key] === "f") return "F";
@@ -89,6 +98,7 @@ export function buildParticipantUpdatePayload(participant, draft) {
     prenom: String(draft.prenom || "").trim(),
     email: String(draft.email || "").trim(),
     sexe: draft.sexe || "",
+    anneeNaissance: draft.anneeNaissance === "" ? null : (draft.anneeNaissance ?? null),
     passport: draft.passport || "sans",
     passportDecouverte: Boolean(draft.passportDecouverte),
     passeportFfme: Boolean(draft.passeportFfme),

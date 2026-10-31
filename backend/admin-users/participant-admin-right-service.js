@@ -140,11 +140,12 @@ export async function updateParticipantWithAdminRight(req, res) {
             can_admin = $13,
             avatar_id = $14,
             crest_id = $15,
-            profile_public = $16
+            profile_public = $16,
+            annee_naissance = $17
         where id = $1
         returning id, nom, prenom, email, login_email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme,
                   initiateur_sae, initiateur_sne, can_encadrer, can_referer, can_admin,
-                  avatar_id, crest_id, profile_public, custom_avatar_image
+                  avatar_id, crest_id, profile_public, custom_avatar_image, annee_naissance
       `,
       [
         participantId,
@@ -163,6 +164,7 @@ export async function updateParticipantWithAdminRight(req, res) {
         avatarId,
         crestId,
         profilePublic,
+        participant.anneeNaissance,
       ],
     );
 

@@ -1,4 +1,5 @@
 import { getPool } from "./database.js";
+import { getFfmeAgeCategory } from "../../shared/ffme-age-categories.js";
 
 // Marqueur compact conservé pour compatibilité avec le flux de mise à jour du
 // frontend. Il remplace l'ancien contenu Base64 dans les réponses JSON.
@@ -62,6 +63,8 @@ export function serializeParticipant(row) {
     passportDecouverte: Boolean(row.passport_decouverte),
     passeportFfme: Boolean(row.passeport_ffme),
     sexe: row.sexe,
+    anneeNaissance: row.annee_naissance ?? null,
+    categorieFfme: getFfmeAgeCategory(row.annee_naissance),
     cotisation: Boolean(row.cotisation),
     ffme: Boolean(row.ffme),
     initiateurSae: Boolean(row.initiateur_sae),
@@ -108,6 +111,7 @@ export function serializePublicParticipant(row) {
     passportDecouverte: Boolean(row.passport_decouverte),
     passeportFfme: Boolean(row.passeport_ffme),
     sexe: row.sexe,
+    categorieFfme: getFfmeAgeCategory(row.annee_naissance),
     cotisation: Boolean(row.cotisation),
     ffme: Boolean(row.ffme),
     initiateurSae: Boolean(row.initiateur_sae),
@@ -181,6 +185,7 @@ export async function listParticipantsWithPrivacy(req, res) {
     const result = await getPool().query(`
       select
         id, nom, prenom, email, login_email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme,
+        annee_naissance,
         initiateur_sae, initiateur_sne,
         can_encadrer, can_referer, can_admin, avatar_id, crest_id,
         exists(select 1 from users u where u.participant_id::text = participants.id::text) as account_associated,
