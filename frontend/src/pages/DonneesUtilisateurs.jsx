@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { getFfmeAgeCategory } from "../../../shared/ffme-age-categories.js";
 import { apiFetch } from "../lib/api.js";
 import {
   USER_DATA_BOOLEAN_KEYS,
@@ -14,7 +15,7 @@ import {
   yesNo,
 } from "../lib/user-data-management.js";
 
-const MOBILE_WIDE_FIELD_KEYS = new Set(["nom", "prenom", "email", "passport"]);
+const MOBILE_WIDE_FIELD_KEYS = new Set(["nom", "prenom", "email", "passport", "categorieFfme"]);
 const MOBILE_READ_ONLY_KEYS = new Set(["accountAssociated", "sessions"]);
 
 function stickyColumnStyle(key, header = false) {
@@ -194,6 +195,7 @@ export default function DonneesUtilisateurs({ participants = [], sessions = [], 
   function editor(participant, key) {
     if (key === "sessions") return sessionCountByParticipantId[String(participant.id)] || 0;
     if (key === "accountAssociated") return yesNo(Boolean(participant.accountAssociated));
+    if (key === "categorieFfme") return displayUserDataValue(draftFor(participant), key);
 
     const draft = draftFor(participant);
     const value = draft[key];
@@ -205,6 +207,20 @@ export default function DonneesUtilisateurs({ participants = [], sessions = [], 
           checked={Boolean(value)}
           onChange={(event) => setField(participant, key, event.target.checked)}
           aria-label={`${USER_DATA_COLUMNS.find((column) => column[0] === key)?.[1]} ${participant.prenom} ${participant.nom}`}
+        />
+      );
+    }
+    if (key === "anneeNaissance") {
+      return (
+        <input
+          type="number"
+          min="1900"
+          max={new Date().getFullYear() - 18}
+          step="1"
+          value={value ?? ""}
+          onChange={(event) => setField(participant, key, event.target.value)}
+          aria-label={`Année de naissance ${participant.prenom} ${participant.nom}`}
+          style={{ width: "100%", minWidth: 0, boxSizing: "border-box", fontSize: "inherit", padding: "4px 2px" }}
         />
       );
     }
@@ -288,6 +304,8 @@ export default function DonneesUtilisateurs({ participants = [], sessions = [], 
               <PassportSelect value={newParticipant.passport} onChange={(event) => setNewParticipant((participant) => ({ ...participant, passport: event.target.value }))} />
             </div>
             <div><label>Sexe</label><select value={newParticipant.sexe || ""} onChange={(event) => setNewParticipant((participant) => ({ ...participant, sexe: event.target.value }))}><option value="">-</option><option value="h">H</option><option value="f">F</option></select></div>
+            <div><label>Année de naissance</label><input type="number" min="1900" max={new Date().getFullYear() - 18} step="1" value={newParticipant.anneeNaissance ?? ""} onChange={(event) => setNewParticipant((participant) => ({ ...participant, anneeNaissance: event.target.value }))} /></div>
+            <div><label>Catégorie FFME</label><div className="pill">{getFfmeAgeCategory(newParticipant.anneeNaissance) || "Non renseignée"}</div></div>
           </div>
           <div className="group" style={{ marginTop: 10 }}>
             <label><input type="checkbox" checked={Boolean(newParticipant.passeportFfme)} onChange={(event) => setNewParticipant((participant) => ({ ...participant, passeportFfme: event.target.checked }))} /> Passeport FFME</label>
