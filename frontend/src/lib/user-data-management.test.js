@@ -26,6 +26,7 @@ test("le payload utilisateur normalise les champs persistés", () => {
     passportDecouverte: 1,
     passeportFfme: 0,
     cotisation: 1,
+    cotisationPrecedente: true,
     ffme: true,
     canEncadrer: false,
     canReferer: true,
@@ -40,6 +41,7 @@ test("le payload utilisateur normalise les champs persistés", () => {
   assert.equal(payload.passport, "orange");
   assert.equal(payload.passportDecouverte, true);
   assert.equal(payload.cotisation, true);
+  assert.equal(payload.cotisationPrecedente, true);
   assert.equal(payload.passeportFfme, false);
 });
 
