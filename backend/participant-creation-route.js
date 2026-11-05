@@ -14,6 +14,7 @@ function participantDbToApi(row) {
     anneeNaissance: row.annee_naissance ?? null,
     categorieFfme: getFfmeAgeCategory(row.annee_naissance),
     cotisation: row.cotisation,
+    cotisationPrecedente: Boolean(row.cotisation_precedente),
     ffme: row.ffme,
     canEncadrer: row.can_encadrer,
     canReferer: row.can_referer,
@@ -53,7 +54,7 @@ export function installParticipantCreationRoute(app, { requireAuth, requireAdmin
           insert into participants
           (nom, prenom, email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme, can_encadrer, can_referer, can_admin, avatar_id, crest_id, profile_public, annee_naissance)
           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-          returning id, nom, prenom, email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme, can_encadrer, can_referer, can_admin, avatar_id, crest_id, profile_public, annee_naissance
+          returning id, nom, prenom, email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, cotisation_precedente, ffme, can_encadrer, can_referer, can_admin, avatar_id, crest_id, profile_public, annee_naissance
         `,
         [
           nom,
