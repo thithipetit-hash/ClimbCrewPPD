@@ -24,9 +24,18 @@ test("valide et normalise un participant", () => {
   assert.equal(participant.nom, "Dupont");
   assert.equal(participant.email, "alice@example.com");
   assert.equal(participant.cotisation, true);
+  assert.equal(participant.cotisationPrecedente, undefined);
   assert.equal(participant.sexe, "f");
   assert.equal(participant.ffme, false);
   assert.equal(participant.passportDecouverte, false);
+});
+
+test("la cotisation précédente est modifiable sans effacer les données des anciens clients", () => {
+  const base = { nom: "Dupont", prenom: "Alice" };
+  assert.equal(validateParticipantPayload(base).cotisationPrecedente, undefined);
+  assert.equal(validateParticipantPayload({ ...base, cotisationPrecedente: true }).cotisationPrecedente, true);
+  assert.equal(validateParticipantPayload({ ...base, cotisationPrecedente: false }).cotisationPrecedente, false);
+  assert.throws(() => validateParticipantPayload({ ...base, cotisationPrecedente: "invalide" }), ValidationError);
 });
 
 test("l'année de naissance d'un participant adulte est facultative et contrôlée", () => {

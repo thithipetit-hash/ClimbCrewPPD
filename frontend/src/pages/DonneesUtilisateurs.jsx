@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { getFfmeAgeCategory } from "../../../shared/ffme-age-categories.js";
-import { apiFetch } from "../lib/api.js";
+import { apiFetch, USE_API } from "../lib/api.js";
 import {
   USER_DATA_BOOLEAN_KEYS,
   USER_DATA_COLUMNS,
@@ -46,6 +46,7 @@ export default function DonneesUtilisateurs({ participants = [], sessions = [], 
   const [drafts, setDrafts] = useState({});
   const [savingId, setSavingId] = useState(null);
   const [savingAll, setSavingAll] = useState(false);
+  const [resettingCotisations, setResettingCotisations] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -192,6 +193,34 @@ export default function DonneesUtilisateurs({ participants = [], sessions = [], 
     }
   }
 
+  async function resetCotisations() {
+    if (Object.keys(drafts).length || savingAll || resettingCotisations) return;
+    if (!window.confirm("Reporter les cotisations de l’année en cours vers l’année précédente, puis remettre l’année en cours à zéro pour tous les utilisateurs ? Une sauvegarde sera créée avant l’opération.")) return;
+
+    setResettingCotisations(true);
+    setMessage("");
+    setError("");
+    let resetApplied = false;
+    try {
+      const result = await apiFetch("/admin/reset/cotisations", {
+        method: "POST",
+        body: JSON.stringify({ confirm: "RESET_COTISATIONS" }),
+      });
+      resetApplied = true;
+      if (onSaved) await onSaved();
+      const count = Number(result.transferred || 0);
+      setMessage(count
+        ? `${count} cotisation${count > 1 ? "s" : ""} reportée${count > 1 ? "s" : ""} vers l’année précédente. Année en cours remise à zéro.`
+        : "Aucune cotisation en cours à reporter. Les données de l’année précédente ont été conservées.");
+    } catch (resetError) {
+      setError(resetApplied
+        ? `Cotisations reportées, mais actualisation impossible : ${String(resetError.message || resetError)}`
+        : `Réinitialisation impossible : ${String(resetError.message || resetError)}`);
+    } finally {
+      setResettingCotisations(false);
+    }
+  }
+
   function editor(participant, key) {
     if (key === "sessions") return sessionCountByParticipantId[String(participant.id)] || 0;
     if (key === "accountAssociated") return yesNo(Boolean(participant.accountAssociated));
@@ -327,12 +356,16 @@ export default function DonneesUtilisateurs({ participants = [], sessions = [], 
         </div>
         <div className="user-data-actions">
           <button type="button" onClick={exportCsv}>Export CSV</button>
-          <button type="button" disabled={!Object.keys(drafts).length || savingAll} onClick={saveAll}>
+          {USE_API && <button type="button" className="secondary" disabled={savingAll || resettingCotisations || Boolean(Object.keys(drafts).length)} onClick={resetCotisations} title="Reporter les cotisations en cours vers l’année précédente, puis les remettre à zéro. Enregistrer d’abord toute modification.">
+            {resettingCotisations ? "Report en cours…" : "Reset cotisations"}
+          </button>}
+          <button type="button" disabled={!Object.keys(drafts).length || savingAll || resettingCotisations} onClick={saveAll}>
             {savingAll ? "Enregistrement…" : "Enregistrer"}
           </button>
         </div>
       </div>
 
+      {Object.keys(drafts).length > 0 && <div className="small" style={{ marginBottom: 8 }}>Enregistrer les modifications avant de reporter les cotisations.</div>}
       {message && <div className="success" style={{ marginBottom: 10 }}>{message}</div>}
       {error && <div className="error" style={{ marginBottom: 10 }}>{error}</div>}
 

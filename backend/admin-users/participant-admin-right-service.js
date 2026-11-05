@@ -134,6 +134,7 @@ export async function updateParticipantWithAdminRight(req, res) {
             passeport_ffme = $7,
             sexe = $8,
             cotisation = $9,
+            cotisation_precedente = coalesce($18::boolean, cotisation_precedente),
             ffme = $10,
             can_encadrer = $11,
             can_referer = $12,
@@ -143,7 +144,7 @@ export async function updateParticipantWithAdminRight(req, res) {
             profile_public = $16,
             annee_naissance = $17
         where id = $1
-        returning id, nom, prenom, email, login_email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme,
+        returning id, nom, prenom, email, login_email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, cotisation_precedente, ffme,
                   initiateur_sae, initiateur_sne, can_encadrer, can_referer, can_admin,
                   avatar_id, crest_id, profile_public, custom_avatar_image, annee_naissance
       `,
@@ -165,6 +166,7 @@ export async function updateParticipantWithAdminRight(req, res) {
         crestId,
         profilePublic,
         participant.anneeNaissance,
+        participant.cotisationPrecedente ?? null,
       ],
     );
 
