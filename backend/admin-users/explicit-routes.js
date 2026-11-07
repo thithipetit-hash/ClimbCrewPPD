@@ -53,6 +53,7 @@ import { installBackupRoutes } from "../backup-routes.js";
 import { createBackup, startBackupScheduler } from "../backup-service.js";
 import { installVideoAnalysisSettingsRoutes } from "../video-analysis-settings-routes.js";
 import { getPool } from "./database.js";
+import { transferCotisationsToPreviousYear } from "./cotisation-service.js";
 import { recalculateOwnStatisticsAndCpr, resetOwnCpr } from "./participant-cpr-reset-service.js";
 import { sendTokenConfirmationPage } from "../token-confirmation-page.js";
 
@@ -106,9 +107,7 @@ async function resetAdminData(req, res) {
     if (type === "realisations") {
       result = await client.query("delete from realisations");
     } else if (type === "cotisations") {
-      result = await client.query(
-        "update participants set cotisation = false where cotisation is distinct from false",
-      );
+      result = await transferCotisationsToPreviousYear(client);
     } else {
       result = await client.query(
         "update participants set ffme = false where ffme is distinct from false",
@@ -118,7 +117,8 @@ async function resetAdminData(req, res) {
     return res.json({
       ok: true,
       type,
-      affected: result.rowCount,
+      affected: result.rowCount ?? result.affected,
+      ...(type === "cotisations" ? { transferred: result.transferred } : {}),
       safetyBackup: safetyBackup.fileName,
     });
   } catch (error) {
