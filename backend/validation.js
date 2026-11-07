@@ -156,6 +156,9 @@ export function validateParticipantPayload(payload = {}) {
     sexe: enumValue(payload.sexe, "sexe", SEXES, ""),
     anneeNaissance: optionalAdultBirthYear(payload.anneeNaissance),
     cotisation: strictBoolean(payload.cotisation, "cotisation"),
+    cotisationPrecedente: payload.cotisationPrecedente === undefined
+      ? undefined
+      : strictBoolean(payload.cotisationPrecedente, "cotisationPrecedente"),
     ffme: strictBoolean(payload.ffme, "ffme"),
     canEncadrer: strictBoolean(payload.canEncadrer, "canEncadrer"),
     canReferer: strictBoolean(payload.canReferer, "canReferer"),

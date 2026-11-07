@@ -38,6 +38,7 @@ function serializeParticipant(row) {
     sexe: row.sexe || "",
     anneeNaissance: row.annee_naissance ?? null,
     cotisation: Boolean(row.cotisation),
+    cotisationPrecedente: Boolean(row.cotisation_precedente),
     ffme: Boolean(row.ffme),
     initiateurSae: Boolean(row.initiateur_sae),
     initiateurSne: Boolean(row.initiateur_sne),

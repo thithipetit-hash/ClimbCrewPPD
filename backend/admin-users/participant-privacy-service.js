@@ -66,6 +66,7 @@ export function serializeParticipant(row) {
     anneeNaissance: row.annee_naissance ?? null,
     categorieFfme: getFfmeAgeCategory(row.annee_naissance),
     cotisation: Boolean(row.cotisation),
+    cotisationPrecedente: Boolean(row.cotisation_precedente),
     ffme: Boolean(row.ffme),
     initiateurSae: Boolean(row.initiateur_sae),
     initiateurSne: Boolean(row.initiateur_sne),
@@ -184,7 +185,7 @@ export async function listParticipantsWithPrivacy(req, res) {
   try {
     const result = await getPool().query(`
       select
-        id, nom, prenom, email, login_email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, ffme,
+        id, nom, prenom, email, login_email, passport, passport_decouverte, passeport_ffme, sexe, cotisation, cotisation_precedente, ffme,
         annee_naissance,
         initiateur_sae, initiateur_sne,
         can_encadrer, can_referer, can_admin, avatar_id, crest_id,
