@@ -355,12 +355,7 @@ export async function listParticipantChallengeBadges(db, participantId) {
       where pb.participant_id = $1::bigint
         and pb.badge_type = 'challenge'
         and pb.source_type = 'challenge'
-        and coalesce((pb.metadata->>'rank') ~ '^[0-9]+`,
-    [participantId],
-  );
-  return result.rows;
-}, false)
-        and (pb.metadata->>'rank')::integer between 1 and 3
+        and pb.metadata->>'rank' in ('1', '2', '3')
       order by pb.awarded_at desc`,
     [participantId],
   );
