@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   calculateChallengeRanking,
   challengeBadgeDistinction,
+  closeChallenge,
+  listParticipantChallengeBadges,
   findSelectedRoutes,
   normalizeChallengeRouteIds,
 } from "./challenge-service.js";
@@ -101,4 +103,30 @@ test("calculateChallengeRanking transmet la date de début qui exclut l'historiq
   const db = { async query(_sql, values) { assert.equal(values[1], "2026-10-05"); assert.equal(values[2], null); return { rows: [] }; } };
   const ranking = await calculateChallengeRanking(db, { startsOn: "2026-10-05", endsOn: null }, [{ id: "r1" }]);
   assert.deepEqual(ranking, []);
+});
+test("closeChallenge attribue un badge Challenge à chacun des trois premiers et non aux suivants", async () => {
+  const writes = [];
+  const db = { async query(sql, args = []) {
+    if (sql.includes("from challenges c") && sql.includes("for update")) return { rows: [{ id: 7, name: "Octobre rose", status: "active", starts_on: "2026-10-01", ends_on: "2026-10-31" }] };
+    if (sql.includes("from challenge_routes")) return { rows: [{ id: "r1", snapshot: {} }] };
+    if (sql.includes("from realisations r")) return { rows: [1, 2, 3, 4].map((id) => ({
+      id: `real-${id}`, participantId: String(id), voieId: "r1", dateRealisation: "2026-10-15",
+      styleRealisation: "a_vue", modeRealisation: "en_tete", prenom: "Grimpeur", nom: String(id),
+    })) };
+    if (sql.includes("insert into participant_badges")) writes.push(args);
+    return { rows: [] };
+  } };
+  await closeChallenge(db, 7);
+  assert.equal(writes.length, 3);
+  assert.deepEqual(writes.map((row) => row[0]), ["1", "2", "3"]);
+  assert.ok(writes.every((row) => row[1] === "Challenge" && row[2] === "7"));
+});
+
+test("listParticipantChallengeBadges ne sélectionne que les podiums historiques", async () => {
+  const db = { async query(sql, args) {
+    assert.match(sql, /metadata->>'rank' in \('1', '2', '3'\)/);
+    assert.deepEqual(args, [42]);
+    return { rows: [] };
+  } };
+  assert.deepEqual(await listParticipantChallengeBadges(db, 42), []);
 });

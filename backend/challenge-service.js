@@ -216,6 +216,7 @@ async function loadFrozenRanking(db, challengeId) {
         and pb.badge_type = 'challenge'
         and pb.source_type = 'challenge'
         and pb.source_id = cr.challenge_id::text
+        and cr.rank <= 3
       where cr.challenge_id = $1
       order by cr.rank asc`,
     [challengeId],
@@ -314,7 +315,7 @@ export async function closeChallenge(db, challengeId) {
     );
   }
 
-  for (const participant of ranking) {
+  for (const participant of ranking.filter((entry) => entry.rank <= 3)) {
     const distinction = challengeBadgeDistinction(participant.rank);
     await db.query(
       `insert into participant_badges
@@ -323,7 +324,7 @@ export async function closeChallenge(db, challengeId) {
        on conflict (participant_id, badge_type, source_type, source_id)
        do update set label = excluded.label,
                      metadata = excluded.metadata`,
-      [participant.participantId, challenge.name, String(challengeId), JSON.stringify({
+      [participant.participantId, "Challenge", String(challengeId), JSON.stringify({
         challengeName: challenge.name,
         rank: participant.rank,
         score: participant.score,
@@ -353,6 +354,8 @@ export async function listParticipantChallengeBadges(db, participantId) {
        from participant_badges pb
       where pb.participant_id = $1::bigint
         and pb.badge_type = 'challenge'
+        and pb.source_type = 'challenge'
+        and pb.metadata->>'rank' in ('1', '2', '3')
       order by pb.awarded_at desc`,
     [participantId],
   );
