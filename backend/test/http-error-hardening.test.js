@@ -64,3 +64,67 @@ test("les erreurs métier 4xx restent explicites", async () => {
     assert.deepEqual(await response.json(), { error: "Champ invalide" });
   });
 });
+
+test("le formulaire de confirmation e-mail accepte toujours son origine publique réelle", async () => {
+  const app = express();
+  const config = testConfig();
+  config.trustProxy = 1;
+  config.corsOrigins = ["https://ancienne-config.example"];
+  installHttpStack(app, config, {
+    isSafeMethod: (method) => ["GET", "HEAD", "OPTIONS"].includes(String(method).toUpperCase()),
+    getClientIp: () => "127.0.0.1",
+  });
+  app.post("/auth/verify-email", (_req, res) => {
+    res.status(400).json({ error: "Lien de confirmation invalide." });
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/auth/verify-email?token=test`, {
+      method: "POST",
+      headers: {
+        Origin: "https://pre-climbcrew.dip-tcs.com",
+        "X-Forwarded-Proto": "https",
+        "X-Forwarded-Host": "pre-climbcrew.dip-tcs.com",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "",
+    });
+
+    assert.equal(response.status, 400);
+    assert.equal(
+      response.headers.get("access-control-allow-origin"),
+      "https://pre-climbcrew.dip-tcs.com",
+    );
+    assert.deepEqual(await response.json(), { error: "Lien de confirmation invalide." });
+  });
+});
+
+test("une vraie origine externe reste refusée avec un statut 403", async () => {
+  const app = express();
+  const config = testConfig();
+  config.trustProxy = 1;
+  config.corsOrigins = ["https://pre-climbcrew.dip-tcs.com"];
+  installHttpStack(app, config, {
+    isSafeMethod: (method) => ["GET", "HEAD", "OPTIONS"].includes(String(method).toUpperCase()),
+    getClientIp: () => "127.0.0.1",
+  });
+  app.post("/auth/verify-email", (_req, res) => {
+    res.status(204).end();
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/auth/verify-email?token=test`, {
+      method: "POST",
+      headers: {
+        Origin: "https://malveillant.example",
+        "X-Forwarded-Proto": "https",
+        "X-Forwarded-Host": "pre-climbcrew.dip-tcs.com",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "",
+    });
+
+    assert.equal(response.status, 403);
+    assert.match(await response.text(), /Origine CORS non autorisée/);
+  });
+});

@@ -39,3 +39,13 @@
   background: linear-gradient(135deg, rgba(100, 116, 139, .34), rgba(51, 65, 85, .55)) !important;
   border-color: rgba(148, 163, 184, .62) !important;
 }
+
+
+/* Une séance libre sans référent ou encadrée sans encadrant est neutralisée
+ * en gris. Cette règle doit rester après les couleurs de statut afin de gagner
+ * la cascade, y compris avec les !important du thème. */
+.session-card.session-status-libre.session-card-missing-supervisor,
+.session-card.session-status-encadree.session-card-missing-supervisor {
+  background: #6b7280 !important;
+  border-color: #9ca3af !important;
+}

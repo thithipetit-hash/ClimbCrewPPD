@@ -4,6 +4,7 @@ const MEDIAPIPE_MODULE_URL = "/mediapipe-runtime/vision_bundle.mjs";
 const MEDIAPIPE_WASM_URL = "/mediapipe-runtime/wasm";
 const POSE_MODEL_URL = "/mediapipe-runtime/models/pose_landmarker_lite.task";
 const MAX_ANALYSIS_SECONDS = 8 * 60;
+const MAX_TRAJECTORY_POINTS = 240;
 
 const LANDMARK = Object.freeze({
   LEFT_SHOULDER: 11,
@@ -88,8 +89,15 @@ function buildFramePose(landmarks, rules) {
     rightWrist: point(LANDMARK.RIGHT_WRIST),
     leftAnkle: point(LANDMARK.LEFT_ANKLE),
     rightAnkle: point(LANDMARK.RIGHT_ANKLE),
+    leftHip,
+    rightHip,
+    shoulderCenter,
+    leftShoulder,
+    rightShoulder,
     leftElbowAngle: angleDegrees(leftShoulder, point(LANDMARK.LEFT_ELBOW), point(LANDMARK.LEFT_WRIST)),
     rightElbowAngle: angleDegrees(rightShoulder, point(LANDMARK.RIGHT_ELBOW), point(LANDMARK.RIGHT_WRIST)),
+    leftKneeAngle: angleDegrees(leftHip, point(LANDMARK.LEFT_KNEE), point(LANDMARK.LEFT_ANKLE)),
+    rightKneeAngle: angleDegrees(rightHip, point(LANDMARK.RIGHT_KNEE), point(LANDMARK.RIGHT_ANKLE)),
   };
 }
 
@@ -113,9 +121,9 @@ export async function getPoseLandmarker() {
     baseOptions: { modelAssetPath: POSE_MODEL_URL },
     runningMode: "VIDEO",
     numPoses: 1,
-    minPoseDetectionConfidence: 0.45,
-    minPosePresenceConfidence: 0.45,
-    minTrackingConfidence: 0.45,
+    minPoseDetectionConfidence: 0.3,
+    minPosePresenceConfidence: 0.3,
+    minTrackingConfidence: 0.3,
   });
 }
 
@@ -263,6 +271,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
   let previousPose = null;
   let previousTime = null;
   let validSamples = 0;
+  let partialSamples = 0;
   let pauseStart = null;
   let leftBentStart = null;
   let rightBentStart = null;
@@ -278,7 +287,31 @@ export async function analyzeClimbingVideo(video, options = {}) {
   let rightFootAdjustments = 0;
   let dynamicMoves = 0;
   let previousDynamic = false;
+  let hipTravelTorso = 0;
+  let hipVerticalProgressTorso = 0;
+  let hipSpeedSum = 0;
+  let hipSpeedSamples = 0;
+  let maxHipSpeed = 0;
+  let kneeAngleSum = 0;
+  let kneeAngleSamples = 0;
+  let hipLateralSum = 0;
+  let hipLateralSamples = 0;
+  let hipLateralMax = 0;
+  const hipLateralValues = [];
+  let shoulderHipOffsetSum = 0;
+  let shoulderHipOffsetSamples = 0;
+  let shoulderHipOffsetMax = 0;
+  let compactSeconds = 0;
   const pauses = [];
+  const events = [];
+  const hipTrajectory = [];
+  let lastCrossEvent = -Infinity;
+  let lastFlagEvent = -Infinity;
+  let lastFootSwitchEvent = -Infinity;
+  let movementStart = null;
+  let movementPeakTime = null;
+  let movementPeakSpeed = 0;
+  const movementSegments = [];
 
   const finishTrackedIntervals = (endTime) => {
     if (endTime == null) return;
@@ -309,7 +342,15 @@ export async function analyzeClimbingVideo(video, options = {}) {
       const time = sampleTimes[index];
       await seekVideo(video, time);
       const result = poseLandmarker.detectForVideo(video, Math.round(time * 1000));
-      const pose = buildFramePose(result?.landmarks?.[0], rules);
+      const landmarks = result?.landmarks?.[0];
+      let pose = buildFramePose(landmarks, rules);
+      if (!pose && landmarks?.length) {
+        // Second passage plus tolérant : utile quand le grimpeur est petit dans
+        // une image large ou brièvement occulté. Les mesures restent marquées
+        // par la confiance globale et ne sont acceptées que si le tronc existe.
+        pose = buildFramePose(landmarks, { ...rules, minVisibility: Math.min(rules.minVisibility, 0.25) });
+        if (pose) partialSamples += 1;
+      }
       options.onProgress?.((index + 1) / sampleTimes.length);
 
       if (!pose) {
@@ -322,6 +363,30 @@ export async function analyzeClimbingVideo(video, options = {}) {
       }
 
       validSamples += 1;
+      if (hipTrajectory.length < MAX_TRAJECTORY_POINTS && (validSamples === 1 || validSamples % Math.max(1, Math.ceil(sampleTimes.length / MAX_TRAJECTORY_POINTS)) === 0)) {
+        hipTrajectory.push({ t: time, x: pose.hipCenter.x, y: pose.hipCenter.y });
+      }
+      const kneeAngles = [pose.leftKneeAngle, pose.rightKneeAngle].filter(Number.isFinite);
+      if (kneeAngles.length) {
+        kneeAngleSum += kneeAngles.reduce((sum, value) => sum + value, 0) / kneeAngles.length;
+        kneeAngleSamples += 1;
+        if ((kneeAngles.reduce((sum, value) => sum + value, 0) / kneeAngles.length) < 105) compactSeconds += sampleStep;
+      }
+      const hipWidth = distance(pose.leftHip, pose.rightHip);
+      const hipWidthToTorso = hipWidth / Math.max(0.01, pose.torsoLength);
+      if (hipWidth > 0.005 && hipWidthToTorso >= 0.25 && hipWidthToTorso <= 1.6) {
+        const lateral = Math.abs((pose.hipCenter.x || 0) - (pose.shoulderCenter.x || 0)) / hipWidth;
+        if (Number.isFinite(lateral) && lateral <= 6) {
+          hipLateralSum += lateral;
+          hipLateralSamples += 1;
+          hipLateralValues.push(lateral);
+          hipLateralMax = Math.max(hipLateralMax, lateral);
+        }
+        const offset = distance(pose.hipCenter, pose.shoulderCenter) / Math.max(0.01, pose.torsoLength);
+        shoulderHipOffsetSum += offset;
+        shoulderHipOffsetSamples += 1;
+        shoulderHipOffsetMax = Math.max(shoulderHipOffsetMax, offset);
+      }
       if (previousPose && previousTime != null) {
         const dt = Math.max(0.001, time - previousTime);
         const torsoLength = Math.max(0.01, (pose.torsoLength + previousPose.torsoLength) / 2);
@@ -332,7 +397,22 @@ export async function analyzeClimbingVideo(video, options = {}) {
         const rightAnkleSpeed = normalizeObservedSpeed(previousPose.rightAnkle, pose.rightAnkle, torsoLength, dt);
         const availableSpeeds = [hipSpeed, leftWristSpeed, rightWristSpeed, leftAnkleSpeed, rightAnkleSpeed]
           .filter(Number.isFinite);
-        const bodySpeed = availableSpeeds.reduce((sum, value) => sum + value, 0) / availableSpeeds.length;
+        const bodySpeed = availableSpeeds.length ? availableSpeeds.reduce((sum, value) => sum + value, 0) / availableSpeeds.length : 0;
+        const movementThreshold = Math.max(rules.pauseSpeedTorsoPerSecond * 2.2, 0.18);
+        if (bodySpeed >= movementThreshold) {
+          if (movementStart == null) { movementStart = previousTime; movementPeakTime = time; movementPeakSpeed = bodySpeed; }
+          if (bodySpeed > movementPeakSpeed) { movementPeakSpeed = bodySpeed; movementPeakTime = time; }
+        } else if (movementStart != null && time - movementStart >= 0.35) {
+          movementSegments.push({ start: movementStart, peak: movementPeakTime, end: time, peakSpeed: movementPeakSpeed });
+          movementStart = null; movementPeakTime = null; movementPeakSpeed = 0;
+        }
+        if (Number.isFinite(hipSpeed)) {
+          hipSpeedSum += hipSpeed;
+          hipSpeedSamples += 1;
+          maxHipSpeed = Math.max(maxHipSpeed, hipSpeed);
+          hipTravelTorso += distance(previousPose.hipCenter, pose.hipCenter) / torsoLength;
+          hipVerticalProgressTorso += Math.abs((pose.hipCenter.y || 0) - (previousPose.hipCenter.y || 0)) / torsoLength;
+        }
 
         if (bodySpeed <= rules.pauseSpeedTorsoPerSecond) {
           if (pauseStart == null) pauseStart = previousTime;
@@ -359,6 +439,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
         ) {
           leftFootAdjustments += 1;
           lastLeftFootAdjustment = time;
+          events.push({ type: "foot-adjustment", side: "left", time, confidence: 0.8 });
         }
         if (
           feetContextIsStable
@@ -370,12 +451,42 @@ export async function analyzeClimbingVideo(video, options = {}) {
         ) {
           rightFootAdjustments += 1;
           lastRightFootAdjustment = time;
+          events.push({ type: "foot-adjustment", side: "right", time, confidence: 0.8 });
         }
 
         const dynamicSpeeds = [hipSpeed, leftWristSpeed, rightWristSpeed].filter(Number.isFinite);
         const dynamicNow = dynamicSpeeds.some((speed) => speed >= rules.dynamicSpeedTorsoPerSecond);
-        if (dynamicNow && !previousDynamic) dynamicMoves += 1;
+        if (dynamicNow && !previousDynamic) {
+          dynamicMoves += 1;
+          events.push({ type: "dynamic", time, confidence: 0.75 });
+        }
         previousDynamic = dynamicNow;
+
+        const shoulderWidth = distance(pose.leftShoulder, pose.rightShoulder);
+        if (shoulderWidth > 0.005 && time - lastCrossEvent >= 1.2) {
+          const leftCross = pose.leftWrist && pose.rightShoulder && pose.leftWrist.x > pose.rightShoulder.x + shoulderWidth * 0.08;
+          const rightCross = pose.rightWrist && pose.leftShoulder && pose.rightWrist.x < pose.leftShoulder.x - shoulderWidth * 0.08;
+          if (leftCross || rightCross) {
+            events.push({ type: "cross", side: leftCross ? "left" : "right", time, confidence: 0.7 });
+            lastCrossEvent = time;
+          }
+        }
+        if (pose.leftAnkle && pose.rightAnkle && time - lastFootSwitchEvent >= 1.0) {
+          const previousOrder = (previousPose.leftAnkle?.x ?? 0) - (previousPose.rightAnkle?.x ?? 0);
+          const currentOrder = pose.leftAnkle.x - pose.rightAnkle.x;
+          if (Math.abs(previousOrder) > 0.025 && Math.abs(currentOrder) > 0.025 && Math.sign(previousOrder) !== Math.sign(currentOrder)) {
+            events.push({ type: "foot-switch", time, confidence: 0.68 });
+            lastFootSwitchEvent = time;
+          }
+        }
+        if (hipWidth > 0.005 && pose.leftAnkle && pose.rightAnkle && time - lastFlagEvent >= 1.2) {
+          const leftFlag = pose.leftAnkle.x > pose.rightHip.x + hipWidth * 0.45;
+          const rightFlag = pose.rightAnkle.x < pose.leftHip.x - hipWidth * 0.45;
+          if (leftFlag || rightFlag) {
+            events.push({ type: "flag-candidate", side: leftFlag ? "left" : "right", time, confidence: 0.58 });
+            lastFlagEvent = time;
+          }
+        }
       }
 
       const accumulateAngleDuration = (angle, threshold, currentStart, setter) => {
@@ -423,18 +534,39 @@ export async function analyzeClimbingVideo(video, options = {}) {
   }
 
   const detectionRatio = sampleTimes.length ? validSamples / sampleTimes.length : 0;
-  if (detectionRatio < 0.35) {
-    throw new Error("Le grimpeur n’est pas détecté assez souvent. Utiliser une vidéo où le corps entier reste davantage visible.");
+  // Une analyse reste exploitable avec des occultations temporaires. Le seuil
+  // historique de 35 % rejetait notamment les plans larges de SAE alors que le
+  // tronc était suivi sur une partie significative de la voie.
+  if (validSamples < Math.min(12, sampleTimes.length) || detectionRatio < 0.15) {
+    throw new Error("Le grimpeur est trop peu détecté pour produire une analyse fiable. Rapprocher le cadrage ou garder le tronc visible plus longtemps.");
   }
 
+  if (movementStart != null && previousTime != null && previousTime - movementStart >= 0.35) movementSegments.push({ start: movementStart, peak: movementPeakTime, end: previousTime, peakSpeed: movementPeakSpeed });
+  for (const segment of movementSegments.slice(0, 500)) {
+    events.push({ type: "movement", time: segment.start, end: segment.end, confidence: Math.min(0.92, 0.55 + segment.peakSpeed / 8), phase: "preparation" });
+    events.push({ type: "movement-peak", time: segment.peak ?? segment.start, confidence: Math.min(0.95, 0.6 + segment.peakSpeed / 7), phase: "execution" });
+    events.push({ type: "stabilization", time: segment.end, confidence: 0.65, phase: "stabilization" });
+  }
   const longPauses = pauses.filter((pause) => pause.duration >= rules.longPauseMinSeconds);
   const maxBent = Math.max(leftBentSeconds, rightBentSeconds, 0.001);
   const armAsymmetryRatio = Math.abs(leftBentSeconds - rightBentSeconds) / maxBent;
+  for (const pause of pauses) events.push({ type: "pause", time: pause.start, end: pause.end, confidence: detectionRatio });
+  events.sort((a, b) => a.time - b.time);
+  const hipPathEfficiency = hipTravelTorso > 0 ? Math.min(1, hipVerticalProgressTorso / hipTravelTorso) : 0;
+  const observationConfidence = Math.max(0, Math.min(1, detectionRatio * (validSamples >= 20 ? 1 : validSamples / 20)));
+  // Un maximum brut est très sensible à une seule frame MediaPipe aberrante.
+  // On conserve donc un maximum robuste (98e percentile) sur les observations
+  // anatomiquement plausibles ; la moyenne utilise le même ensemble filtré.
+  if (hipLateralValues.length) {
+    const sortedHipLateral = [...hipLateralValues].sort((a, b) => a - b);
+    hipLateralMax = sortedHipLateral[Math.min(sortedHipLateral.length - 1, Math.floor((sortedHipLateral.length - 1) * 0.98))];
+  }
   const metrics = {
     duration,
     analyzedSeconds: duration * detectionRatio,
     sampleCount: sampleTimes.length,
     validSamples,
+    partialSamples,
     detectionRatio,
     pauses,
     longPauses,
@@ -443,11 +575,30 @@ export async function analyzeClimbingVideo(video, options = {}) {
     footAdjustments: { left: leftFootAdjustments, right: rightFootAdjustments, total: leftFootAdjustments + rightFootAdjustments },
     dynamicMoves,
     armAsymmetryRatio,
+    hipMotion: {
+      travelTorso: hipTravelTorso,
+      verticalProgressTorso: hipVerticalProgressTorso,
+      pathEfficiency: hipPathEfficiency,
+      meanSpeedTorsoPerSecond: hipSpeedSamples ? hipSpeedSum / hipSpeedSamples : 0,
+      maxSpeedTorsoPerSecond: maxHipSpeed,
+    },
+    meanKneeAngleDegrees: kneeAngleSamples ? kneeAngleSum / kneeAngleSamples : null,
+    bodyPosition: {
+      meanHipLateralOffsetHipWidths: hipLateralSamples ? hipLateralSum / hipLateralSamples : 0,
+      maxHipLateralOffsetHipWidths: hipLateralMax,
+      meanShoulderHipOffsetTorso: shoulderHipOffsetSamples ? shoulderHipOffsetSum / shoulderHipOffsetSamples : 0,
+      maxShoulderHipOffsetTorso: shoulderHipOffsetMax,
+      compactSeconds: Math.min(duration, compactSeconds),
+    },
+    observationConfidence,
+    events: events.slice(0, 1000),
+    movementSegments: movementSegments.slice(0, 500),
+    hipTrajectory,
   };
 
   return {
     engine: "MediaPipe Pose Landmarker Lite",
-    engineVersion: "1.0.3",
+    engineVersion: "1.3.2",
     localProcessing: true,
     rules,
     metrics,

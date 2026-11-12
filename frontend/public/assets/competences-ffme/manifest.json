@@ -1,0 +1,71 @@
+{
+  "source": "Fédération française de la montagne et de l'escalade (FFME)",
+  "notice": "Reproduction autorisée déclarée par l'exploitant du club. Pages originales non retouchées.",
+  "documents": {
+    "check": [
+      "/assets/competences-ffme/check-01.jpg",
+      "/assets/competences-ffme/check-02.jpg"
+    ],
+    "encord": [
+      "/assets/competences-ffme/encord-01.jpg"
+    ],
+    "huit": [
+      "/assets/competences-ffme/huit-01.jpg"
+    ],
+    "cinq": [
+      "/assets/competences-ffme/cinq-01.jpg"
+    ],
+    "trois": [
+      "/assets/competences-ffme/trois-01.jpg"
+    ],
+    "leader": [
+      "/assets/competences-ffme/leader-01.jpg"
+    ],
+    "clip": [
+      "/assets/competences-ffme/clip-01.jpg",
+      "/assets/competences-ffme/clip-02.jpg",
+      "/assets/competences-ffme/clip-03.jpg"
+    ],
+    "parade": [
+      "/assets/competences-ffme/parade-01.jpg",
+      "/assets/competences-ffme/parade-02.jpg"
+    ],
+    "comparatif": [
+      "/assets/competences-ffme/comparatif-01.jpg"
+    ],
+    "pieds": [
+      "/assets/competences-ffme/pieds-01.jpg",
+      "/assets/competences-ffme/pieds-02.jpg",
+      "/assets/competences-ffme/pieds-03.jpg"
+    ],
+    "repos": [
+      "/assets/competences-ffme/repos-01.jpg",
+      "/assets/competences-ffme/repos-02.jpg",
+      "/assets/competences-ffme/repos-03.jpg"
+    ],
+    "lecture": [
+      "/assets/competences-ffme/lecture-01.jpg",
+      "/assets/competences-ffme/lecture-02.jpg",
+      "/assets/competences-ffme/lecture-03.jpg",
+      "/assets/competences-ffme/lecture-04.jpg",
+      "/assets/competences-ffme/lecture-05.jpg",
+      "/assets/competences-ffme/lecture-06.jpg",
+      "/assets/competences-ffme/lecture-07.jpg",
+      "/assets/competences-ffme/lecture-08.jpg"
+    ]
+  },
+  "pdfs": {
+    "check": "/assets/competences-ffme/check.pdf",
+    "encord": "/assets/competences-ffme/encord.pdf",
+    "huit": "/assets/competences-ffme/huit.pdf",
+    "cinq": "/assets/competences-ffme/cinq.pdf",
+    "trois": "/assets/competences-ffme/trois.pdf",
+    "leader": "/assets/competences-ffme/leader.pdf",
+    "clip": "/assets/competences-ffme/clip.pdf",
+    "parade": "/assets/competences-ffme/parade.pdf",
+    "comparatif": "/assets/competences-ffme/comparatif.pdf",
+    "pieds": "/assets/competences-ffme/pieds.pdf",
+    "repos": "/assets/competences-ffme/repos.pdf",
+    "lecture": "/assets/competences-ffme/lecture.pdf"
+  }
+}

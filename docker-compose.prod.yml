@@ -1,8 +1,8 @@
 # =============================================================================
 # Déploiement de production sur serveur Linux avec Docker Compose
 # =============================================================================
-# Ce fichier reste indépendant de render.yaml. Il orchestre localement la base,
-# l'API et le frontend derrière le reverse proxy HTTPS déjà présent sur le serveur.
+# Ce fichier orchestre localement la base, l'API et le frontend derrière le
+# reverse proxy HTTPS déjà présent sur le serveur Linux.
 
 services:
   # ---------------------------------------------------------------------------
@@ -65,6 +65,9 @@ services:
       BACKUP_RECIPIENT: ${BACKUP_RECIPIENT:-}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-35}
       BACKUP_UPLOAD_MAX_BYTES: ${BACKUP_UPLOAD_MAX_BYTES:-52428800}
+      APP_VERSION: ${APP_VERSION:-unknown}
+      DEPLOYMENT_COMMIT: ${GITHUB_SHA:-unknown}
+      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
     ports:
       - "127.0.0.1:${BACKEND_BIND_PORT:-3000}:3000"
     volumes:
@@ -75,7 +78,7 @@ services:
       backup-init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(async r=>{if(!r.ok)process.exit(1);const b=await r.json();process.exit(b.degraded?1:0)}).catch(()=>process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 5

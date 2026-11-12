@@ -15,9 +15,12 @@ test("App délègue le bootstrap API et authentification", () => {
 test("le bootstrap initial libère l'authentification après la page récente puis hydrate l'historique", () => {
   assert.match(hook, /apiFetch\("\/auth\/me"/);
   assert.match(hook, /recentOnly: true/);
-  assert.match(hook, /setAuthLoading\(false\);\s*\n\s*if \(recentState\?\.realisations\?\.length/);
+  assert.match(hook, /setAuthLoading\(false\)/);
+  assert.match(hook, /void hydrateSessions\(/);
   assert.match(hook, /void hydrateRealisations\(/);
   assert.match(hook, /historyTokenRef/);
+  assert.match(hook, /sessionHistoryTokenRef/);
+  assert.match(hook, /recentSessionsPath/);
   assert.match(hook, /apiFetch\("\/auth\/broadcast-messages\/pending"/);
   assert.doesNotMatch(hook, /authApiFetch|authToken|setAuthToken/);
   assert.match(hook, /return \{ reloadApiState \}/);
@@ -32,7 +35,7 @@ test("les réalisations récentes utilisent la première page puis l'historique 
 
 test("un rafraîchissement manuel invalide l'hydratation différée et recharge tout", () => {
   assert.match(hook, /recentOnly = false/);
-  assert.match(hook, /if \(!recentOnly\) historyTokenRef\.current = null/);
+  assert.match(hook, /if \(!recentOnly\) \{[\s\S]*historyTokenRef\.current = null;[\s\S]*sessionHistoryTokenRef\.current = null;/);
   assert.match(hook, /loadBootstrapEndpoint\(endpoint, \{ recentOnly \}\)/);
 });
 

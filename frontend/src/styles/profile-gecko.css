@@ -88,3 +88,28 @@
 .profile-gecko-stage[data-level="7"] .profile-animal-image { transform: scale(1); filter: saturate(1.14) contrast(1.04) drop-shadow(0 4px 8px color-mix(in srgb, var(--gecko-accent) 24%, transparent)); }
 .profile-gecko-stage[data-level="8"] .profile-animal-image { transform: scale(1.03); filter: saturate(1.2) contrast(1.06) drop-shadow(0 5px 10px color-mix(in srgb, var(--gecko-accent) 38%, transparent)); }
 .profile-gecko-stage[data-level] .profile-custom-image { transform: none; filter: none; object-fit: cover; }
+
+/* Un même couvre-chef complète chaque avatar et chaque évolution sans dupliquer les illustrations. */
+.profile-avatar-christmas { position: relative; }
+.profile-avatar-christmas::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 19%;
+  width: 58%;
+  aspect-ratio: 180 / 150;
+  background: url("/media/avatars/christmas/santa-hat.svg") center / contain no-repeat;
+  pointer-events: none;
+}
+
+.profile-avatar-edit-button { width: min(260px, 100%); margin-top: 8px; }
+.profile-avatar-history-item--current {
+  padding: 4px;
+  border: 2px solid var(--gecko-accent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--gecko-accent) 12%, var(--theme-card));
+}
+.profile-avatar-history-item--current figcaption { color: var(--theme-text); font-weight: 800; }
+.profile-avatar-history-item--locked { filter: grayscale(1); opacity: .48; }
+.profile-avatar-history-status { display: block; margin-top: 2px; font-size: 9px; }

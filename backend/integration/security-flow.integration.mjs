@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import bcrypt from "bcryptjs";
 import pg from "pg";
 import { purgeExpiredSecurityData } from "../admin-users/security-retention-service.js";
+import { hashToken } from "../admin-users/security.js";
 
 const { Pool } = pg;
 const PORT = Number(process.env.PORT || 3100);
@@ -188,6 +189,250 @@ async function run() {
   );
   assert.equal(closedRows.rowCount, 0, "l'inscription refusée a malgré tout été persistée");
 
+  // Régression planning : la liste Inscriptions permet à un membre connecté
+  // d'inscrire un autre utilisateur sans lui accorder le droit de changer le type.
+  const registrationTarget = await jsonRequest("/participants", {
+    method: "POST",
+    cookies: admin.cookies,
+    csrf: admin.csrf,
+    body: {
+      nom: "Inscription",
+      prenom: "Cible",
+      email: `inscription-cible-${Date.now()}@integration.test`,
+      passport: "vert",
+      sexe: "",
+      cotisation: true,
+      ffme: false,
+      canEncadrer: false,
+      canReferer: false,
+      canAdmin: false,
+      avatarId: "gecko",
+      crestId: "cristal",
+      profilePublic: true,
+    },
+  });
+  assert.equal(registrationTarget.response.status, 201, JSON.stringify(registrationTarget.payload));
+  const registrationTargetId = String(registrationTarget.payload.id);
+  const registrationSessionId = `registration-${Date.now()}`;
+  const registrationSession = {
+    id: registrationSessionId,
+    date: "2026-08-26",
+    slot: "soir",
+    status: "libre",
+    encadrantId: null,
+    referentId: null,
+    participantIds: [],
+  };
+  const registerOtherMember = await jsonRequest(
+    `/sessions/${registrationSessionId}/participants/${registrationTargetId}`,
+    {
+      method: "POST",
+      cookies: member.cookies,
+      csrf: member.csrf,
+      body: { session: registrationSession },
+    },
+  );
+  assert.equal(
+    registerOtherMember.response.status,
+    200,
+    JSON.stringify(registerOtherMember.payload),
+  );
+  assert.ok(registerOtherMember.payload.participantIds.includes(registrationTargetId));
+  const persistedOtherRegistration = await pool.query(
+    `select 1 from session_participants where session_id = $1 and participant_id = $2`,
+    [registrationSessionId, registrationTargetId],
+  );
+  assert.equal(
+    persistedOtherRegistration.rowCount,
+    1,
+    "l'inscription d'un autre utilisateur n'a pas été persistée",
+  );
+
+  const forbiddenTypeSessionId = `registration-type-${Date.now()}`;
+  const forbiddenTypeChange = await jsonRequest(
+    `/sessions/${forbiddenTypeSessionId}/participants/${registrationTargetId}`,
+    {
+      method: "POST",
+      cookies: member.cookies,
+      csrf: member.csrf,
+      body: {
+        session: {
+          ...registrationSession,
+          id: forbiddenTypeSessionId,
+          status: "encadree",
+        },
+      },
+    },
+  );
+  assert.equal(
+    forbiddenTypeChange.response.status,
+    403,
+    "un membre standard a pu changer le type d'une séance lors d'une inscription",
+  );
+
+  // Régression planning : un encadrant doit pouvoir s'affecter lui-même et
+  // l'affectation doit survivre à la relecture PostgreSQL.
+  await pool.query(
+    `update participants set can_encadrer = true where id = $1`,
+    [participantId],
+  );
+  const selfAssignEncadrant = await jsonRequest(`/sessions/${sessionId}`, {
+    method: "PUT",
+    cookies: member.cookies,
+    csrf: member.csrf,
+    body: {
+      ...sessionPayload,
+      status: "encadree",
+      encadrantId: participantId,
+    },
+  });
+  assert.equal(
+    selfAssignEncadrant.response.status,
+    200,
+    JSON.stringify(selfAssignEncadrant.payload),
+  );
+  assert.equal(String(selfAssignEncadrant.payload.encadrantId), participantId);
+  const persistedEncadrant = await pool.query(
+    `select encadrant_id from sessions where id = $1`,
+    [sessionId],
+  );
+  assert.equal(
+    String(persistedEncadrant.rows[0].encadrant_id),
+    participantId,
+    "l'auto-affectation de l'encadrant n'a pas été persistée",
+  );
+  // Régression planning : un référent qualifié doit pouvoir s’affecter lui-même,
+  // y compris lors du passage d’une séance encadrée à une séance libre.
+  await pool.query(
+    `update participants set can_referer = true where id = $1`,
+    [participantId],
+  );
+  const selfAssignReferent = await jsonRequest(`/sessions/${sessionId}`, {
+    method: "PUT",
+    cookies: member.cookies,
+    csrf: member.csrf,
+    body: {
+      ...sessionPayload,
+      status: "libre",
+      encadrantId: null,
+      referentId: participantId,
+    },
+  });
+  assert.equal(
+    selfAssignReferent.response.status,
+    200,
+    JSON.stringify(selfAssignReferent.payload),
+  );
+  assert.equal(String(selfAssignReferent.payload.referentId), participantId);
+  assert.equal(selfAssignReferent.payload.encadrantId, null);
+  const persistedReferent = await pool.query(
+    `select encadrant_id, referent_id from sessions where id = $1`,
+    [sessionId],
+  );
+  assert.equal(persistedReferent.rows[0].encadrant_id, null);
+  assert.equal(
+    String(persistedReferent.rows[0].referent_id),
+    participantId,
+    "l'auto-affectation du référent n'a pas été persistée",
+  );
+
+  // La gestion d'une séance appartient aux encadrants/référents. Une personne
+  // habilitée peut sélectionner dans la liste un autre responsable qualifié.
+  const supervisorTarget = await jsonRequest("/participants", {
+    method: "POST",
+    cookies: admin.cookies,
+    csrf: admin.csrf,
+    body: {
+      nom: "Responsable",
+      prenom: "Cible",
+      email: `responsable-cible-${Date.now()}@integration.test`,
+      passport: "vert",
+      sexe: "",
+      cotisation: true,
+      ffme: false,
+      canEncadrer: true,
+      canReferer: true,
+      canAdmin: false,
+      avatarId: "gecko",
+      crestId: "cristal",
+      profilePublic: true,
+    },
+  });
+  assert.equal(supervisorTarget.response.status, 201, JSON.stringify(supervisorTarget.payload));
+  const supervisorTargetId = String(supervisorTarget.payload.id);
+
+  await pool.query(
+    `update participants set can_encadrer = false, can_referer = true where id = $1`,
+    [participantId],
+  );
+  const referentChangesToEncadree = await jsonRequest(`/sessions/${sessionId}`, {
+    method: "PUT",
+    cookies: member.cookies,
+    csrf: member.csrf,
+    body: {
+      ...sessionPayload,
+      status: "encadree",
+      encadrantId: supervisorTargetId,
+      referentId: null,
+    },
+  });
+  assert.equal(
+    referentChangesToEncadree.response.status,
+    200,
+    JSON.stringify(referentChangesToEncadree.payload),
+  );
+  assert.equal(String(referentChangesToEncadree.payload.encadrantId), supervisorTargetId);
+  assert.equal(referentChangesToEncadree.payload.referentId, null);
+
+  const targetAsReferent = await jsonRequest(`/sessions/${sessionId}`, {
+    method: "PUT",
+    cookies: member.cookies,
+    csrf: member.csrf,
+    body: {
+      ...sessionPayload,
+      status: "libre",
+      encadrantId: null,
+      referentId: supervisorTargetId,
+    },
+  });
+  assert.equal(targetAsReferent.response.status, 200, JSON.stringify(targetAsReferent.payload));
+  assert.equal(String(targetAsReferent.payload.referentId), supervisorTargetId);
+
+  const unqualifiedTarget = await jsonRequest("/participants", {
+    method: "POST",
+    cookies: admin.cookies,
+    csrf: admin.csrf,
+    body: {
+      nom: "Responsable",
+      prenom: "NonQualifie",
+      email: `responsable-non-qualifie-${Date.now()}@integration.test`,
+      passport: "vert",
+      sexe: "",
+      cotisation: true,
+      ffme: false,
+      canEncadrer: false,
+      canReferer: false,
+      canAdmin: false,
+      avatarId: "gecko",
+      crestId: "cristal",
+      profilePublic: true,
+    },
+  });
+  assert.equal(unqualifiedTarget.response.status, 201, JSON.stringify(unqualifiedTarget.payload));
+  const invalidSupervisor = await jsonRequest(`/sessions/${sessionId}`, {
+    method: "PUT",
+    cookies: member.cookies,
+    csrf: member.csrf,
+    body: {
+      ...sessionPayload,
+      status: "libre",
+      encadrantId: null,
+      referentId: String(unqualifiedTarget.payload.id),
+    },
+  });
+  assert.equal(invalidSupervisor.response.status, 400);
+  assert.match(String(invalidSupervisor.payload?.error || ""), /pas habilité comme référent/i);
+
   const unverifiedEmail = `unverified-${Date.now()}@integration.test`;
   const requestAccess = await jsonRequest("/auth/request-access", {
     method: "POST",
@@ -212,6 +457,94 @@ async function run() {
     [unverifiedEmail],
   );
   assert.equal(prematureParticipant.rowCount, 0, "une fiche participant a été créée avant vérification e-mail");
+
+  const associationTargetEmail = `association-target-${Date.now()}@integration.test`;
+  const associationTarget = await jsonRequest("/participants", {
+    method: "POST",
+    cookies: admin.cookies,
+    csrf: admin.csrf,
+    body: {
+      nom: "Association",
+      prenom: "Cible",
+      email: associationTargetEmail,
+      passport: "jaune",
+      sexe: "",
+      cotisation: false,
+      ffme: false,
+      canEncadrer: false,
+      canReferer: false,
+      canAdmin: false,
+      avatarId: "gecko",
+      crestId: "cristal",
+      profilePublic: true,
+    },
+  });
+  assert.equal(associationTarget.response.status, 201, JSON.stringify(associationTarget.payload));
+  const associationTargetId = String(associationTarget.payload.id);
+
+  const prematureAssociation = await jsonRequest(`/admin/auth/users/${pendingUser.rows[0].id}/participant`, {
+    method: "PUT",
+    cookies: admin.cookies,
+    csrf: admin.csrf,
+    body: { participantId: associationTargetId },
+  });
+  assert.equal(
+    prematureAssociation.response.status,
+    409,
+    "un compte non confirmé a pu être associé à une fiche grimpeur",
+  );
+  const stillUnassociated = await pool.query(
+    `select participant_id from users where id = $1`,
+    [pendingUser.rows[0].id],
+  );
+  assert.equal(stillUnassociated.rows[0].participant_id, null);
+
+  const verificationToken = `integration-verification-${Date.now()}`;
+  await pool.query(
+    `insert into email_verification_tokens (user_id, token_hash, expires_at)
+     values ($1, $2, now() + interval '1 hour')`,
+    [pendingUser.rows[0].id, hashToken(verificationToken)],
+  );
+  const verifyEmail = await jsonRequest(
+    `/auth/verify-email?token=${encodeURIComponent(verificationToken)}`,
+    { method: "POST" },
+  );
+  assert.equal(verifyEmail.response.status, 200, JSON.stringify(verifyEmail.payload));
+
+  const verifiedAssociation = await jsonRequest(`/admin/auth/users/${pendingUser.rows[0].id}/participant`, {
+    method: "PUT",
+    cookies: admin.cookies,
+    csrf: admin.csrf,
+    body: { participantId: associationTargetId },
+  });
+  assert.equal(verifiedAssociation.response.status, 200, JSON.stringify(verifiedAssociation.payload));
+
+  const persistedAssociation = await pool.query(
+    `
+      select u.participant_id, u.email_verified_at, p.email, p.login_email
+      from users u
+      join participants p on p.id = u.participant_id
+      where u.id = $1
+    `,
+    [pendingUser.rows[0].id],
+  );
+  assert.equal(String(persistedAssociation.rows[0].participant_id), associationTargetId);
+  assert.ok(persistedAssociation.rows[0].email_verified_at);
+  assert.equal(persistedAssociation.rows[0].email, unverifiedEmail);
+  assert.equal(persistedAssociation.rows[0].login_email, unverifiedEmail);
+
+  const approvePendingAccount = await jsonRequest(`/admin/auth/users/${pendingUser.rows[0].id}/approve`, {
+    method: "POST",
+    cookies: admin.cookies,
+    csrf: admin.csrf,
+  });
+  assert.equal(approvePendingAccount.response.status, 200, JSON.stringify(approvePendingAccount.payload));
+  const activatedAccount = await pool.query(
+    `select status, participant_id from users where id = $1`,
+    [pendingUser.rows[0].id],
+  );
+  assert.equal(activatedAccount.rows[0].status, "active");
+  assert.equal(String(activatedAccount.rows[0].participant_id), associationTargetId);
 
   const staleEmail = `stale-${Date.now()}@integration.test`;
   const oldTimestamp = "2026-08-10T10:00:00.000Z";

@@ -38,6 +38,20 @@ test("la vue complète utilise login_email et remplace le Base64 par un marqueur
   assert.equal(participant.canAdmin, true);
 });
 
+test("l'année de naissance reste privée et seule la catégorie FFME est diffusée", () => {
+  const birthYear = new Date().getUTCFullYear() - 41;
+  const row = { ...participantRow, annee_naissance: birthYear };
+  const complete = serializeParticipant(row);
+  const publicProfile = serializePublicParticipant(row);
+  const privateProfile = serializePrivateParticipant({ ...row, profile_public: false });
+  assert.equal(complete.anneeNaissance, birthYear);
+  assert.equal(complete.categorieFfme, "Vétéran 1");
+  assert.equal(publicProfile.categorieFfme, "Vétéran 1");
+  assert.equal(Object.hasOwn(publicProfile, "anneeNaissance"), false);
+  assert.equal(Object.hasOwn(privateProfile, "anneeNaissance"), false);
+  assert.equal(Object.hasOwn(privateProfile, "categorieFfme"), false);
+});
+
 test("la vue publique signale l avatar sans divulguer son Base64", () => {
   const participant = serializePublicParticipant(participantRow);
   assert.equal(participant.id, "42");

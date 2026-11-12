@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: climbcrew-validation-deploy-${{ github.ref }}
@@ -33,7 +34,7 @@ jobs:
       deploy_branch: ${{ steps.validated_commit.outputs.branch }}
     steps:
       - name: Récupérer le dépôt à valider
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.branch || github.sha }}
           fetch-depth: 2
@@ -61,6 +62,27 @@ jobs:
           echo "Commit validé : $VALIDATED_SHA"
           echo "Branche cible : $DEPLOY_BRANCH"
 
+      - name: Vérifier que main provient d'une Pull Request
+        if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ steps.validated_commit.outputs.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          RESPONSE="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPOSITORY}/commits/${COMMIT_SHA}/pulls")"
+          MERGED_TO_MAIN="$(printf '%s' "$RESPONSE" | python3 -c 'import json,sys; data=json.load(sys.stdin); print(sum(1 for pr in data if pr.get("merged_at") and pr.get("base",{}).get("ref")=="main"))')"
+          if [ "$MERGED_TO_MAIN" -lt 1 ]; then
+            echo "ERROR: un push direct vers main ne peut pas être déployé. Utiliser une Pull Request."
+            exit 1
+          fi
+          echo "Commit main associé à une Pull Request fusionnée : OK"
+
       - name: Vérifier l'incrément de version
         shell: bash
         env:
@@ -68,8 +90,18 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
         run: bash .github/scripts/verify-version.sh
 
+      - name: Valider les scripts de déploiement P0
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n deploy/scripts/install-preprod-nginx.sh
+          bash -n deploy/scripts/rollback-preprod.sh
+          grep -Fq '__PPD_DOMAIN__' deploy/nginx/pre-climbcrew.reverse-proxy.conf.template
+          grep -Fq '__SSL_CERTIFICATE__' deploy/nginx/pre-climbcrew.reverse-proxy.conf.template
+          grep -Fq '__SSL_CERTIFICATE_KEY__' deploy/nginx/pre-climbcrew.reverse-proxy.conf.template
+
       - name: Installer Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
@@ -128,12 +160,12 @@ jobs:
           --health-retries 12
     steps:
       - name: Récupérer exactement le commit validé
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ needs.validate.outputs.validated_sha }}
 
       - name: Installer Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
@@ -173,54 +205,68 @@ jobs:
       ref: ${{ needs.validate.outputs.validated_sha }}
 
   deploy:
-    name: Déployer la production réelle
+    name: Déployer la préproduction
     needs: [validate, integration, linux_validate]
-    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.validate.outputs.deploy_branch == 'production' }}
+    if: ${{ github.repository == 'thithipetit-hash/ClimbCrewPPD' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.validate.outputs.deploy_branch == 'main' }}
     runs-on: self-hosted
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       DEPLOY_ROOT: /opt/climbcrew
+      PPD_DOMAIN: pre-climbcrew.dip-tcs.com
     steps:
-      - name: Vérifier que le runner pointe bien sur la production
+      - name: Vérifier la cible de préproduction
         shell: bash
         run: |
           set -euo pipefail
-          for command in git docker curl; do
+          for command in git docker curl sudo nginx; do
             command -v "$command" >/dev/null 2>&1 || { echo "ERROR: commande absente: $command"; exit 1; }
           done
           docker compose version >/dev/null
           test -d "$DEPLOY_ROOT/.git" || { echo "ERROR: clone persistant absent: $DEPLOY_ROOT"; exit 1; }
           test -f "$DEPLOY_ROOT/.env.production" || { echo "ERROR: .env.production absent"; exit 1; }
-          if ! sudo grep -RqsE 'server_name[[:space:]]+climbcrew\.dip-tcs\.com' /etc/nginx/sites-enabled 2>/dev/null; then
-            echo 'ERROR: ce runner ne publie pas climbcrew.dip-tcs.com.'
-            exit 1
-          fi
-          if docker inspect climbcrew-backend >/dev/null 2>&1; then
-            CURRENT_ROOT="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' climbcrew-backend 2>/dev/null || true)"
-            if [ -n "$CURRENT_ROOT" ] && [ "$CURRENT_ROOT" != "$DEPLOY_ROOT" ]; then
-              echo "ERROR: climbcrew-backend appartient à $CURRENT_ROOT, pas à $DEPLOY_ROOT"
-              exit 1
-            fi
-          fi
-          echo "Cible confirmée: $DEPLOY_ROOT -> climbcrew.dip-tcs.com"
+          CURRENT_ORIGIN="$(cd "$DEPLOY_ROOT" && git remote get-url origin 2>/dev/null || true)"
+          EXPECTED_ORIGIN="https://github.com/${GITHUB_REPOSITORY}.git"
+          [ "$CURRENT_ORIGIN" = "$EXPECTED_ORIGIN" ] || { echo "ERROR: origin inattendu: $CURRENT_ORIGIN"; exit 1; }
+          sudo nginx -t
+          echo "Cible PPD confirmée: $DEPLOY_ROOT"
 
-      - name: Sauvegarder PostgreSQL avant bascule
+      - name: Sauvegarder et vérifier PostgreSQL avant bascule
+        id: backup_db
         shell: bash
         run: |
           set -euo pipefail
-          docker inspect climbcrew-db >/dev/null 2>&1 || { echo 'ERROR: conteneur PostgreSQL de production absent'; exit 1; }
-          docker ps --format '{{.Names}}' | grep -qx 'climbcrew-db' || { echo 'ERROR: PostgreSQL de production arrêté'; exit 1; }
+          docker inspect climbcrew-db >/dev/null 2>&1 || { echo "ERROR: conteneur PostgreSQL PPD absent"; exit 1; }
+          docker ps --format '{{.Names}}' | grep -qx 'climbcrew-db' || { echo "ERROR: PostgreSQL PPD arrêté"; exit 1; }
           BACKUP_DIR="$DEPLOY_ROOT/backups/predeploy"
           mkdir -p "$BACKUP_DIR"
           STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
           BACKUP_FILE="$BACKUP_DIR/predeploy-${STAMP}.dump"
           docker exec climbcrew-db sh -lc 'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$BACKUP_FILE"
-          test -s "$BACKUP_FILE" || { echo 'ERROR: sauvegarde PostgreSQL vide'; exit 1; }
+          test -s "$BACKUP_FILE" || { echo "ERROR: sauvegarde PostgreSQL vide"; exit 1; }
+          docker exec -i climbcrew-db pg_restore --list < "$BACKUP_FILE" >/dev/null
           sha256sum "$BACKUP_FILE"
-          ls -1t "$BACKUP_DIR"/predeploy-*.dump 2>/dev/null | tail -n +11 | xargs -r rm -f
-          echo "Sauvegarde pré-déploiement créée: $BACKUP_FILE"
+          printf 'backup_file=%s\n' "$BACKUP_FILE" >> "$GITHUB_OUTPUT"
 
-      - name: Synchroniser le dépôt sur le SHA production validé
+          DATA_SNAPSHOT="$BACKUP_DIR/predeploy-${STAMP}.ids"
+          docker exec -i climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' > "$DATA_SNAPSHOT" <<'SQL'
+          select 'users:' || id::text from users
+          union all select 'participants:' || id::text from participants
+          union all select 'sessions:' || id::text from sessions
+          union all select 'session_participants:' || session_id || ':' || participant_id from session_participants
+          union all select 'routes:' || id::text from routes
+          union all select 'realisations:' || id::text from realisations
+          union all select 'route_videos:' || id::text from route_videos
+          union all select 'route_ratings:' || route_id || ':' || user_id::text from route_ratings
+          order by 1;
+          SQL
+          test -s "$DATA_SNAPSHOT" || { echo "ERROR: inventaire métier pré-déploiement vide"; exit 1; }
+          printf 'data_snapshot=%s\n' "$DATA_SNAPSHOT" >> "$GITHUB_OUTPUT"
+
+          ls -1t "$BACKUP_DIR"/predeploy-*.dump 2>/dev/null | tail -n +11 | xargs -r rm -f
+          ls -1t "$BACKUP_DIR"/predeploy-*.ids 2>/dev/null | tail -n +11 | xargs -r rm -f
+          echo "Sauvegarde et inventaire pré-déploiement créés et vérifiés: $BACKUP_FILE"
+
+      - name: Synchroniser le dépôt sur le SHA PPD validé
         id: sync_repo
         shell: bash
         env:
@@ -228,27 +274,30 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_ROOT"
-          EXPECTED_ORIGIN="https://github.com/${GITHUB_REPOSITORY}.git"
-          CURRENT_ORIGIN="$(git remote get-url origin 2>/dev/null || true)"
-          if [ "$CURRENT_ORIGIN" != "$EXPECTED_ORIGIN" ]; then
-            git remote set-url origin "$EXPECTED_ORIGIN" 2>/dev/null || git remote add origin "$EXPECTED_ORIGIN"
-          fi
           PREVIOUS_SHA="$(git rev-parse HEAD)"
           printf 'previous_sha=%s\n' "$PREVIOUS_SHA" >> "$GITHUB_OUTPUT"
           FETCH_OK=false
           for attempt in 1 2 3 4 5; do
-            if timeout 90s git fetch --no-tags --prune origin 'refs/heads/production:refs/remotes/origin/production'; then
+            if timeout 90s git fetch --no-tags --prune origin 'refs/heads/main:refs/remotes/origin/main'; then
               FETCH_OK=true
               break
             fi
             sleep $((attempt * 10))
           done
-          [ "$FETCH_OK" = true ] || { echo 'ERROR: git fetch impossible'; exit 1; }
-          git cat-file -e "${VALIDATED_SHA}^{commit}" 2>/dev/null || { echo 'ERROR: SHA validé absent'; exit 1; }
-          git merge-base --is-ancestor "$VALIDATED_SHA" refs/remotes/origin/production || { echo 'ERROR: SHA hors branche production'; exit 1; }
-          git checkout -B production "$VALIDATED_SHA"
+          [ "$FETCH_OK" = true ] || { echo "ERROR: git fetch impossible"; exit 1; }
+          git cat-file -e "${VALIDATED_SHA}^{commit}" 2>/dev/null || { echo "ERROR: SHA validé absent"; exit 1; }
+          git merge-base --is-ancestor "$VALIDATED_SHA" refs/remotes/origin/main || { echo "ERROR: SHA hors branche main"; exit 1; }
+          git checkout -B main "$VALIDATED_SHA"
           [ "$(git rev-parse HEAD)" = "$VALIDATED_SHA" ] || exit 1
-          echo "Production verrouillée sur $VALIDATED_SHA (ancien SHA: $PREVIOUS_SHA)"
+          printf 'candidate_checked_out=true\n' >> "$GITHUB_OUTPUT"
+          echo "Préproduction verrouillée sur $VALIDATED_SHA (ancien SHA: $PREVIOUS_SHA)"
+
+      - name: Installer le vhost PPD dédié
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_ROOT"
+          bash deploy/scripts/install-preprod-nginx.sh "$PPD_DOMAIN"
 
       - name: Synchroniser les secrets applicatifs disponibles
         shell: bash
@@ -267,8 +316,10 @@ jobs:
               printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
             fi
           }
-          set_env_var REQUIRE_ADMIN_ACCOUNT_APPROVAL true
           set_env_var ALLOW_FIRST_ADMIN_BOOTSTRAP false
+          set_env_var PUBLIC_URL "https://${PPD_DOMAIN}"
+          set_env_var FRONTEND_ORIGIN "https://${PPD_DOMAIN}"
+          set_env_var CORS_ORIGIN "https://${PPD_DOMAIN}"
           if [ -n "${SMTP_USER:-}" ] && [ -n "${SMTP_PASSWORD:-}" ]; then
             set_env_var EMAIL_ENABLED true
             set_env_var SMTP_HOST smtp.gmail.com
@@ -277,13 +328,13 @@ jobs:
             set_env_var SMTP_REQUIRE_TLS true
             set_env_var SMTP_USER "$SMTP_USER"
             set_env_var SMTP_PASSWORD "$SMTP_PASSWORD"
-            set_env_var EMAIL_FROM_NAME ClimbClubCristal
+            set_env_var EMAIL_FROM_NAME CristalClimbClub
             set_env_var EMAIL_FROM_ADDRESS "$SMTP_USER"
           fi
           if [ -n "${BACKUP_EMAIL_ENCRYPTION_KEY:-}" ]; then
             set_env_var BACKUP_EMAIL_ENCRYPTION_KEY "$BACKUP_EMAIL_ENCRYPTION_KEY"
           fi
-          echo 'Configuration de sécurité synchronisée.'
+          echo "Configuration PPD synchronisée."
 
       - name: Construire et démarrer le SHA validé
         shell: bash
@@ -292,8 +343,14 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_ROOT"
-          docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
-          echo "Pile démarrée pour $VALIDATED_SHA"
+          export GITHUB_SHA="$VALIDATED_SHA"
+          if ! docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build; then
+            echo "ERROR: démarrage de la pile PPD impossible"
+            docker compose --env-file .env.production -f docker-compose.prod.yml ps || true
+            docker logs --tail 300 climbcrew-backend || true
+            exit 1
+          fi
+          echo "Pile PPD démarrée pour $VALIDATED_SHA"
 
       - name: Contrôler la santé locale
         shell: bash
@@ -303,22 +360,121 @@ jobs:
           set -euo pipefail
           BACKEND_OK=false
           for attempt in $(seq 1 24); do
-            if curl --fail --silent --max-time 5 http://127.0.0.1:3000/health >/dev/null; then BACKEND_OK=true; break; fi
+            HEALTH_RESPONSE="$(curl --fail --silent --max-time 5 http://127.0.0.1:3000/health || true)"
+            if [[ -n "$HEALTH_RESPONSE" ]] && ! grep -Eq '"degraded"[[:space:]]*:[[:space:]]*true' <<<"$HEALTH_RESPONSE"; then
+              BACKEND_OK=true
+              break
+            fi
             sleep 5
           done
           [ "$BACKEND_OK" = true ] || { docker logs --tail 200 climbcrew-backend || true; exit 1; }
+
           FRONTEND_OK=false
           for attempt in $(seq 1 12); do
-            if curl --fail --silent --max-time 5 http://127.0.0.1:8080/ >/dev/null; then FRONTEND_OK=true; break; fi
+            if curl --fail --silent --max-time 5 http://127.0.0.1:8080/ >/dev/null; then
+              FRONTEND_OK=true
+              break
+            fi
             sleep 5
           done
-          [ "$FRONTEND_OK" = true ] || { docker compose --env-file "$DEPLOY_ROOT/.env.production" -f "$DEPLOY_ROOT/docker-compose.prod.yml" ps || true; exit 1; }
+          [ "$FRONTEND_OK" = true ] || {
+            docker compose --env-file "$DEPLOY_ROOT/.env.production" -f "$DEPLOY_ROOT/docker-compose.prod.yml" ps || true
+            exit 1
+          }
           echo "Backend OK · Frontend OK · SHA $VALIDATED_SHA"
+
+      - name: Vérifier la conservation des comptes et données existants
+        shell: bash
+        env:
+          DATA_SNAPSHOT: ${{ steps.backup_db.outputs.data_snapshot }}
+        run: |
+          set -euo pipefail
+          test -n "$DATA_SNAPSHOT" && test -s "$DATA_SNAPSHOT" || {
+            echo "ERROR: inventaire métier pré-déploiement introuvable"
+            exit 1
+          }
+
+          CURRENT_SNAPSHOT="$(mktemp)"
+          trap 'rm -f "$CURRENT_SNAPSHOT"' EXIT
+          docker exec -i climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' > "$CURRENT_SNAPSHOT" <<'SQL'
+          select 'users:' || id::text from users
+          union all select 'participants:' || id::text from participants
+          union all select 'sessions:' || id::text from sessions
+          union all select 'session_participants:' || session_id || ':' || participant_id from session_participants
+          union all select 'routes:' || id::text from routes
+          union all select 'realisations:' || id::text from realisations
+          union all select 'route_videos:' || id::text from route_videos
+          union all select 'route_ratings:' || route_id || ':' || user_id::text from route_ratings
+          order by 1;
+          SQL
+
+          MISSING="$(comm -23 "$DATA_SNAPSHOT" "$CURRENT_SNAPSHOT" || true)"
+          if [ -n "$MISSING" ]; then
+            echo "ERROR: données existantes absentes après migration/déploiement :"
+            printf '%s\n' "$MISSING" | head -100
+            exit 1
+          fi
+          echo "Conservation vérifiée : aucun compte, participant, séance, inscription, voie, réalisation, vidéo ou note existant n'a disparu."
+
+      - name: Vérifier la version et le SHA sur le frontal PPD
+        shell: bash
+        env:
+          VALIDATED_SHA: ${{ needs.validate.outputs.validated_sha }}
+        run: |
+          set -euo pipefail
+          EXPECTED_VERSION="$(tr -d '[:space:]' < "$DEPLOY_ROOT/VERSION")"
+          LOCAL_MARKER="$(
+            curl --fail --silent --max-time 10 \
+              "http://127.0.0.1:8080/deployment-version.json?sha=${VALIDATED_SHA}"
+          )"
+          printf '%s' "$LOCAL_MARKER" | grep -Fq "\"version\": \"${EXPECTED_VERSION}\"" || {
+            echo "ERROR: version locale inattendue"
+            echo "$LOCAL_MARKER"
+            exit 1
+          }
+          printf '%s' "$LOCAL_MARKER" | grep -Fq "\"commit\": \"${VALIDATED_SHA}\"" || {
+            echo "ERROR: commit local inattendu"
+            echo "$LOCAL_MARKER"
+            exit 1
+          }
+
+          # Le runner self-hosted est derrière le frontal Stormshield : une
+          # requête HTTPS publique effectuée ici peut recevoir le certificat
+          # d'inspection du runner et ne représente donc pas le TLS vu depuis
+          # Internet. La bascule est validée ici par le marqueur local exact.
+          # Le workflow Verify Public After Deploy effectue séparément le
+          # contrôle public HTTPS après un déploiement réussi.
+
           {
-            echo '### Déploiement production ClimbCrew'
+            echo '### Déploiement préproduction ClimbCrew'
+            echo "- Version: \`$EXPECTED_VERSION\`"
             echo "- SHA: \`$VALIDATED_SHA\`"
-            echo '- Domaine: `climbcrew.dip-tcs.com`'
-            echo '- PostgreSQL sauvegardé avant bascule'
+            echo "- Domaine: \`$PPD_DOMAIN\`"
+            echo '- Vhost PPD dédié: OK'
+            echo '- PostgreSQL sauvegardé et dump vérifié avant bascule'
             echo '- Backend: OK'
             echo '- Frontend: OK'
+            echo '- Marqueur local version/SHA: OK'\n            echo '- Vérification HTTPS publique: déléguée au workflow post-déploiement'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restaurer automatiquement la PPD en cas d'échec
+        if: ${{ failure() && steps.sync_repo.outputs.candidate_checked_out == 'true' && steps.backup_db.outputs.backup_file != '' }}
+        shell: bash
+        env:
+          PREVIOUS_SHA: ${{ steps.sync_repo.outputs.previous_sha }}
+          BACKUP_FILE: ${{ steps.backup_db.outputs.backup_file }}
+        run: |
+          set -euo pipefail
+          ROLLBACK_SCRIPT="$(mktemp)"
+          cp "$DEPLOY_ROOT/deploy/scripts/rollback-preprod.sh" "$ROLLBACK_SCRIPT"
+          chmod +x "$ROLLBACK_SCRIPT"
+          trap 'rm -f "$ROLLBACK_SCRIPT"' EXIT
+          "$ROLLBACK_SCRIPT" "$DEPLOY_ROOT" "$PREVIOUS_SHA" "$BACKUP_FILE" "$PPD_DOMAIN"
+          PREVIOUS_VERSION="$(tr -d '[:space:]' < "$DEPLOY_ROOT/VERSION")"
+          {
+            echo '### Rollback automatique PPD'
+            echo "- SHA restauré: \`$PREVIOUS_SHA\`"
+            echo "- Version restaurée: \`$PREVIOUS_VERSION\`"
+            echo "- Base PostgreSQL restaurée depuis: \`$BACKUP_FILE\`"
+            echo '- Marqueur public restauré: OK'
           } >> "$GITHUB_STEP_SUMMARY"

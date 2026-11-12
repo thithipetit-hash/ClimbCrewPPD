@@ -1,6 +1,5 @@
 import React from "react";
-import Button from "../components/Button.jsx";
-import { fullName } from "../lib/domain.js";
+import RouteRealisationStatisticsTable from "../components/RouteRealisationStatisticsTable.jsx";
 
 const PASSPORT_STATISTICS = [
   ["sans", "Sans"],
@@ -11,10 +10,12 @@ const PASSPORT_STATISTICS = [
   ["decouverte", "Découverte"],
 ];
 
+
 export default function StatisticsSection({
   sessionStats,
   topRouteRankings,
   leadRealisationStats,
+  routeRealisationStats = [],
   formatRouteName,
   statsSortField,
   setStatsSortField,
@@ -29,6 +30,7 @@ export default function StatisticsSection({
     <>
       <div className="stats-grid">
         <div className="stat"><div className="label">Inscrits uniques</div><div className="value">{sessionStats.nombreInscrits}</div></div>
+        <div className="stat"><div className="label">Comptes actifs</div><div className="value">{sessionStats.nombreComptesActifs || 0}</div></div>
         <div className="stat"><div className="label">Cotisations</div><div className="value">{sessionStats.nombreCotisations}</div></div>
         <div className="stat"><div className="label">FFME</div><div className="value">{sessionStats.nombreFFME}</div></div>
         <div className="stat"><div className="label">Voies actives</div><div className="value">{sessionStats.nombreVoiesActives}</div></div>
@@ -59,7 +61,11 @@ export default function StatisticsSection({
               style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, minWidth: 0 }}
             >
               <div className="label" style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                <span className="passport-dot" style={getPassportDotStyle({ passport })} aria-hidden="true" />
+                <span
+                  className="passport-dot"
+                  style={getPassportDotStyle({ passport, ffme: true })}
+                  aria-hidden="true"
+                />
                 <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
               </div>
               <div className="value" style={{ flex: "0 0 auto" }}>{sessionStats.passportCounts?.[passport] || 0}</div>
@@ -92,6 +98,8 @@ export default function StatisticsSection({
         </div>
       </div>
 
+      <RouteRealisationStatisticsTable rows={routeRealisationStats} formatRouteName={formatRouteName} />
+
       <div className="card">
         <div className="card-header">
           <h2>Réalisations en tête par cotation</h2>
@@ -117,48 +125,7 @@ export default function StatisticsSection({
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <h2>Liste des inscrits</h2>
-          <div className="group">
-            <div
-              className="stats-sort-field"
-              style={{ display: "grid", gridTemplateColumns: "auto minmax(160px, 1fr)", gap: 8, alignItems: "center", minWidth: 250 }}
-            >
-              <label style={{ margin: 0 }}>Trier par</label>
-              <select value={statsSortField} onChange={(e) => setStatsSortField(e.target.value)}>
-                <option value="name">Nom</option>
-                <option value="passport">Passeport</option>
-                <option value="cotisation">Cotisation</option>
-                <option value="ffme">Licence FFME</option>
-              </select>
-            </div>
-            <Button
-              variant="secondary"
-              onClick={() => setStatsSortDirection((value) => (value === "asc" ? "desc" : "asc"))}
-              title="Inverser le tri"
-              aria-label={statsSortDirection === "asc" ? "Trier par ordre décroissant" : "Trier par ordre croissant"}
-            >
-              {statsSortDirection === "asc" ? "↓" : "↑"}
-            </Button>
-          </div>
-        </div>
-        <div className="stack">
-          {sortedStatsParticipants.map((participant) => (
-            <div className="participant-row passport-row stats-participant-row" key={participant.id} style={getPassportStyle(participant)} data-passport={normalizePassport(participant.passport)}>
-              <span className="participant-identity">
-                <span className="passport-dot" style={getPassportDotStyle(participant)} aria-hidden="true" />
-                <span className="participant-name">{fullName(participant)},</span>
-              </span>
-              <span className="stats-participant-details small" style={{ color: "inherit" }}>
-                <span title="Cotisation">Cotis. : {participant.cotisation ? "Oui" : "Non"}</span>
-                <span>FFME : {participant.ffme ? "Oui" : "Non"}</span>
-                <span>Passeport : {participant.passport}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+
     </>
   );
 }

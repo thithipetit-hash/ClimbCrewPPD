@@ -3,16 +3,28 @@ import Button from "../components/Button.jsx";
 import ClimberProfilePanel from "../components/ClimberProfilePanel.jsx";
 import ParticipantBadges from "../components/ParticipantBadges.jsx";
 import ProfileGecko from "../components/ProfileGecko.jsx";
+import PhysicalProfileCard from "../components/PhysicalProfileCard.jsx";
 import ProfileRealisationRecorder from "../components/ProfileRealisationRecorder.jsx";
+import ProfileReceivedKudos from "../components/ProfileReceivedKudos.jsx";
+import RouteRealisationStatisticsTable from "../components/RouteRealisationStatisticsTable.jsx";
 import RealisationVideoAnalysis from "../components/RealisationVideoAnalysis.jsx";
+import ConfirmDialog from "../components/ConfirmDialog.jsx";
+import CprDetailsModal from "../components/CprDetailsModal.jsx";
 import CprEvolutionChart from "../sections/CprEvolutionChart.jsx";
 import { apiFetch } from "../lib/api.js";
+import { useProfileRealisations } from "../hooks/useProfileRealisations.js";
 import {
   fullName,
   formatPoints,
   formatDateShortFr,
+  formatPassportLabel,
   formatRouteForRealisation,
+  formatRouteName,
   gradeToIndex,
+  getPassportDotLabel,
+  getPassportDotStyle,
+  getPassportStyle,
+  normalizePassport,
   normalizeRopeNumber,
 } from "../lib/domain.js";
 import {
@@ -21,6 +33,15 @@ import {
   getRealisationCriterion,
   getRealisationMode,
 } from "../lib/realisation-mode.js";
+import { bestRealisationIds, realisationQualityScore } from "../lib/profile-physical.js";
+import { buildRouteRealisationStatistics } from "../lib/route-realisation-statistics.js";
+import {
+  BUDDY_DAYS,
+  BUDDY_SLOTS,
+  buddyPreferenceKey,
+  buddyPreferencesFromAvailability,
+  formatBuddyPreferences,
+} from "../lib/buddy-preferences.js";
 
 function sortParticipantsForProfile(participants, myParticipantId) {
   return [...participants].sort((a, b) => {
@@ -31,7 +52,7 @@ function sortParticipantsForProfile(participants, myParticipantId) {
   });
 }
 
-function sortRealisationsForDisplay(realisations, routesById, sortBy) {
+function sortRealisationsForDisplay(realisations, routesById, sortBy, bestIds = new Set()) {
   return [...realisations].sort((a, b) => {
     const dateOrder = String(b.dateRealisation || "").localeCompare(String(a.dateRealisation || ""));
     if (sortBy === "date") return dateOrder;
@@ -42,6 +63,13 @@ function sortRealisationsForDisplay(realisations, routesById, sortBy) {
     if (sortBy === "rope") {
       const ropeOrder = normalizeRopeNumber(routeA?.numeroCorde) - normalizeRopeNumber(routeB?.numeroCorde);
       return ropeOrder || dateOrder;
+    }
+
+    if (sortBy === "best") {
+      const bestOrder = Number(bestIds.has(String(b.id))) - Number(bestIds.has(String(a.id)));
+      if (bestOrder) return bestOrder;
+      const qualityOrder = realisationQualityScore(b, routeB) - realisationQualityScore(a, routeA);
+      return qualityOrder || dateOrder;
     }
 
     if (sortBy === "difficulty") {
@@ -72,23 +100,78 @@ export default function Profil({
   getPassportDotStyle,
   normalizePassport,
   updateMyProfile,
+  onRecalculateStats,
   exportMyRealisationsCsv,
+  onTheCragImported,
+  onRealisationsChanged,
+  octoberPumpkinSalt = null,
 }) {
   const [participants, setParticipants] = React.useState(() => myParticipant ? [myParticipant] : []);
   const [selectedParticipantId, setSelectedParticipantId] = React.useState(() => String(myParticipantId || ""));
   const [realisations, setRealisations] = React.useState(() => Array.isArray(allRealisations) ? allRealisations : []);
   const [realisationSort, setRealisationSort] = React.useState("date");
   const [profileError, setProfileError] = React.useState("");
+  const [theCragImporting, setTheCragImporting] = React.useState(false);
+  const [theCragImportStatus, setTheCragImportStatus] = React.useState(null);
+  const [theCragStartDate, setTheCragStartDate] = React.useState("");
+  const [kudosPendingId, setKudosPendingId] = React.useState("");
+  const [buddyAvailability, setBuddyAvailability] = React.useState({ preferences: [], note: "" });
+  const [buddyMatches, setBuddyMatches] = React.useState([]);
+  const [buddySaving, setBuddySaving] = React.useState(false);
+  const [buddySaveStatus, setBuddySaveStatus] = React.useState("");
+  const [pendingConfirmation, setPendingConfirmation] = React.useState(null);
+  const [cprDetailsOpen, setCprDetailsOpen] = React.useState(false);
+  const [statsRecalculating, setStatsRecalculating] = React.useState(false);
+  const [statsRecalculateStatus, setStatsRecalculateStatus] = React.useState("");
+
+  async function toggleKudo(realisation) {
+    if (!myParticipantId || kudosPendingId) return;
+    setKudosPendingId(realisation.id);
+    try {
+      await apiFetch(`/realisations/${encodeURIComponent(realisation.id)}/kudos`, {
+        method: realisation.kudosByMe ? "DELETE" : "POST",
+      });
+      await refreshRealisations();
+    } finally {
+      setKudosPendingId("");
+    }
+  }
+
 
   React.useEffect(() => {
     setRealisations(Array.isArray(allRealisations) ? allRealisations : []);
   }, [allRealisations]);
 
   React.useEffect(() => {
+    if (!USE_API || !myParticipantId) return;
+    Promise.all([apiFetch("/buddy/me"), apiFetch("/buddy")])
+      .then(([mine, matches]) => {
+        setBuddyAvailability({ preferences: buddyPreferencesFromAvailability(mine), note: mine?.note || "" });
+        setBuddyMatches(Array.isArray(matches) ? matches : []);
+      })
+      .catch((error) => {
+        console.error("Impossible de charger les disponibilités Buddy.", error);
+        setProfileError(`Disponibilités Buddy indisponibles : ${error.message || error}`);
+      });
+  }, [USE_API, myParticipantId]);
+
+  React.useEffect(() => {
     if (!selectedParticipantId && myParticipantId) {
       setSelectedParticipantId(String(myParticipantId));
     }
   }, [myParticipantId, selectedParticipantId]);
+
+  React.useEffect(() => {
+    if (!myParticipant?.id) return;
+    setParticipants((current) => {
+      const participantId = String(myParticipant.id);
+      const exists = current.some((participant) => String(participant.id) === participantId);
+      const next = exists
+        ? current.map((participant) => String(participant.id) === participantId ? myParticipant : participant)
+        : [myParticipant, ...current];
+      return sortParticipantsForProfile(next, myParticipantId);
+    });
+  }, [myParticipant, myParticipantId]);
 
   React.useEffect(() => {
     if (!USE_API) return;
@@ -116,7 +199,9 @@ export default function Profil({
   const selectedRealisations = realisations
     .filter((realisation) => String(realisation.participantId) === String(selectedParticipantId))
     .sort((a, b) => String(b.dateRealisation || "").localeCompare(String(a.dateRealisation || "")));
-  const displayedRealisations = sortRealisationsForDisplay(selectedRealisations, routesById, realisationSort);
+  const bestIds = bestRealisationIds(selectedRealisations, routesById);
+  const displayedRealisations = sortRealisationsForDisplay(selectedRealisations, routesById, realisationSort, bestIds);
+  const selectedRouteRealisationStats = buildRouteRealisationStatistics(Object.values(routesById || {}), selectedRealisations);
   const cpr = cprByParticipantId[selectedParticipantId] || {};
   const points = pointsByParticipantId[selectedParticipantId] || 0;
   const participations = sessionStats.participationCount[selectedParticipantId] || 0;
@@ -127,6 +212,28 @@ export default function Profil({
     ? grades.reduce((best, current) => gradeToIndex(current) > gradeToIndex(best) ? current : best)
     : "";
   const profileIsVisible = isOwnProfile || selectedParticipant?.profilePublic !== false;
+
+  const {
+    refreshRealisations,
+    resetOwnRealisations,
+    importTheCragFile,
+    updateOwnRealisation,
+    deleteOwnRealisation,
+  } = useProfileRealisations({
+    isOwnProfile,
+    myParticipantId,
+    selectedRealisations,
+    routesById,
+    theCragStartDate,
+    setRealisations,
+    setProfileError,
+    setTheCragImportStatus,
+    setTheCragImporting,
+    setPendingConfirmation,
+    onTheCragImported,
+    onRealisationsChanged,
+  });
+
 
   async function handleProfileUpdate(patch) {
     if (!isOwnProfile) return;
@@ -139,38 +246,50 @@ export default function Profil({
     return updateMyProfile({ ...patch, sexe: normalizedSexe });
   }
 
-  async function refreshRealisations() {
-    const data = await apiFetch("/realisations");
-    if (Array.isArray(data)) setRealisations(data);
-  }
-
-  async function updateOwnRealisation(realisationId, patch) {
-    if (!isOwnProfile) return;
+  async function handleRecalculateOwnStats() {
+    if (!isOwnProfile || statsRecalculating) return;
+    setStatsRecalculating(true);
+    setStatsRecalculateStatus("");
+    setProfileError("");
     try {
-      setProfileError("");
-      await apiFetch(`/realisations/${encodeURIComponent(realisationId)}`, {
-        method: "PUT",
-        body: JSON.stringify(patch),
-      });
-      await refreshRealisations();
+      await onRecalculateStats();
+      setStatsRecalculateStatus("Vos statistiques et votre CPR ont été recalculés à partir de toutes vos réalisations.");
     } catch (error) {
-      setProfileError(String(error.message || error));
+      setProfileError(`Recalcul des statistiques impossible : ${error.message || error}`);
+    } finally {
+      setStatsRecalculating(false);
+      setPendingConfirmation(null);
     }
   }
 
-  async function deleteOwnRealisation(realisation) {
-    if (!isOwnProfile || !realisation?.id) return;
-    const route = routesById[realisation.voieId];
-    const label = route ? formatRouteForRealisation(route) : "cette réalisation";
-    if (!window.confirm(`Supprimer définitivement ${label} ?`)) return;
+  function toggleBuddyPreference(day, slot) {
+    const preference = buddyPreferenceKey(day, slot);
+    setBuddySaveStatus("");
+    setBuddyAvailability((current) => ({
+      ...current,
+      preferences: current.preferences.includes(preference)
+        ? current.preferences.filter((item) => item !== preference)
+        : [...current.preferences, preference],
+    }));
+  }
+
+  async function saveBuddyAvailability() {
     try {
+      setBuddySaving(true);
+      setBuddySaveStatus("");
       setProfileError("");
-      await apiFetch(`/realisations/${encodeURIComponent(realisation.id)}`, { method: "DELETE" });
-      await refreshRealisations();
+      const saved = await apiFetch("/buddy/me", { method: "PUT", body: JSON.stringify(buddyAvailability) });
+      setBuddyAvailability({ preferences: buddyPreferencesFromAvailability(saved), note: saved.note || "" });
+      const matches = await apiFetch("/buddy");
+      setBuddyMatches(Array.isArray(matches) ? matches : []);
+      setBuddySaveStatus("Préférences enregistrées.");
     } catch (error) {
       setProfileError(String(error.message || error));
+    } finally {
+      setBuddySaving(false);
     }
   }
+
 
   return (
     <div className="stack unified-profile-page">
@@ -190,6 +309,22 @@ export default function Profil({
       </div>
 
       {profileError && <div className="muted-box" role="alert">{profileError}</div>}
+      <ConfirmDialog
+        open={Boolean(pendingConfirmation)}
+        title={pendingConfirmation?.title}
+        message={pendingConfirmation?.message}
+        confirmLabel={pendingConfirmation?.confirmLabel}
+        onConfirm={() => void pendingConfirmation?.onConfirm?.()}
+        busy={statsRecalculating}
+        onCancel={() => setPendingConfirmation(null)}
+      />
+      <CprDetailsModal
+        open={cprDetailsOpen}
+        cpr={cpr}
+        realisations={selectedRealisations}
+        routesById={routesById}
+        onClose={() => setCprDetailsOpen(false)}
+      />
 
       {!selectedParticipant ? (
         <div className="card"><div className="muted-box">Choisissez un grimpeur.</div></div>
@@ -198,7 +333,9 @@ export default function Profil({
           <div className="card" style={getPassportStyle(selectedParticipant)} data-passport={normalizePassport(selectedParticipant.passport)}>
             <div className="card-header">
               <div className="participant-identity">
-                <span className="passport-dot" style={getPassportDotStyle(selectedParticipant)} aria-hidden="true" />
+                <span className="passport-dot" style={getPassportDotStyle(selectedParticipant)} aria-hidden="true">
+                  {getPassportDotLabel(selectedParticipant)}
+                </span>
                 <div>
                   <h2 style={{ margin: 0 }}>{fullName(selectedParticipant)}</h2>
                   {isOwnProfile && <div className="small">{authUser.email}</div>}
@@ -206,9 +343,12 @@ export default function Profil({
               </div>
             </div>
             <div className="group" style={{ marginTop: 10 }}>
-              <span className="pill">Passeport : {selectedParticipant.passport || "-"}</span>
+              <span className="pill">Couleur de passeport : {formatPassportLabel(selectedParticipant.passport)}</span>
+              <span className="pill">Découverte : {selectedParticipant.passportDecouverte ? "Oui" : "Non"}</span>
+              <span className="pill">Passeport FFME : {selectedParticipant.passeportFfme ? "Oui" : "Non"}</span>
               <span className="pill">Cotisation : {selectedParticipant.cotisation ? "Oui" : "Non"}</span>
               <span className="pill">Licence FFME : {selectedParticipant.ffme ? "Oui" : "Non"}</span>
+              {selectedParticipant.categorieFfme && <span className="pill">Catégorie FFME : {selectedParticipant.categorieFfme}</span>}
               <span className="pill">Sexe : {selectedParticipant.sexe ? String(selectedParticipant.sexe).toUpperCase() : "Non précisé"}</span>
             </div>
           </div>
@@ -230,6 +370,45 @@ export default function Profil({
             </div>
           )}
 
+          {isOwnProfile && (
+            <details className="card buddy-card">
+              <summary className="card-header buddy-summary">
+                <div><h3 style={{ margin: 0 }}>Climb buddy</h3><div className="small">Définissez vos préférences habituelles pour chaque jour et chaque séance, sans vous inscrire.</div></div>
+                <span className="buddy-count">{buddyMatches.length} disponible{buddyMatches.length > 1 ? "s" : ""}</span>
+              </summary>
+              <div className="buddy-content">
+                <div className="buddy-preference-grid" role="group" aria-label="Préférences par jour et séance">
+                  <div className="buddy-preference-header" aria-hidden="true"><span>Jour</span>{BUDDY_SLOTS.map((slot) => <span key={slot.value}>{slot.label}</span>)}</div>
+                  {BUDDY_DAYS.map((day) => (
+                    <div className="buddy-preference-row" key={day.value}>
+                      <strong>{day.label}</strong>
+                      {BUDDY_SLOTS.map((slot) => {
+                        const preference = buddyPreferenceKey(day.value, slot.value);
+                        const selected = buddyAvailability.preferences.includes(preference);
+                        return <button type="button" key={preference} className={selected ? "buddy-session-toggle active" : "buddy-session-toggle"} aria-pressed={selected} aria-label={`${day.label} ${slot.label}`} onClick={() => toggleBuddyPreference(day.value, slot.value)}>{selected ? "✓" : "—"}</button>;
+                      })}
+                    </div>
+                  ))}
+                </div>
+                <label>Précision facultative<input maxLength={240} value={buddyAvailability.note} onChange={(event) => { setBuddySaveStatus(""); setBuddyAvailability((current) => ({ ...current, note: event.target.value })); }} placeholder="Ex. plutôt après 18 h, prévenir la veille…" /></label>
+                <div className="buddy-actions"><Button type="button" variant="secondary" disabled={buddySaving} onClick={saveBuddyAvailability}>{buddySaving ? "Enregistrement…" : "Enregistrer mes préférences"}</Button></div>
+                {buddySaveStatus && <div className="small success" role="status">{buddySaveStatus}</div>}
+                {buddyMatches.length > 0 && <div className="buddy-match-list"><strong>Grimpeurs disponibles</strong>{buddyMatches.map((buddy) => <div className="buddy-match" key={buddy.participantId}><span><strong>{buddy.name}</strong><span className="small"> · {formatBuddyPreferences(buddy)}</span></span>{buddy.note && <span className="small">{buddy.note}</span>}</div>)}</div>}
+              </div>
+            </details>
+          )}
+
+          {profileIsVisible && (
+            <details className="card profile-physical-collapsible">
+              <summary className="card-header" style={{ cursor: "pointer" }}>
+                <h3 style={{ margin: 0 }}>Profil physique</h3>
+                <span className="small">Cliquer pour compacter / étendre</span>
+              </summary>
+              <div style={{ marginTop: 10 }}>
+                <PhysicalProfileCard participant={selectedParticipant} editable={isOwnProfile} onUpdate={handleProfileUpdate} />
+              </div>
+            </details>
+          )}
           {!profileIsVisible ? (
             <div className="muted-box private-profile-notice">Ce grimpeur a choisi de conserver son profil privé.</div>
           ) : (
@@ -238,6 +417,7 @@ export default function Profil({
                 grade={cpr.currentGrade || ""}
                 sexe={selectedParticipant.sexe}
                 participant={selectedParticipant}
+                octoberPumpkinSalt={octoberPumpkinSalt}
                 editable={isOwnProfile}
                 onProfileUpdate={isOwnProfile ? handleProfileUpdate : undefined}
               />
@@ -246,15 +426,46 @@ export default function Profil({
                 <div className="stats-grid profile-stats-grid">
                   <div className="stat"><div className="label">Voies réalisées</div><div className="value">{selectedRealisations.length}</div></div>
                   <div className="stat"><div className="label">Meilleure cotation</div><div className="value">{bestGrade || (isOwnProfile ? myProfileStats.bestAll : "-") || "-"}</div></div>
-                  <div className="stat"><div className="label">CPR actuel</div><div className="value">{cpr.currentGrade || "-"}</div></div>
+                  <div className="stat">
+                    <div className="label">CPR actuel</div>
+                    <div className="value">
+                      <button
+                        type="button"
+                        className="cpr-stat-button"
+                        onClick={() => setCprDetailsOpen(true)}
+                        aria-label={`Afficher les voies prises en compte dans le CPR ${cpr.currentGrade || "-"}`}
+                      >
+                        {cpr.currentGrade || "-"}
+                      </button>
+                    </div>
+                  </div>
                   <div className="stat"><div className="label">Points</div><div className="value">{formatPoints(points)}</div></div>
                   <div className="stat"><div className="label">Séances</div><div className="value">{participations}</div></div>
+                  <div className="stat"><div className="label">Kudos reçus</div><div className="value">{selectedRealisations.reduce((total, item) => total + Number(item.kudosCount || 0), 0)}</div></div>
                 </div>
+                {isOwnProfile && (
+                  <div className="group" style={{ marginTop: 12, alignItems: "center" }}>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled={statsRecalculating}
+                      onClick={() => setPendingConfirmation({
+                        title: "Recalculer mes statistiques et mon CPR",
+                        message: "Toutes vos réalisations déjà enregistrées seront reprises, y compris celles antérieures à une réinitialisation du CPR. Aucune donnée ne sera supprimée.",
+                        confirmLabel: "Recalculer",
+                        onConfirm: handleRecalculateOwnStats,
+                      })}
+                    >
+                      {statsRecalculating ? "Recalcul en cours…" : "Recalculer mes statistiques et mon CPR"}
+                    </Button>
+                    {statsRecalculateStatus && <span className="small" role="status">{statsRecalculateStatus}</span>}
+                  </div>
+                )}
               </div>
 
               <ClimberProfilePanel realisations={selectedRealisations} routesById={routesById} cprGrade={cpr.currentGrade || ""} />
               <ParticipantBadges participant={selectedParticipant} realisations={selectedRealisations} allRealisations={realisations} routesById={routesById} sessions={getParticipantSessions(selectedParticipantId)} />
-              <div className="card"><CprEvolutionChart realisations={selectedRealisations} routesById={routesById} /></div>
+              <div className="card"><CprEvolutionChart realisations={selectedRealisations} routesById={routesById} resetAt={selectedParticipant.cprResetAt} /></div>
 
               {isOwnProfile && (
                 <ProfileRealisationRecorder
@@ -274,6 +485,13 @@ export default function Profil({
                   <span className="small">Cliquer pour afficher</span>
                 </summary>
                 <div style={{ marginTop: 10 }}>
+                  {isOwnProfile && selectedRealisations.length > 0 && (
+                    <div className="group" style={{ justifyContent: "flex-end", marginBottom: 10 }}>
+                      <Button type="button" variant="danger" onClick={resetOwnRealisations}>
+                        Reset mes réalisations
+                      </Button>
+                    </div>
+                  )}
                   {selectedRealisations.length > 1 && (
                     <div className="group" style={{ justifyContent: "flex-end", marginBottom: 10 }}>
                       <label className="group" htmlFor="profile-realisation-sort">
@@ -287,6 +505,7 @@ export default function Profil({
                           <option value="date">Date</option>
                           <option value="rope">Corde</option>
                           <option value="difficulty">Difficulté</option>
+                          <option value="best">Meilleure réalisation</option>
                         </select>
                       </label>
                     </div>
@@ -304,13 +523,15 @@ export default function Profil({
                         : "Critère non précisé (historique)";
                       const forcedMoulinette = Boolean(route?.moulinetteOnly);
                       return (
-                        <details className="subcard editable-realisation-card" key={realisation.id}>
+                        <details className="subcard editable-realisation-card" key={realisation.id} style={bestIds.has(String(realisation.id)) ? { background: "#dff3e4", borderColor: "#5b9b68" } : undefined}>
                           <summary className="card-header realisation-summary">
                             <div>
                               <strong>{route ? formatRouteForRealisation(route) : "Voie inconnue"}</strong>
                               <div className="small">{formatDateShortFr(realisation.dateRealisation?.slice(0, 10))} · {modeLabel} · {criterionLabel}</div>
+                              <div className="small">👍 {Number(realisation.kudosCount || 0)} Kudo{Number(realisation.kudosCount || 0) > 1 ? "s" : ""}</div>
                             </div>
                           </summary>
+                          {!isOwnProfile && <div className="group" style={{ justifyContent: "flex-end", marginBottom: 8 }}><Button variant="secondary" disabled={!myParticipantId || kudosPendingId === realisation.id} aria-pressed={Boolean(realisation.kudosByMe)} onClick={() => void toggleKudo(realisation)}>👍 {realisation.kudosByMe ? "Kudo donné" : "Kudo"} · {Number(realisation.kudosCount || 0)}</Button></div>}
                           {isOwnProfile && (
                             <div className="group" style={{ justifyContent: "flex-end", marginBottom: 8 }}>
                               <Button variant="danger" onClick={() => deleteOwnRealisation(realisation)}>Supprimer</Button>
@@ -365,14 +586,73 @@ export default function Profil({
                 </div>
               </details>
 
+              <RouteRealisationStatisticsTable
+                rows={selectedRouteRealisationStats}
+                formatRouteName={formatRouteName}
+                title="Voies du grimpeur"
+                description="Nombre de réalisations par corde, difficulté, mode et critère."
+                collapsible
+                defaultExpanded={false}
+              />
+
               {isOwnProfile && (
                 <div className="card">
                   <div className="card-header">
-                    <h3>Export</h3>
-                    <Button variant="secondary" onClick={exportMyRealisationsCsv} disabled={myRealisations.length === 0}>Exporter pour theCrag</Button>
+                    <h3>theCrag</h3>
+                    <div className="group">
+                      <label className="inline-field">
+                        <span>Date de début</span>
+                        <input
+                          type="date"
+                          value={theCragStartDate}
+                          onChange={(event) => setTheCragStartDate(event.target.value)}
+                        />
+                      </label>
+                      <input
+                        id="thecrag-import-file"
+                        type="file"
+                        accept=".xls,application/vnd.ms-excel"
+                        style={{ display: "none" }}
+                        onChange={importTheCragFile}
+                        disabled={theCragImporting || !theCragStartDate}
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={theCragImporting || !theCragStartDate}
+                        onClick={() => document.getElementById("thecrag-import-file")?.click()}
+                      >
+                        {theCragImporting ? "Import en cours…" : "Importer depuis theCrag (.xls)"}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => exportMyRealisationsCsv(theCragStartDate)}
+                        disabled={myRealisations.length === 0 || !theCragStartDate}
+                      >
+                        Exporter pour theCrag
+                      </Button>
+                    </div>
                   </div>
+                  <div className="small">La date de début est appliquée à l’import et à l’export. Seules les réalisations à compter de cette date sont prises en compte. Format d’import : feuille « Ascents » au format Excel .xls.</div>
+                  {theCragImporting && <div className="muted-box" role="status" style={{ marginTop: 8 }}>Import theCrag en cours…</div>}
+                  {theCragImportStatus && (
+                    <div
+                      className={theCragImportStatus.type === "success" ? "success" : "error"}
+                      role={theCragImportStatus.type === "success" ? "status" : "alert"}
+                      style={{ marginTop: 8 }}
+                    >
+                      {theCragImportStatus.type === "success" ? "✅ " : "❌ "}
+                      {theCragImportStatus.message}
+                    </div>
+                  )}
                 </div>
               )}
+
+              <ProfileReceivedKudos
+                realisations={selectedRealisations}
+                routesById={routesById}
+                participants={participants}
+              />
             </>
           )}
         </>

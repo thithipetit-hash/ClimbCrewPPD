@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const source = await readFile(new URL("../realisation-management-routes.js", import.meta.url), "utf8");
+const videoPolicy = await readFile(new URL("../video-upload-policy.js", import.meta.url), "utf8");
 const migration = await readFile(new URL("../database/migrations/007_runtime_schema_consolidation.sql", import.meta.url), "utf8");
 
 test("les vidéos chargées depuis Profil mémorisent leur réalisation source", () => {
@@ -11,14 +12,14 @@ test("les vidéos chargées depuis Profil mémorisent leur réalisation source",
 });
 
 test("le backend reçoit des blocs sous 1 Mio puis les assemble sans double copie Node", () => {
-  assert.match(source, /VIDEO_UPLOAD_CHUNK_MAX_BYTES = 1024 \* 1024/);
-  assert.match(source, /VIDEO_UPLOAD_MAX_PARTS = 80/);
+  assert.match(videoPolicy, /VIDEO_UPLOAD_CHUNK_MAX_BYTES = 1024 \* 1024/);
+  assert.match(videoPolicy, /VIDEO_UPLOAD_MAX_PARTS = 80/);
   assert.match(migration, /create table if not exists route_video_upload_chunks/);
   assert.match(source, /\/video-uploads\/:uploadId\/chunks\/:partNumber/);
   assert.match(source, /\/video-uploads\/:uploadId\/complete/);
   assert.match(source, /string_agg\(content, ''::bytea order by part_number\) as content/);
   assert.doesNotMatch(source, /Buffer\.concat\(/);
-  assert.match(source, /receivedBytes !== totalBytes/);
+  assert.match(videoPolicy, /receivedBytes !== totalBytes/);
   assert.match(source, /delete from route_video_upload_chunks where participant_id = \$1 and upload_id = \$2/);
 });
 

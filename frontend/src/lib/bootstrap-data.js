@@ -84,6 +84,31 @@ export function mergeBootstrapCollections(previous, settledResults) {
   return next;
 }
 
+export function mergeSessionWindow(previousSessions = [], refreshedSessions = [], { from = null, to = null } = {}) {
+  const previous = Array.isArray(previousSessions) ? previousSessions : [];
+  const refreshed = Array.isArray(refreshedSessions) ? refreshedSessions : [];
+
+  const isInsideWindow = (session) => {
+    const date = String(session?.date || "").slice(0, 10);
+    if (!date) return false;
+    if (from && date < from) return false;
+    if (to && date > to) return false;
+    return true;
+  };
+
+  const merged = new Map();
+  previous
+    .filter((session) => !isInsideWindow(session))
+    .forEach((session) => merged.set(String(session.id), session));
+  refreshed.forEach((session) => merged.set(String(session.id), session));
+
+  return [...merged.values()].sort((left, right) => {
+    const leftKey = `${left?.date || ""}-${left?.slot || ""}-${left?.id || ""}`;
+    const rightKey = `${right?.date || ""}-${right?.slot || ""}-${right?.id || ""}`;
+    return leftKey.localeCompare(rightKey);
+  });
+}
+
 export function summarizeBootstrapResults(settledResults = []) {
   const failures = settledResults.filter((result) => result?.status === "rejected");
   return {

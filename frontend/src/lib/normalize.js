@@ -68,6 +68,7 @@ export function normalizeParticipant(participant = {}) {
     avatarId: text(participant.avatarId ?? participant.avatar_id) || "gecko",
     crestId: text(participant.crestId ?? participant.crest_id) || "cristal",
     profilePublic: booleanValue(participant.profilePublic ?? participant.profile_public ?? true),
+    cprResetAt: participant.cprResetAt ?? participant.cpr_reset_at ?? null,
     customAvatarImage: text(participant.customAvatarImage ?? participant.custom_avatar_image),
   };
 }
@@ -145,6 +146,7 @@ export function normalizeRealisation(realisation = {}) {
     voieId: identifier(realisation.voieId ?? realisation.voie_id),
     sessionId: identifier(realisation.sessionId ?? realisation.session_id),
     dateRealisation: isoDate(realisation.dateRealisation ?? realisation.date_realisation),
+    createdAt: text(realisation.createdAt ?? realisation.created_at),
     modeRealisation,
     styleRealisation,
     commentaire: text(realisation.commentaire),

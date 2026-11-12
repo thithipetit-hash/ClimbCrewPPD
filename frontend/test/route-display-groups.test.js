@@ -8,6 +8,7 @@ test("regroupe les voies par corde en conservant la couleur", () => {
       { id: "r2", numeroCorde: 2, cotationReference: "6a" },
       { id: "r1", numeroCorde: 1, cotationReference: "5c" },
       { id: "r3", numeroCorde: "2", cotationReference: "6b" },
+      { id: "archived", numeroCorde: 3, cotationReference: "7a", active: false },
     ],
     ropes: [
       { numeroCorde: 1, couleurCorde: "bleue" },
@@ -19,6 +20,7 @@ test("regroupe les voies par corde en conservant la couleur", () => {
   assert.deepEqual(groups.map((group) => group.key), ["corde-1", "corde-2"]);
   assert.equal(groups[0].label, "Corde 1 · bleue");
   assert.deepEqual(groups[1].routes.map((route) => route.id), ["r2", "r3"]);
+  assert.equal(groups.some((group) => group.routes.some((route) => route.id === "archived")), false);
 });
 
 test("regroupe les voies par cotation dans l'ordre métier", () => {

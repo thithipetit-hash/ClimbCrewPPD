@@ -6,13 +6,26 @@ function fail(message) {
 }
 
 const app = fs.readFileSync("frontend/src/App.jsx", "utf8");
+const realisationPersistence = fs.readFileSync("frontend/src/hooks/useRealisationPersistence.js", "utf8");
+const planningView = fs.readFileSync("frontend/src/lib/planning-view.js", "utf8");
 const domain = fs.readFileSync("frontend/src/lib/domain.js", "utf8");
+const backendValidation = fs.readFileSync("backend/validation.js", "utf8");
+const sessionAuthorization = fs.readFileSync("backend/admin-users/session-authorization-service.js", "utf8");
+const sharedGrades = fs.readFileSync("shared/climbing-grades.js", "utf8");
+const sharedSessionRules = fs.readFileSync("shared/session-rules.js", "utf8");
+const sessionCard = fs.readFileSync("frontend/src/components/SessionCard.jsx", "utf8");
+const chatPage = fs.readFileSync("frontend/src/pages/Chat.jsx", "utf8");
+const profilePage = fs.readFileSync("frontend/src/pages/Profil.jsx", "utf8");
+const routesPage = fs.readFileSync("frontend/src/pages/Voies.jsx", "utf8");
 const routeDisplayGroups = fs.readFileSync("frontend/src/lib/route-display-groups.js", "utf8");
+const buddyPreferences = fs.readFileSync("frontend/src/lib/buddy-preferences.js", "utf8");
+const buddyRoutes = fs.readFileSync("backend/buddy-routes.js", "utf8");
+const sharedBuddyPreferences = fs.readFileSync("shared/buddy-preferences.js", "utf8");
 const viteConfig = fs.readFileSync("frontend/vite.config.js", "utf8");
 const frontendDockerfile = fs.readFileSync("frontend/Dockerfile.prod", "utf8");
-const dayStart = app.indexOf("const daySessions = useMemo");
-const weekStart = app.indexOf("const weekDates = useMemo", dayStart);
-const dayBlock = dayStart >= 0 && weekStart > dayStart ? app.slice(dayStart, weekStart) : "";
+const dayStart = planningView.indexOf("const daySessions = useMemo");
+const weekStart = planningView.indexOf("const weekDates = useMemo", dayStart);
+const dayBlock = dayStart >= 0 && weekStart > dayStart ? planningView.slice(dayStart, weekStart) : "";
 if (!dayBlock) fail("bloc daySessions introuvable");
 if (dayBlock.includes("defaultSessionStatus(date, slot)")) fail("référence indéfinie date dans daySessions");
 if (!dayBlock.includes("defaultSessionStatus(selectedDate, slot)")) fail("statut par défaut de daySessions non sécurisé");
@@ -41,8 +54,47 @@ if (app.includes("const gradeRank = new Map(GRADES.map")) {
   fail("copie locale du groupement des voies encore présente dans App");
 }
 if (!routeDisplayGroups.includes("export function buildRouteDisplayGroups")
-    || !routeDisplayGroups.includes("routes.map((route) => normalizeRopeNumber(route.numeroCorde))")) {
-  fail("module de groupement des voies incomplet ou cordes vides non masquées");
+    || !routeDisplayGroups.includes("const activeRoutes = routes.filter((route) => route?.active !== false)")
+    || !routeDisplayGroups.includes("activeRoutes.map((route) => normalizeRopeNumber(route.numeroCorde))")) {
+  fail("module de groupement des voies incomplet, voies archivées visibles ou cordes vides non masquées");
+}
+
+if (!domain.includes('from "../../../shared/climbing-grades.js"')
+    || !backendValidation.includes('from "../shared/climbing-grades.js"')
+    || !sharedGrades.includes("export const GRADES")) {
+  fail("cotations non branchées sur la source de vérité partagée");
+}
+if (domain.includes("export const GRADES = [") || backendValidation.includes("export const GRADES = [")) {
+  fail("échelle de cotation dupliquée hors de shared/climbing-grades.js");
+}
+if (!domain.includes('from "../../../shared/session-rules.js"')
+    || !sessionAuthorization.includes('from "../../shared/session-rules.js"')
+    || !sharedSessionRules.includes("MAX_SESSION_PARTICIPANTS = 18")) {
+  fail("capacité des séances non centralisée");
+}
+if (!app.includes('import SessionCard from "./components/SessionCard.jsx"')
+    || !sessionCard.includes("MAX_PARTICIPANTS")) {
+  fail("carte de séance non extraite de App.jsx");
+}
+for (const [name, source] of [["App", app], ["Chat", chatPage], ["Profil", profilePage], ["Voies", routesPage]]) {
+  if (/window\.(?:confirm|prompt)\s*\(|\balert\s*\(/.test(source)) {
+    fail(`dialogue navigateur natif encore présent dans ${name}`);
+  }
+}
+
+if (!buddyPreferences.includes('from "../../../shared/buddy-preferences.js"')
+    || !buddyRoutes.includes('from "../shared/buddy-preferences.js"')) {
+  fail("préférences Buddy non branchées sur la source de vérité partagée");
+}
+if (buddyPreferences.includes("export const BUDDY_DAYS")
+    || buddyRoutes.includes("const DAYS =")
+    || buddyRoutes.includes("const SLOTS =")) {
+  fail("constantes Buddy dupliquées en dehors de shared/buddy-preferences.js");
+}
+if (!sharedBuddyPreferences.includes("export const BUDDY_DAYS")
+    || !sharedBuddyPreferences.includes("export const BUDDY_SLOTS")
+    || !sharedBuddyPreferences.includes("export const BUDDY_PREFERENCE_VALUES")) {
+  fail("source de vérité Buddy partagée incomplète");
 }
 
 const backendPackage = JSON.parse(fs.readFileSync("backend/package.json", "utf8"));
@@ -62,7 +114,12 @@ if (fs.existsSync("backend/server-runtime.js")) fail("server-runtime.js ne doit 
 if (app.includes("multi-signup") || app.includes('name="participantIds"')) fail("la sélection multiple des inscriptions est encore présente");
 if (app.includes("Sans nom") || app.includes("Voie sans nom")) fail("un libellé Sans nom est encore affiché");
 if (!domain.includes("function formatRouteName(route)")) fail("formatage ouvreur puis nom de voie absent");
-if (!app.includes("async function deleteRealisation(realisation)")) fail("suppression de réalisation absente de la progression");
+if (!app.includes("createRealisationPersistenceActions({")
+    || !app.includes("deleteRealisation={deleteRealisation}")
+    || !realisationPersistence.includes("function deleteRealisation(realisation)")
+    || !realisationPersistence.includes('method: "DELETE"')) {
+  fail("suppression de réalisation absente de la progression");
+}
 if (app.includes("l’ocre apparaît sur fond marron") || main.includes("l’ocre apparaît sur fond marron")) {
   fail("mention ocre sur fond marron encore présente dans le frontend");
 }
@@ -73,7 +130,6 @@ const httpStack = fs.readFileSync("backend/middleware/http-stack.js", "utf8");
 const runtimeHelpers = fs.readFileSync("backend/security/runtime-helpers.js", "utf8");
 const applicationBootstrap = fs.readFileSync("backend/bootstrap/application-bootstrap.js", "utf8");
 const explicitRoutes = fs.readFileSync("backend/admin-users/explicit-routes.js", "utf8");
-const sessionAuthorization = fs.readFileSync("backend/admin-users/session-authorization-service.js", "utf8");
 const realisationManagement = fs.readFileSync("backend/realisation-management-routes.js", "utf8");
 const baselineMigration = fs.readFileSync("backend/database/migrations/001_baseline.sql", "utf8");
 

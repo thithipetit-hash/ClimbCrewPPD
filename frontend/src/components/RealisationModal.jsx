@@ -19,6 +19,8 @@ export default function RealisationModal({
   onRouteIdChange,
   onClose,
   onSubmit,
+  saving = false,
+  isAdmin = false,
 }) {
   const forcedMoulinette = Boolean(route?.moulinetteOnly);
   const selectedMode = forcedMoulinette
@@ -62,6 +64,26 @@ export default function RealisationModal({
         </div>
 
         <div className="grid three">
+          {isAdmin && (
+            <div>
+              <label>Grimpeur</label>
+              <select
+                value={newRealisation.participantId}
+                onChange={(event) => setNewRealisation((prev) => ({
+                  ...prev,
+                  participantId: event.target.value,
+                  selectedDay: "",
+                  sessionId: "",
+                  assureurId: "",
+                }))}
+              >
+                <option value="">Choisir un grimpeur</option>
+                {eligibleParticipants.map((participant) => (
+                  <option key={participant.id} value={participant.id}>{fullName(participant)}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label>Jour</label>
             <select
@@ -84,25 +106,23 @@ export default function RealisationModal({
           </div>
 
           <div>
-            <label>Participant</label>
+            <label>Binôme {newRealisation.chute ? "(obligatoire en cas de vol)" : "(facultatif)"}</label>
             <select
-              value={newRealisation.participantId}
-              onChange={(event) => {
-                const participantId = event.target.value;
-                setNewRealisation((prev) => ({ ...prev, participantId, sessionId: "", assureurId: "" }));
-              }}
+              required={Boolean(newRealisation.chute)}
+              value={newRealisation.assureurId}
+              onChange={(event) => setNewRealisation((prev) => ({ ...prev, assureurId: event.target.value }))}
             >
-              <option value="">Choisir un participant</option>
-              {eligibleParticipants.length === 0 ? (
-                <option value="" disabled>Aucun participant éligible</option>
+              <option value="">Aucun binôme</option>
+              {eligibleBelayers.length === 0 ? (
+                <option value="" disabled>Aucun binôme éligible</option>
               ) : (
-                eligibleParticipants.map((participant) => (
+                eligibleBelayers.map((participant) => (
                   <option key={participant.id} value={participant.id}>{fullName(participant)}</option>
                 ))
               )}
             </select>
             <div className="small" style={{ marginTop: 6, color: "inherit" }}>
-              Seuls les participants cotisants inscrits aux séances du référent ou de l’encadrant à la date choisie sont proposés.
+              {isAdmin ? "La réalisation est attribuée au grimpeur sélectionné." : "La réalisation est attribuée à votre compte."}
             </div>
           </div>
 
@@ -201,25 +221,11 @@ export default function RealisationModal({
               onChange={(event) => setNewRealisation((prev) => ({
                 ...prev,
                 chute: event.target.checked,
-                assureurId: event.target.checked ? prev.assureurId : "",
               }))}
             />
             <span>Le grimpeur a volé</span>
           </label>
 
-          {newRealisation.chute && (
-            <div>
-              <label>Binôme assureur</label>
-              <select value={newRealisation.assureurId} onChange={(event) => setNewRealisation((prev) => ({ ...prev, assureurId: event.target.value }))}>
-                <option value="">Choisir le binôme</option>
-                {eligibleBelayers.length === 0 ? (
-                  <option value="" disabled>Aucun assureur éligible</option>
-                ) : (
-                  eligibleBelayers.map((participant) => <option key={participant.id} value={participant.id}>{fullName(participant)}</option>)
-                )}
-              </select>
-            </div>
-          )}
         </div>
 
         <div style={{ marginTop: 12 }}>
@@ -231,9 +237,10 @@ export default function RealisationModal({
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
           <Button
             onClick={onSubmit}
-            disabled={!newRealisation.selectedDay || !newRealisation.participantId || !newRealisation.voieId || (newRealisation.chute && !newRealisation.assureurId) || eligibleParticipants.length === 0}
+            aria-busy={saving}
+            disabled={saving || !newRealisation.selectedDay || !newRealisation.participantId || !newRealisation.voieId || (newRealisation.chute && !newRealisation.assureurId) || eligibleParticipants.length === 0}
           >
-            Enregistrer
+            {saving ? "Enregistrement…" : "Enregistrer"}
           </Button>
         </div>
       </div>

@@ -1,4 +1,18 @@
+import { calculateCpr, filterCprRealisations } from "../../../shared/cpr.js";
+import { GRADES } from "../../../shared/climbing-grades.js";
+import { MAX_SESSION_PARTICIPANTS } from "../../../shared/session-rules.js";
 import { PASSPORT_STYLES } from "./ui-config.js";
+import {
+  getPassportColor,
+  hasPassportDiscoveryMark,
+  normalizePassport,
+} from "../../../shared/passports.js";
+export {
+  formatPassportLabel,
+  isLibreEligiblePassport,
+  normalizePassport,
+  PASSPORT_OPTIONS,
+} from "../../../shared/passports.js";
 import {
   REALISATION_CRITERION_WEIGHTS,
   getRealisationWeight,
@@ -7,7 +21,7 @@ import {
 } from "./realisation-mode.js";
 export { getDefaultSessionStatus as defaultSessionStatus } from "../../../shared/session-default-status.js";
 
-export const GRADES = ["4","4a","4b","4c","5a","5a+","5b","5b+","5c","5c+","6a","6a+","6b","6b+","6c","6c+","7a","7a+","7b","7c"];
+export { GRADES };
 
 // Conservé pour compatibilité avec les anciens imports/tests.
 // Le coefficient moderne est calculé par getRealisationWeight afin de tenir
@@ -25,16 +39,27 @@ export {
   getRealisationWeight,
 } from "./realisation-mode.js";
 
-export const MAX_PARTICIPANTS = 18;
+export const MAX_PARTICIPANTS = MAX_SESSION_PARTICIPANTS;
 
 export function fullName(p) {
   return p ? `${p.nom} ${p.prenom}`.trim() : "";
 }
 
+export function sortParticipantsCurrentUserFirst(participants, currentParticipantId) {
+  const currentId = String(currentParticipantId || "");
+  return [...participants].sort((a, b) => {
+    const aIsCurrent = String(a.id) === currentId;
+    const bIsCurrent = String(b.id) === currentId;
+    if (aIsCurrent !== bIsCurrent) return aIsCurrent ? -1 : 1;
+    return fullName(a).localeCompare(fullName(b), "fr");
+  });
+}
+
 export function formatRouteName(route) {
+  const color = String(route?.couleurPrises || "").trim();
   const opener = String(route?.nomOuvreur || "").trim();
   const name = String(route?.nomVoie || "").trim();
-  const label = [opener, name].filter(Boolean).join(" · ");
+  const label = [color, opener, name].filter(Boolean).join(" · ");
   return label || "Voie";
 }
 
@@ -54,10 +79,11 @@ export function normalizeRopeNumber(value) {
 
 export function formatRouteForRealisation(route) {
   const rope = `Corde ${normalizeRopeNumber(route?.numeroCorde)}`;
+  const color = String(route?.couleurPrises || "").trim();
   const grade = String(route?.cotationAjustee || route?.cotationReference || "nc").trim();
   const opener = String(route?.nomOuvreur || "").trim();
   const name = String(route?.nomVoie || "").trim();
-  return [rope, grade, opener, name].filter(Boolean).join(" · ");
+  return [rope, color, grade, opener, name].filter(Boolean).join(" · ");
 }
 
 export function toLocalIso(date) {
@@ -79,17 +105,8 @@ export function todayIso() {
   return toLocalIso(date);
 }
 
-export function normalizePassport(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-export function isDiscoveryPassport(passport) {
-  const normalized = normalizePassport(passport);
-  return normalized === "decouverte" || normalized === "decouvertes";
+export function isDiscoveryPassport(passport, passportDecouverte = false) {
+  return hasPassportDiscoveryMark(passport, passportDecouverte);
 }
 
 export function getPassportStyle(participant) {
@@ -108,11 +125,29 @@ export function getPassportStyle(participant) {
 }
 
 export function getPassportDotStyle(participant) {
-  const baseStyle = isDiscoveryPassport(participant?.passport)
-    ? PASSPORT_STYLES.decouverte
-    : PASSPORT_STYLES[participant?.passport] || PASSPORT_STYLES.sans;
+  const passportColor = getPassportColor(participant?.passport);
+  const baseStyle = PASSPORT_STYLES[passportColor] || PASSPORT_STYLES.sans;
+  const hasFfmeLicence = Boolean(participant?.ffme);
+  const isDiscovery = hasPassportDiscoveryMark(
+    participant?.passport,
+    participant?.passportDecouverte,
+  );
+  const showFullDot = hasFfmeLicence || isDiscovery || passportColor === "sans";
 
-  return { backgroundColor: baseStyle.backgroundColor };
+  return {
+    backgroundColor: showFullDot ? baseStyle.backgroundColor : "transparent",
+    backgroundImage: showFullDot
+      ? "none"
+      : `linear-gradient(to right, ${baseStyle.backgroundColor} 0 50%, transparent 50% 100%)`,
+    color: "#000000",
+  };
+}
+
+export function getPassportDotLabel(participant) {
+  return hasPassportDiscoveryMark(
+    participant?.passport,
+    participant?.passportDecouverte,
+  ) ? "D" : "";
 }
 
 export function gradeToIndex(grade) {
@@ -188,30 +223,15 @@ export function nextBusinessDay(dateStr, delta) {
   return d.toISOString().slice(0, 10);
 }
 
-export function calculateSimpleCpr(realisations, routesById, now = Date.now()) {
-  const cutoff = now - (90 * 24 * 60 * 60 * 1000);
-
-  const bestRecent = realisations
-    .map((r) => {
-      const route = routesById[r.voieId];
-      const dateTimestamp = new Date(r.dateRealisation).getTime();
-      if (!route || !Number.isFinite(dateTimestamp) || dateTimestamp < cutoff || dateTimestamp > now) return null;
-
-      return {
-        id: r.id,
-        date: r.dateRealisation,
-        grade: route.cotationAjustee,
-        weightedIndex: gradeToIndex(route.cotationAjustee) * getRealisationWeight(r, route),
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.weightedIndex - a.weightedIndex || b.date.localeCompare(a.date))
-    .slice(0, 10);
-
-  if (!bestRecent.length) return { currentGrade: null, averageIndex: null, timeline: [] };
-
-  const averageIndex = bestRecent.reduce((sum, item) => sum + item.weightedIndex, 0) / bestRecent.length;
-  return { currentGrade: indexToGrade(Math.round(averageIndex)), averageIndex, timeline: bestRecent };
+export function calculateSimpleCpr(realisations, routesById, now = Date.now(), resetAt = null) {
+  return calculateCpr({
+    realisations,
+    routesById,
+    grades: GRADES,
+    isSuccessful: isSuccessfulRealisation,
+    now,
+    resetAt,
+  });
 }
 
 /**
@@ -219,8 +239,8 @@ export function calculateSimpleCpr(realisations, routesById, now = Date.now()) {
  * La formule reste strictement celle de calculateSimpleCpr : seule la date
  * d'observation change afin de produire une courbe historique cohérente.
  */
-export function calculateCprHistory(realisations, routesById, now = Date.now()) {
-  const validRealisations = realisations
+export function calculateCprHistory(realisations, routesById, now = Date.now(), resetAt = null) {
+  const validRealisations = filterCprRealisations(realisations, resetAt)
     .filter((realisation) => Number.isFinite(new Date(realisation.dateRealisation).getTime()))
     .filter((realisation) => new Date(realisation.dateRealisation).getTime() <= now);
 
@@ -230,7 +250,7 @@ export function calculateCprHistory(realisations, routesById, now = Date.now()) 
 
   return dates.map((date) => {
     const observationTime = new Date(`${date}T23:59:59`).getTime();
-    const cpr = calculateSimpleCpr(validRealisations, routesById, observationTime);
+    const cpr = calculateSimpleCpr(validRealisations, routesById, observationTime, resetAt);
     const dayRealisations = validRealisations.filter((realisation) => (
       String(realisation.dateRealisation).slice(0, 10) === date
     ));

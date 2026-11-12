@@ -32,6 +32,48 @@ version_compare_key() {
   printf '%s%s\n' "$date_part" "$sequence_part"
 }
 
+non_runtime_change() {
+  local diff_base=""
+  local changed_files=""
+
+  if [ -n "$BASE_REF" ]; then
+    # Sur pull_request, HEAD est le merge virtuel GitHub. Son premier parent
+    # est exactement la branche de base au moment où la PR a été évaluée.
+    # Utiliser origin/main ici est instable : après fusion, main peut déjà
+    # contenir la version proposée et produire un faux échec.
+    if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && git rev-parse HEAD^1 >/dev/null 2>&1; then
+      diff_base="HEAD^1"
+      changed_files="$(git diff --name-only "${diff_base}..HEAD")"
+    else
+      git fetch --no-tags --depth=1 origin \
+        "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+      diff_base="refs/remotes/origin/${BASE_REF}"
+      changed_files="$(git diff --name-only "${diff_base}...HEAD")"
+    fi
+  elif [ -n "$BEFORE_SHA" ] && [[ ! "$BEFORE_SHA" =~ ^0+$ ]]; then
+    if ! git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+      git fetch --no-tags --depth=1 origin "$BEFORE_SHA"
+    fi
+    diff_base="$BEFORE_SHA"
+    changed_files="$(git diff --name-only "${diff_base}..HEAD")"
+  else
+    return 1
+  fi
+
+  [ -n "$changed_files" ] || return 1
+
+  while IFS= read -r path; do
+    case "$path" in
+      .github/*|frontend/test/*|backend/test/*|backend/integration/*) ;;
+      *) return 1 ;;
+    esac
+  done <<< "$changed_files"
+
+  echo "Modification CI/tests uniquement ; VERSION applicative inchangée autorisée."
+  printf '%s\n' "$changed_files"
+  return 0
+}
+
 CURRENT_VERSION="$(extract_canonical_version "$VERSION_FILE")"
 
 if [[ ! "$CURRENT_VERSION" =~ $CURRENT_VERSION_PATTERN ]]; then
@@ -45,14 +87,34 @@ if [ "$VERSION_CONSISTENCY_ONLY" = "1" ]; then
   exit 0
 fi
 
+# workflow_dispatch redéploie une révision déjà présente sur une branche
+# canonique (main/production). Son incrément a déjà été contrôlé lors de la PR
+# ou du push qui l'a introduite. Refaire une comparaison avec HEAD^ empêcherait
+# notamment de relancer une correction CI-only dont VERSION reste légitimement
+# inchangée. On conserve donc ici la validation du format, sans exiger un nouvel
+# incrément pour la même révision.
+if [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ]; then
+  echo "Relance workflow_dispatch : VERSION déjà validée à l'entrée de la branche."
+  exit 0
+fi
+
+if non_runtime_change; then
+  exit 0
+fi
+
 BASE_VERSION=""
 BASE_LABEL=""
 
 if [ -n "$BASE_REF" ]; then
-  git fetch --no-tags --depth=1 origin \
-    "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
-  BASE_LABEL="origin/${BASE_REF}"
-  BASE_VERSION="$(extract_version_from_ref "refs/remotes/origin/${BASE_REF}" || true)"
+  if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && git rev-parse HEAD^1 >/dev/null 2>&1; then
+    BASE_LABEL="HEAD^1"
+    BASE_VERSION="$(extract_version_from_ref HEAD^1 || true)"
+  else
+    git fetch --no-tags --depth=1 origin \
+      "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+    BASE_LABEL="origin/${BASE_REF}"
+    BASE_VERSION="$(extract_version_from_ref "refs/remotes/origin/${BASE_REF}" || true)"
+  fi
 elif [ -n "$BEFORE_SHA" ] && [[ ! "$BEFORE_SHA" =~ ^0+$ ]]; then
   if ! git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
     git fetch --no-tags --depth=1 origin "$BEFORE_SHA"
@@ -90,7 +152,7 @@ CURRENT_KEY="$(version_compare_key "$CURRENT_VERSION")"
 BASE_KEY="$(version_compare_key "$BASE_VERSION")"
 
 if [[ "$CURRENT_KEY" == "$BASE_KEY" || "$CURRENT_KEY" < "$BASE_KEY" ]]; then
-  echo "ERROR: toute évolution doit incrémenter VERSION."
+  echo "ERROR: toute évolution applicative doit incrémenter VERSION."
   echo "La version proposée doit être strictement supérieure à $BASE_VERSION."
   exit 1
 fi

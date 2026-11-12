@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 150">
+  <defs>
+    <linearGradient id="cloth" x1="0" y1="0" x2=".8" y2="1">
+      <stop offset="0" stop-color="#ff474a"/>
+      <stop offset=".62" stop-color="#dc1727"/>
+      <stop offset="1" stop-color="#a90d20"/>
+    </linearGradient>
+    <linearGradient id="fur" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="1" stop-color="#e0e5ed"/>
+    </linearGradient>
+  </defs>
+  <g transform="rotate(-10 92 89)" stroke-linejoin="round">
+    <path d="M33 83C46 46 75 19 107 13c17-4 35 2 43 17 8 15 4 30-7 40-11 8-28 13-49 18Z"
+      fill="url(#cloth)" stroke="#861323" stroke-width="4"/>
+    <path d="M107 15c-22 12-39 32-46 49" fill="none" stroke="#ff9090" stroke-width="7" stroke-linecap="round" opacity=".43"/>
+    <path d="M143 34c-8 12-24 17-39 16" fill="none" stroke="#930a1b" stroke-width="6" stroke-linecap="round" opacity=".28"/>
+    <path d="M42 59C30 70 25 83 25 102" fill="none" stroke="#b50f22" stroke-width="13" stroke-linecap="round"/>
+    <circle cx="25" cy="105" r="18" fill="url(#fur)" stroke="#c9ced7" stroke-width="3"/>
+    <path d="M17 95c7-7 17-6 23 1" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+    <rect x="34" y="77" width="121" height="30" rx="15" fill="url(#fur)" stroke="#bfc7d2" stroke-width="3"/>
+    <path d="M45 84c32-8 69-8 99 0" stroke="#fff" stroke-width="7" fill="none" stroke-linecap="round" opacity=".88"/>
+  </g>
+</svg>

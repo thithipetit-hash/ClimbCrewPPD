@@ -1,8 +1,7 @@
 # =============================================================================
 # Image de production du backend pour le serveur Linux
 # =============================================================================
-# Render utilise le runtime Node défini dans render.yaml. Ce Dockerfile reste
-# dédié au déploiement Docker Compose sur Linux et conserve donc son comportement.
+# Ce Dockerfile est dédié au déploiement Docker Compose sur le serveur Linux.
 # Son contexte Docker est maintenant la racine du dépôt afin d'embarquer les
 # règles métier communes placées dans /shared.
 
@@ -31,6 +30,7 @@ RUN npm ci --omit=dev --no-audit --no-fund --registry=https://registry.npmjs.org
 # Copie du code backend et des règles métier communes. Le ré-export
 # /app/session-default-status.js résout ../shared vers /shared.
 COPY backend/ ./
+COPY VERSION ./VERSION
 COPY shared/ /shared/
 
 # Exécution avec l'utilisateur non-root fourni par l'image Node.

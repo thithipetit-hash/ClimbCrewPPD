@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { trustedClientIpMiddleware } from "../admin-users/client-ip-hardening.js";
 
 const enhancementsSource = await readFile(new URL("../deployment-bootstrap.js", import.meta.url), "utf8");
@@ -11,7 +11,6 @@ const applicationBootstrapSource = await readFile(new URL("../bootstrap/applicat
 const databaseSource = await readFile(new URL("../admin-users/database.js", import.meta.url), "utf8");
 const authMiddlewareSource = await readFile(new URL("../auth-middleware.js", import.meta.url), "utf8");
 const migrationSql = await readFile(new URL("../database/migrations/001_integrity_constraints.sql", import.meta.url), "utf8");
-const schemaSource = await readFile(new URL("../schema.sql", import.meta.url), "utf8");
 
 test("l'adresse IP fiable remplace une chaîne X-Forwarded-For potentiellement falsifiée", () => {
   const req = {
@@ -79,9 +78,8 @@ test("la migration ajoute les relations structurantes sans bloquer un historique
   assert.match(migrationSql, /raise warning/i);
 });
 
-test("schema.sql décrit désormais les identifiants participants comme des bigint reliés", () => {
-  assert.match(schemaSource, /encadrant_id bigint references participants\(id\) on delete set null/);
-  assert.match(schemaSource, /participant_id bigint not null references participants\(id\) on delete cascade/);
-  assert.match(schemaSource, /assureur_id bigint references participants\(id\) on delete set null/);
-  assert.match(schemaSource, /create table if not exists schema_migrations/);
+test("les migrations sont l'unique source de vérité du schéma", async () => {
+  await assert.rejects(access(new URL("../schema.sql", import.meta.url)));
+  assert.match(migrationEngineSource, /schema_migrations/);
+  assert.match(migrationSql, /participant_id type bigint/i);
 });

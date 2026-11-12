@@ -63,12 +63,12 @@ export default function AuthPage({
         {authView === "login" && (
           <form className="grid two" style={{ marginTop: 14 }} onSubmit={(event) => { event.preventDefault(); handleLogin(); }}>
             <div>
-              <label>Email</label>
-              <input value={loginForm.email} onChange={(event) => setLoginForm((previous) => ({ ...previous, email: event.target.value }))} />
+              <label htmlFor="login-email">Email</label>
+              <input id="login-email" value={loginForm.email} onChange={(event) => setLoginForm((previous) => ({ ...previous, email: event.target.value }))} />
             </div>
             <div>
-              <label>Mot de passe</label>
-              <input type="password" value={loginForm.password} onChange={(event) => setLoginForm((previous) => ({ ...previous, password: event.target.value }))} />
+              <label htmlFor="login-password">Mot de passe</label>
+              <input id="login-password" type="password" value={loginForm.password} onChange={(event) => setLoginForm((previous) => ({ ...previous, password: event.target.value }))} />
             </div>
             <div className="auth-submit-row">
               <Button type="submit">Se connecter</Button>
@@ -78,11 +78,11 @@ export default function AuthPage({
 
         {authView === "request" && (
           <form className="grid two issue13-request-form" style={{ marginTop: 14 }} onSubmit={(event) => { event.preventDefault(); handleRequestAccess(); }}>
-            <div><label>Prénom</label><input value={requestAccessForm.prenom} onChange={(event) => setRequestAccessForm((previous) => ({ ...previous, prenom: event.target.value }))} /></div>
-            <div><label>Nom</label><input value={requestAccessForm.nom} onChange={(event) => setRequestAccessForm((previous) => ({ ...previous, nom: event.target.value }))} /></div>
-            <div><label>Email</label><input type="email" value={requestAccessForm.email} onChange={(event) => setRequestAccessForm((previous) => ({ ...previous, email: event.target.value }))} /></div>
-            <div><label>Mot de passe fort</label><input type="password" value={requestAccessForm.password} onChange={(event) => setRequestAccessForm((previous) => ({ ...previous, password: event.target.value }))} /></div>
-            <div><label>Confirmation</label><input type="password" value={requestAccessForm.confirmPassword} onChange={(event) => setRequestAccessForm((previous) => ({ ...previous, confirmPassword: event.target.value }))} /></div>
+            <div><label htmlFor="request-prenom">Prénom</label><input id="request-prenom" value={requestAccessForm.prenom} onChange={(event) => setRequestAccessForm((previous) => ({ ...previous, prenom: event.target.value }))} /></div>
+            <div><label htmlFor="request-nom">Nom</label><input id="request-nom" value={requestAccessForm.nom} onChange={(event) => setRequestAccessForm((previous) => ({ ...previous, nom: event.target.value }))} /></div>
+            <div><label htmlFor="request-email">Email</label><input id="request-email" type="email" value={requestAccessForm.email} onChange={(event) => setRequestAccessForm((previous) => ({ ...previous, email: event.target.value }))} /></div>
+            <div><label htmlFor="request-password">Mot de passe fort</label><input id="request-password" type="password" value={requestAccessForm.password} onChange={(event) => setRequestAccessForm((previous) => ({ ...previous, password: event.target.value }))} /></div>
+            <div><label htmlFor="request-confirm-password">Confirmation</label><input id="request-confirm-password" type="password" value={requestAccessForm.confirmPassword} onChange={(event) => setRequestAccessForm((previous) => ({ ...previous, confirmPassword: event.target.value }))} /></div>
             <div>
               <label>Règles du mot de passe</label>
               <p className="small issue13-password-policy-text">{PASSWORD_RULE_TEXT}</p>
@@ -99,7 +99,7 @@ export default function AuthPage({
 
         {authView === "forgot" && (
           <form className="grid two" style={{ marginTop: 14 }} onSubmit={(event) => { event.preventDefault(); handleForgotPassword(); }}>
-            <div><label>Email</label><input type="email" value={forgotPasswordForm.email} onChange={(event) => setForgotPasswordForm({ email: event.target.value })} /></div>
+            <div><label htmlFor="forgot-email">Email</label><input id="forgot-email" type="email" value={forgotPasswordForm.email} onChange={(event) => setForgotPasswordForm({ email: event.target.value })} /></div>
             <div className="small" style={{ display: "flex", alignItems: "end" }}>{FORGOT_PASSWORD_HELP_TEXT}</div>
             <div className="auth-submit-row"><Button type="submit">Envoyer le code de réinitialisation</Button></div>
           </form>
@@ -107,10 +107,10 @@ export default function AuthPage({
 
         {authView === "reset" && (
           <form className="grid two" style={{ marginTop: 14 }} onSubmit={(event) => { event.preventDefault(); handleResetPassword(); }}>
-            <div><label>Email</label><input type="email" value={resetPasswordForm.email} onChange={(event) => setResetPasswordForm((previous) => ({ ...previous, email: event.target.value }))} /></div>
-            <div><label>Code de réinitialisation</label><input value={resetPasswordForm.token} onChange={(event) => setResetPasswordForm((previous) => ({ ...previous, token: event.target.value }))} /></div>
-            <div><label>Nouveau mot de passe</label><input type="password" value={resetPasswordForm.password} onChange={(event) => setResetPasswordForm((previous) => ({ ...previous, password: event.target.value }))} /></div>
-            <div><label>Confirmation</label><input type="password" value={resetPasswordForm.confirmPassword} onChange={(event) => setResetPasswordForm((previous) => ({ ...previous, confirmPassword: event.target.value }))} /></div>
+            <div><label htmlFor="reset-email">Email</label><input id="reset-email" type="email" value={resetPasswordForm.email} onChange={(event) => setResetPasswordForm((previous) => ({ ...previous, email: event.target.value }))} /></div>
+            <div><label htmlFor="reset-token">Code de réinitialisation</label><input id="reset-token" value={resetPasswordForm.token} onChange={(event) => setResetPasswordForm((previous) => ({ ...previous, token: event.target.value }))} /></div>
+            <div><label htmlFor="reset-password">Nouveau mot de passe</label><input id="reset-password" type="password" value={resetPasswordForm.password} onChange={(event) => setResetPasswordForm((previous) => ({ ...previous, password: event.target.value }))} /></div>
+            <div><label htmlFor="reset-confirm-password">Confirmation</label><input id="reset-confirm-password" type="password" value={resetPasswordForm.confirmPassword} onChange={(event) => setResetPasswordForm((previous) => ({ ...previous, confirmPassword: event.target.value }))} /></div>
             <div>
               <label>Règles du mot de passe</label>
               <p className="small issue13-password-policy-text">{PASSWORD_RULE_TEXT}</p>

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   REALISATIONS_PAGE_SIZE,
   fetchPaginatedCollection,
+  mergeSessionWindow,
 } from "../src/lib/bootstrap-data.js";
 
 test("les réalisations sont agrégées page par page sans changer leur ordre", async () => {
@@ -93,4 +94,57 @@ test("un offset de reprise doit rester aligné sur la taille de page", async () 
     () => fetchPaginatedCollection(async () => [], { startOffset: 1 }),
     /startOffset invalide/,
   );
+});
+
+
+test("le rafraîchissement du planning remplace seulement la fenêtre récente", () => {
+  const previous = [
+    { id: "old", date: "2026-01-15", slot: "midi", participantIds: ["1"] },
+    { id: "inside-updated", date: "2026-09-28", slot: "midi", participantIds: ["1"] },
+    { id: "inside-deleted", date: "2026-09-29", slot: "soir", participantIds: ["2"] },
+    { id: "future", date: "2027-12-01", slot: "soir", participantIds: ["3"] },
+  ];
+  const refreshed = [
+    { id: "inside-updated", date: "2026-09-28", slot: "midi", participantIds: ["1", "4"] },
+    { id: "inside-new", date: "2026-10-01", slot: "matin", participantIds: [] },
+  ];
+
+  const result = mergeSessionWindow(previous, refreshed, {
+    from: "2026-06-30",
+    to: "2027-03-27",
+  });
+
+  assert.deepEqual(result.map((session) => session.id), [
+    "old",
+    "inside-updated",
+    "inside-new",
+    "future",
+  ]);
+  assert.deepEqual(
+    result.find((session) => session.id === "inside-updated").participantIds,
+    ["1", "4"],
+  );
+  assert.equal(
+    result.some((session) => session.id === "inside-deleted"),
+    false,
+    "une séance supprimée dans la fenêtre doit disparaître localement",
+  );
+});
+
+test("le rafraîchissement du planning ne touche pas aux réalisations historiques", () => {
+  const state = {
+    sessions: [{ id: "old", date: "2026-01-15", slot: "midi" }],
+    realisations: Array.from({ length: 650 }, (_, index) => ({ id: `r-${index}` })),
+  };
+
+  const next = {
+    ...state,
+    sessions: mergeSessionWindow(state.sessions, [], {
+      from: "2026-06-30",
+      to: "2027-03-27",
+    }),
+  };
+
+  assert.equal(next.realisations.length, 650);
+  assert.equal(next.sessions[0].id, "old");
 });

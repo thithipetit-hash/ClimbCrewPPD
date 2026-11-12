@@ -26,9 +26,16 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
     `
       select s.date, p.cotisation
       from sessions s
-      join session_participants sp on sp.session_id = s.id
       join participants p on p.id::text = $2
-      where s.id = $1 and sp.participant_id::text = $2
+      where s.id = $1
+        and (
+          exists (
+            select 1 from session_participants sp
+            where sp.session_id = s.id and sp.participant_id::text = $2
+          )
+          or (s.status = 'encadree' and s.encadrant_id::text = $2)
+          or (s.status = 'libre' and s.referent_id::text = $2)
+        )
       limit 1
     `,
     [realisation.sessionId, ownerId],
@@ -55,8 +62,8 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
     );
   }
 
-  if (!realisation.chute) return;
   const assureurId = String(realisation.assureurId || "");
+  if (!realisation.chute && !assureurId) return;
   if (!assureurId) {
     throw new RealisationIntegrityError("Le binôme assureur est obligatoire lorsqu’un vol est enregistré.", "assureurId");
   }
@@ -67,9 +74,17 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
   const belayerResult = await pool.query(
     `
       select 1
-      from session_participants sp
+      from sessions s
       join participants p on p.id::text = $2
-      where sp.session_id = $1 and sp.participant_id::text = $2
+      where s.id = $1
+        and (
+          exists (
+            select 1 from session_participants sp
+            where sp.session_id = s.id and sp.participant_id::text = $2
+          )
+          or (s.status = 'encadree' and s.encadrant_id::text = $2)
+          or (s.status = 'libre' and s.referent_id::text = $2)
+        )
       limit 1
     `,
     [realisation.sessionId, assureurId],
