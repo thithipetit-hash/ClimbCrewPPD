@@ -167,7 +167,7 @@ export default function Challenges({ isAdmin = false }) {
       setClosing(true);
       const closed = await apiFetch(`/admin/challenges/${encodeURIComponent(detail.id)}/close`, { method: "POST" });
       setDetail(closed);
-      setMessage(`Challenge « ${closed.name} » clôturé. Le classement est figé et les badges portent désormais le nom du challenge.`);
+      setMessage(`Challenge « ${closed.name} » clôturé. Le classement est figé et les trois premiers reçoivent chacun un badge Challenge.`);
       await loadChallenges(closed.id);
     } catch (closeError) {
       setError(String(closeError.message || closeError));
@@ -187,18 +187,11 @@ export default function Challenges({ isAdmin = false }) {
             <div className="small">Toute réalisation pendant la période compte, y compris un essai. Une même voie ne compte qu’une fois.</div>
           </div>
         </div>
-        {badges.length > 0 && (
-          <div className="group" style={{ marginTop: 12 }}>
-            {badges.map((badge) => {
-              const badgeName = badge.metadata?.challengeName || badge.label || "Challenge";
-              return (
-                <span className="pill" key={badge.id} title={badgeName}>
-                  🏅 {badgeName} · #{badge.metadata?.rank || "?"}
-                </span>
-              );
-            })}
-          </div>
-        )}
+        <div className="group" style={{ marginTop: 12 }}>
+          <span className="pill" title="Un badge par challenge clôturé terminé sur le podium">
+            🏅 Challenge ×{new Set(badges.filter((badge) => [1, 2, 3].includes(Number(badge.metadata?.rank))).map((badge) => String(badge.sourceId))).size}
+          </span>
+        </div>
       </div>
 
       {isAdmin && (
@@ -292,7 +285,7 @@ export default function Challenges({ isAdmin = false }) {
               <div className="muted-box" style={{ marginTop: 12 }}>
                 <strong>Ma progression : {detail.myProgress.score} / {detail.targetRouteCount}</strong>
                 {detail.myProgress.rank && <span> · classement #{detail.myProgress.rank}</span>}
-                {detail.myProgress.challengeBadge && <span> · 🏅 Badge {detail.name}</span>}
+                {detail.myProgress.challengeBadge && <span> · 🏅 Badge Challenge</span>}
               </div>
             )}
             {isAdmin && detail.status !== "closed" && (
@@ -318,7 +311,7 @@ export default function Challenges({ isAdmin = false }) {
                         <td><strong>#{entry.rank}</strong></td>
                         <td>{entry.participantName}</td>
                         <td>{entry.score} / {detail.targetRouteCount}</td>
-                        <td>{detail.status === "closed" && entry.challengeBadge ? `🏅 ${detail.name}` : "—"}</td>
+                        <td>{detail.status === "closed" && entry.challengeBadge ? "🏅 Challenge" : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
