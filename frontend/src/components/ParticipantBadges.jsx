@@ -57,6 +57,7 @@ function BadgeTile({ badge, pending = false, onOpen }) {
   return (
     <div
       className={`participant-badge-tile participant-badge-tile--${badge.family}${pending ? " is-pending" : " is-earned"}`}
+      style={{ position: "relative", cursor: "pointer" }}
       title={`${badge.name} — ${badge.condition}`}
       role="button"
       tabIndex={0}
@@ -68,9 +69,9 @@ function BadgeTile({ badge, pending = false, onOpen }) {
           onOpen(badge);
         }
       }}
-      style={{ cursor: "pointer" }}
     >
       <BadgeVisual badge={badge} />
+      {badge.count > 0 && <span className="badge" aria-label={`${badge.count} badges Challenge obtenus`} style={{ position: "absolute", top: 4, right: 4, zIndex: 1 }}>×{badge.count}</span>}
       <span className="participant-badge-copy">
         <strong>{badge.name}</strong>
         <span>{pending ? "À débloquer" : BADGE_FAMILY_LABELS[badge.family]}</span>
@@ -90,7 +91,7 @@ function BadgeDetail({ badge, onClose }) {
         <div className="small" style={{ marginBottom: 14 }}>{BADGE_FAMILY_LABELS[badge.family]}</div>
         <div className="muted-box" style={{ textAlign: "left", marginBottom: 16 }}>
           <strong>{badge.earned ? "Badge obtenu" : "À débloquer"}</strong>
-          <div style={{ marginTop: 6 }}>{badge.condition}</div>
+          <div style={{ marginTop: 6, whiteSpace: "pre-line" }}>{badge.condition}</div>
         </div>
         <button type="button" className="btn" onClick={onClose}>Fermer</button>
       </div>
@@ -115,23 +116,26 @@ function participantRoleBadges(participant, routesById) {
   ].filter(Boolean);
 }
 
-function challengeBadgeDescriptors(items) {
-  return (Array.isArray(items) ? items : []).map((item) => {
-    const distinction = String(item.metadata?.distinction || "participation");
-    const podiumLabel = { or: "Or", argent: "Argent", bronze: "Bronze" }[distinction] || "";
-    const challengeName = item.label || item.metadata?.challengeName || "Challenge";
-    const rank = item.metadata?.rank;
-    return {
-      id: `challenge_${item.sourceId}`,
-      name: challengeName,
-      family: "prestige",
-      shape: "ribbon",
-      condition: podiumLabel
-        ? `${podiumLabel} du challenge « ${challengeName} » — rang #${rank}.`
-        : `Participation au challenge « ${challengeName} »${rank ? ` — rang #${rank}` : ""}.`,
-      earned: true,
-    };
+export function challengeBadgeDescriptors(items) {
+  const podiums = (Array.isArray(items) ? items : [])
+    .filter((item) => [1, 2, 3].includes(Number(item.metadata?.rank)))
+    .filter((item, index, all) => all.findIndex((other) => String(other.sourceId) === String(item.sourceId)) === index);
+  if (podiums.length === 0) return [];
+  const history = podiums.map((item) => {
+    const rank = Number(item.metadata.rank);
+    const medal = { 1: "Or", 2: "Argent", 3: "Bronze" }[rank];
+    return `${medal} — ${item.metadata?.challengeName || item.label || "Challenge"} (#${rank})`;
   });
+  return [{
+    id: "challenge",
+    name: "Challenge",
+    family: "prestige",
+    shape: "ribbon",
+    symbol: "🏅",
+    count: podiums.length,
+    condition: `Terminer parmi les trois premiers d'un challenge clôturé. ${podiums.length} badge${podiums.length > 1 ? "s" : ""} obtenu${podiums.length > 1 ? "s" : ""}.\n${history.join("\n")}`,
+    earned: true,
+  }];
 }
 
 export default function ParticipantBadges({ realisations, allRealisations = [], routesById, sessions, participant }) {
