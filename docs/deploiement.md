@@ -175,3 +175,22 @@ Le workflow applique la règle suivante :
 > valider d'abord, déployer ensuite exactement le commit validé.
 
 Le runner de production n'utilise aucune action GitHub tierce ou téléchargée pour préparer le dépôt. Les secrets restent gérés par GitHub Actions et par `.env.production`, qui n'est pas versionné.
+
+## Procédure de publication d'une évolution en préproduction (retour d'expérience du 14/11/2026)
+
+1. Modifier le code sur une branche dédiée et ouvrir une Pull Request vers `main`.
+2. Faire valider les tests, puis fusionner la Pull Request.
+3. Lire le fichier racine `VERSION`. **Chaque nouvelle publication doit incrémenter la version** (exemple : `261114.001` → `261114.002`). Si l'incrément a été oublié, créer une PR dédiée à `VERSION` et la fusionner.
+4. Contrôler le workflow GitHub Actions **Validate and Deploy** du **commit de fusion sur `main`**, pas seulement celui de la Pull Request. Vérifier les jobs de tests et le job de déploiement séparément.
+5. Ne jamais interpréter la conclusion globale `success` comme une preuve de publication : un job **Déployer la préproduction** peut avoir la conclusion `skipped`. Dans ce cas, la publication n'est **pas confirmée** ; examiner les conditions `if` du workflow `.github/workflows/deploy.yml`, les événements déclencheurs et la disponibilité du runner.
+6. Si le workflow autorise `workflow_dispatch`, le lancer sur `main` puis vérifier le job de déploiement. Sinon, corriger la condition ou le déclencheur de manière ciblée, avec revue et tests ; ne pas créer de commit factice pour simuler une publication.
+7. Vérifier sur l'environnement cible le numéro de version et le SHA effectivement exécutés, la santé de l'API, puis les parcours essentiels (connexion, affichage du CPR, enregistrement d'une réalisation). Ne déclarer la publication terminée qu'après ces contrôles.
+
+### Exemple concret
+
+- PR **#347** : affichage de la valeur pondérée de chaque voie dans le CPR ; fusionnée sur `main` au commit `a7d0c8d`.
+- Exécution GitHub Actions **#2206** : tests réussis, mais job **Déployer la préproduction** à `skipped`. Le code était fusionné, **pas prouvé publié**.
+- PR **#348** : incrément de `VERSION` de `261114.001` à `261114.002`, fusionnée au commit `8a041fe`.
+- L'incrément de version ne prouve pas à lui seul que le serveur a été mis à jour ; vérifier une exécution de déploiement et le runtime.
+
+Cette procédure complète les instructions de déploiement Linux ci-dessus ; elle ne remplace pas les contrôles de sécurité ni la validation du SHA déployé.
