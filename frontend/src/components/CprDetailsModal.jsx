@@ -14,6 +14,7 @@ export default function CprDetailsModal({
     realisations.map((realisation) => [String(realisation.id), realisation]),
   );
   const timeline = Array.isArray(cpr?.timeline) ? cpr.timeline : [];
+  const count = timeline.length;
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cpr-details-title">
@@ -26,7 +27,7 @@ export default function CprDetailsModal({
         </div>
 
         <div className="small cpr-details-help">
-          Le CPR utilise jusqu’à 10 réalisations éligibles des 90 derniers jours, classées selon leur contribution au calcul.
+          Le CPR est la moyenne des valeurs pondérées des 10 meilleures réalisations éligibles des 90 derniers jours. Chaque valeur correspond à l’indice de cotation multiplié par le coefficient du mode de réalisation.
         </div>
 
         {timeline.length === 0 ? (
@@ -44,6 +45,10 @@ export default function CprDetailsModal({
                     <strong>{route ? formatRouteForRealisation(route) : `Cotation ${item.grade || "-"}`}</strong>
                     <span className="small">
                       Réalisée le {formatDateShortFr(item.date || realisation?.dateRealisation)}
+                    </span>
+                    <span className="small">
+                      Valeur CPR de la voie : {Number.isFinite(item.weightedIndex) ? item.weightedIndex.toFixed(2) : "–"}
+                      {count > 0 && Number.isFinite(item.weightedIndex) ? ` · Contribution à la moyenne : ${(item.weightedIndex / count).toFixed(2)}` : ""}
                     </span>
                   </div>
                 </li>
