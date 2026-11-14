@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import DemandesEvolution from "../pages/DemandesEvolution.jsx";
+import { GRADES } from "../../../shared/climbing-grades.js";
+import { REALISATION_MODE_WEIGHTS } from "../../../shared/realisation-mode.js";
 
 const HELP_ITEMS = [
   {
@@ -52,7 +54,7 @@ const HELP_ITEMS = [
   },
   {
     title: "Que signifie CPR ?",
-    content: "Le CPR représente le niveau récent du grimpeur. Il utilise les voies réussies au cours des 90 derniers jours et conserve jusqu’aux dix meilleures réalisations. Seules les réussites sont prises en compte : le mode ou le critère de réalisation ne gonfle pas artificiellement la cotation. Une voie facile d'échauffement n'abaisse donc pas le CPR si elle ne fait pas partie de ces dix meilleures réalisations.",
+    content: "Le CPR représente le niveau récent du grimpeur. Il utilise les voies réussies au cours des 90 derniers jours et conserve jusqu’aux dix meilleures réalisations. Seules les réussites sont prises en compte. Le mode En tête conserve l’indice de cotation et le mode Moulinette lui applique un coefficient de 0,85. Une voie facile d'échauffement n'abaisse donc pas le CPR si elle ne fait pas partie de ces dix meilleures réalisations.",
   },
   {
     title: "Comment est calculée la cotation consensus ?",
@@ -127,6 +129,15 @@ export default function FaqSection({ APP_VERSION, USE_API, authUser }) {
       {activeSection === "aide" && (
         <>
           {HELP_ITEMS.map((item) => <FaqItem key={item.title} {...item} />)}
+          <details className="faq-item">
+            <summary><strong>Barème CPR : valeurs brutes et cotations converties</strong></summary>
+            <p className="small">Chaque cotation correspond à un indice brut. Une réussite en tête conserve cet indice ; une réussite en moulinette le multiplie par {REALISATION_MODE_WEIGHTS.moulinette}. Le CPR brut personnel est la moyenne des dix meilleures réalisations réussies des 90 derniers jours. Le niveau converti est la cotation dont l’indice est le plus proche de cette moyenne (arrondi).</p>
+            <div style={{ overflowX: "auto" }}>
+              <table><thead><tr><th>Cotation</th><th>Indice brut en tête</th><th>Indice brut en moulinette</th></tr></thead>
+                <tbody>{GRADES.map((grade, index) => <tr key={grade}><td>{grade}</td><td>{index}</td><td>{(index * REALISATION_MODE_WEIGHTS.moulinette).toFixed(2)}</td></tr>)}</tbody>
+              </table>
+            </div>
+          </details>
         </>
       )}
 
