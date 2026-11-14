@@ -1330,6 +1330,7 @@ async function handleThemePreferenceChange(nextTheme) {
             setRouteSortMode={setRouteSortMode}
             routeRatingsById={routeRatingsById}
             routeAggregatesById={routeAggregatesById}
+            allRealisations={state.realisations}
             openRealisationModal={openRealisationModal}
             selectedParticipantProgress={state.selectedParticipantProgress}
             editingRouteId={editingRouteId}
