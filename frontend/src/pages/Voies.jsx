@@ -591,13 +591,13 @@ function handleRouteSummaryKeyDown(event, routeId) {
                       <span className="small" aria-hidden="true" style={{ marginLeft: 8 }}>{isExpanded ? "▴" : "▾"}</span>
                     </strong>
                               <div className="route-meta-line" aria-label="Réalisation du grimpeur connecté">{formatRouteProgress(myRouteProgress, route)}</div>
-                              <div className="small">Valeur de la voie dans le calcul CPR — En tête : {route.moulinetteOnly ? "non autorisée" : cprLeadValue} · Moulinette : {cprTopRopeValue}</div>
                     {isExpanded && (
                       <div
                         className="route-expanded-details"
                         aria-label="Détails complets de la voie"
                         style={{ marginTop: 10, display: "grid", gap: 4 }}
                       >
+                        <div><strong>Valeur CPR :</strong> En tête : {route.moulinetteOnly ? "non autorisée" : cprLeadValue} · Moulinette : {cprTopRopeValue}</div>
                         <div><strong>Nom :</strong> {route.nomVoie || "Sans nom"}</div>
                         <div><strong>Corde :</strong> {normalizeRopeNumber(route.numeroCorde)}</div>
                         <div><strong>Couleur :</strong> {route.couleurPrises || "Sans couleur"}</div>
