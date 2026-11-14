@@ -22,7 +22,9 @@ permissions:
 
 concurrency:
   group: climbcrew-validation-deploy-${{ github.ref }}
-  cancel-in-progress: true
+  # Ne pas annuler une publication main lorsqu'une autre PR est fusionnée.
+  # Les exécutions sont mises en attente plutôt que d'interrompre le déploiement.
+  cancel-in-progress: false
 
 jobs:
   validate:
