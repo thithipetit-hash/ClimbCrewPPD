@@ -427,7 +427,7 @@ export default function Profil({
                   <div className="stat"><div className="label">Voies réalisées</div><div className="value">{selectedRealisations.length}</div></div>
                   <div className="stat"><div className="label">Meilleure cotation</div><div className="value">{bestGrade || (isOwnProfile ? myProfileStats.bestAll : "-") || "-"}</div></div>
                   <div className="stat">
-                    <div className="label">CPR actuel</div>
+                    <div className="label">CPR converti</div>
                     <div className="value">
                       <button
                         type="button"
@@ -439,6 +439,7 @@ export default function Profil({
                       </button>
                     </div>
                   </div>
+                  <div className="stat"><div className="label">CPR brut</div><div className="value">{Number.isFinite(cpr.averageIndex) ? cpr.averageIndex.toFixed(2) : "-"}</div></div>
                   <div className="stat"><div className="label">Points</div><div className="value">{formatPoints(points)}</div></div>
                   <div className="stat"><div className="label">Séances</div><div className="value">{participations}</div></div>
                   <div className="stat"><div className="label">Kudos reçus</div><div className="value">{selectedRealisations.reduce((total, item) => total + Number(item.kudosCount || 0), 0)}</div></div>
