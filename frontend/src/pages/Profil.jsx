@@ -83,6 +83,27 @@ function sortRealisationsForDisplay(realisations, routesById, sortBy, bestIds = 
   });
 }
 
+
+function recommendRoutes(routesById, realisations) {
+  const routes = Object.values(routesById || {}).filter((route) => route.active !== false && gradeToIndex(route.cotationAjustee || route.cotationReference) >= 0);
+  const history = [...realisations].sort((a, b) => String(b.dateRealisation || "").localeCompare(String(a.dateRealisation || "")));
+  const lastDate = history[0]?.dateRealisation;
+  const daysSince = lastDate ? Math.max(0, Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000)) : 15;
+  const completed = history.slice(0, 20).filter((item) => ["a_vue", "flash", "travaillee", "en_tete", "moulinette"].includes(item.styleRealisation));
+  const indices = completed.map((item) => gradeToIndex(routesById[item.voieId]?.cotationAjustee || routesById[item.voieId]?.cotationReference)).filter((index) => index >= 0);
+  const level = indices.length ? Math.round(indices.reduce((sum, index) => sum + index, 0) / indices.length) : 8;
+  const recovery = daysSince > 14 ? -2 : daysSince < 2 ? -1 : 0;
+  const used = new Set();
+  return [["Échauffement", -3], ["Consolidation", -1], ["Progression", 0], ["Projet", 1], ["Technique", 0], ["Bonus", 2]].map(([label, offset]) => {
+    const candidates = routes.filter((route) => !used.has(String(route.id))).sort((a, b) =>
+      Math.abs(gradeToIndex(a.cotationAjustee || a.cotationReference) - level - recovery - offset) -
+      Math.abs(gradeToIndex(b.cotationAjustee || b.cotationReference) - level - recovery - offset));
+    const route = candidates[0];
+    if (route) used.add(String(route.id));
+    return route ? { label, route } : null;
+  }).filter(Boolean);
+}
+
 export default function Profil({
   USE_API,
   authUser,
@@ -212,6 +233,7 @@ export default function Profil({
     ? grades.reduce((best, current) => gradeToIndex(current) > gradeToIndex(best) ? current : best)
     : "";
   const profileIsVisible = isOwnProfile || selectedParticipant?.profilePublic !== false;
+  const recommendations = isOwnProfile ? recommendRoutes(routesById, selectedRealisations) : [];
 
   const {
     refreshRealisations,
@@ -427,7 +449,7 @@ export default function Profil({
                   <div className="stat"><div className="label">Voies réalisées</div><div className="value">{selectedRealisations.length}</div></div>
                   <div className="stat"><div className="label">Meilleure cotation</div><div className="value">{bestGrade || (isOwnProfile ? myProfileStats.bestAll : "-") || "-"}</div></div>
                   <div className="stat">
-                    <div className="label">CPR actuel</div>
+                    <div className="label">CPR converti</div>
                     <div className="value">
                       <button
                         type="button"
@@ -439,6 +461,7 @@ export default function Profil({
                       </button>
                     </div>
                   </div>
+                  <div className="stat"><div className="label">CPR brut</div><div className="value">{Number.isFinite(cpr.averageIndex) ? cpr.averageIndex.toFixed(2) : "-"}</div></div>
                   <div className="stat"><div className="label">Points</div><div className="value">{formatPoints(points)}</div></div>
                   <div className="stat"><div className="label">Séances</div><div className="value">{participations}</div></div>
                   <div className="stat"><div className="label">Kudos reçus</div><div className="value">{selectedRealisations.reduce((total, item) => total + Number(item.kudosCount || 0), 0)}</div></div>
@@ -463,6 +486,15 @@ export default function Profil({
                 )}
               </div>
 
+              {isOwnProfile && (
+                <div className="card">
+                  <h3>Mes prochaines voies</h3>
+                  <div className="small">Cinq propositions et un bonus adaptés aux dernières réalisations et au délai depuis la dernière séance.</div>
+                  <div className="stack">{recommendations.map(({ label, route }) => (
+                    <div className="subcard" key={route.id}><strong>{label}</strong> · {formatRouteForRealisation(route)}</div>
+                  ))}</div>
+                </div>
+              )}
               <ClimberProfilePanel realisations={selectedRealisations} routesById={routesById} cprGrade={cpr.currentGrade || ""} />
               <ParticipantBadges participant={selectedParticipant} realisations={selectedRealisations} allRealisations={realisations} routesById={routesById} sessions={getParticipantSessions(selectedParticipantId)} />
               <div className="card"><CprEvolutionChart realisations={selectedRealisations} routesById={routesById} resetAt={selectedParticipant.cprResetAt} /></div>

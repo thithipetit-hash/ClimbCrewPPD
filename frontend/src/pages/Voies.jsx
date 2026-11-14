@@ -4,7 +4,7 @@ import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import RouteQrCode from "../components/RouteQrCode.jsx";
 import { API_BASE, apiFetch, apiUploadVideoInChunks } from "../lib/api.js";
 import { REALISATIONS_PAGE_SIZE, fetchPaginatedCollection } from "../lib/bootstrap-data.js";
-import { GRADES, formatRouteName, getRouteCardStyle, normalizeRopeNumber } from "../lib/domain.js";
+import { GRADES, formatRouteName, getRouteCardStyle, normalizeRopeNumber, isSuccessfulLeadRealisation } from "../lib/domain.js";
 import {
   ROUTE_REALISATION_EXCLUSION_OPTIONS,
   ROUTE_REALISATION_FILTER_OPTIONS,
@@ -55,6 +55,7 @@ export default function Voies({
   setRouteSortMode,
   routeRatingsById,
   routeAggregatesById,
+  allRealisations = [],
   openRealisationModal,
   selectedParticipantProgress,
   editingRouteId,
@@ -532,6 +533,10 @@ function handleRouteSummaryKeyDown(event, routeId) {
               {group.routes.length === 0 ? <div className="small">Aucune voie.</div> : (
                 <div className="stack">
                   {group.routes.map((route) => {
+                    const leadClimbers = new Set(allRealisations.filter((item) => String(item.voieId) === String(route.id) && isSuccessfulLeadRealisation(item, route)).map((item) => String(item.participantId)));
+                    const leadPoints = 1000 / (leadClimbers.size + (leadClimbers.has(String(currentParticipantId)) ? 0 : 1));
+                    const alreadyLead = leadClimbers.has(String(currentParticipantId));
+                    const displayedLeadPoints = alreadyLead ? 0 : leadPoints;
                     const routeRating = routeRatingsById[route.id] || { average: 0, count: 0 };
                     const videoCount = effectiveVideoUrls(route).length;
                     const videoInputId = `route-video-upload-${route.id}`;
@@ -587,6 +592,7 @@ function handleRouteSummaryKeyDown(event, routeId) {
                       <span className="small" aria-hidden="true" style={{ marginLeft: 8 }}>{isExpanded ? "▴" : "▾"}</span>
                     </strong>
                               <div className="route-meta-line" aria-label="Réalisation du grimpeur connecté">{formatRouteProgress(myRouteProgress, route)}</div>
+                              <div className="small">Points de classement supplémentaires — En tête : {route.moulinetteOnly ? "non autorisée" : displayedLeadPoints.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} · Moulinette : 0</div>
                     {isExpanded && (
                       <div
                         className="route-expanded-details"
