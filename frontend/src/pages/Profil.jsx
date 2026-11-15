@@ -127,6 +127,22 @@ export default function Profil({
   const [statsRecalculating, setStatsRecalculating] = React.useState(false);
   const [statsRecalculateStatus, setStatsRecalculateStatus] = React.useState("");
 
+  const selectedRealisations = React.useMemo(() => realisations
+    .filter((realisation) => String(realisation.participantId) === String(selectedParticipantId))
+    .sort((a, b) => String(b.dateRealisation || "").localeCompare(String(a.dateRealisation || ""))),
+  [realisations, selectedParticipantId]);
+  const recommendationPlan = React.useMemo(() => (
+    myParticipant && String(selectedParticipantId) === String(myParticipantId)
+      ? buildRouteRecommendations({
+        routesById,
+        realisations: selectedRealisations,
+        currentCpr: cprByParticipantId?.[selectedParticipantId] || {},
+        resetAt: myParticipant.cprResetAt,
+        mode: recommendationMode,
+      })
+      : null
+  ), [myParticipant, myParticipantId, selectedParticipantId, selectedRealisations, routesById, cprByParticipantId, recommendationMode]);
+
   async function toggleKudo(realisation) {
     if (!myParticipantId || kudosPendingId) return;
     setKudosPendingId(realisation.id);
@@ -199,10 +215,6 @@ export default function Profil({
   const selectedParticipant = participants.find((participant) => String(participant.id) === String(selectedParticipantId))
     || (String(selectedParticipantId) === String(myParticipantId) ? myParticipant : null);
   const isOwnProfile = Boolean(selectedParticipant && String(selectedParticipant.id) === String(myParticipantId));
-  const selectedRealisations = React.useMemo(() => realisations
-    .filter((realisation) => String(realisation.participantId) === String(selectedParticipantId))
-    .sort((a, b) => String(b.dateRealisation || "").localeCompare(String(a.dateRealisation || ""))),
-  [realisations, selectedParticipantId]);
   const bestIds = bestRealisationIds(selectedRealisations, routesById);
   const displayedRealisations = sortRealisationsForDisplay(selectedRealisations, routesById, realisationSort, bestIds);
   const selectedRouteRealisationStats = buildRouteRealisationStatistics(Object.values(routesById || {}), selectedRealisations);
@@ -216,16 +228,6 @@ export default function Profil({
     ? grades.reduce((best, current) => gradeToIndex(current) > gradeToIndex(best) ? current : best)
     : "";
   const profileIsVisible = isOwnProfile || selectedParticipant?.profilePublic !== false;
-  const recommendationPlan = React.useMemo(() => isOwnProfile
-    ? buildRouteRecommendations({
-      routesById,
-      realisations: selectedRealisations,
-      currentCpr: cpr,
-      resetAt: selectedParticipant?.cprResetAt,
-      mode: recommendationMode,
-    })
-    : null,
-  [isOwnProfile, routesById, selectedRealisations, cpr, selectedParticipant?.cprResetAt, recommendationMode]);
 
   const {
     refreshRealisations,
