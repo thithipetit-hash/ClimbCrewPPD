@@ -170,3 +170,6 @@
   .climber-kiviat svg { width: 100%; }
   .kiviat-label { font-size: 12px; }
 }
+
+.profile-recommendation-modes { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.profile-recommendation-modes button { flex: 1 1 130px; min-width: 0; }
