@@ -35,6 +35,7 @@ import {
 } from "../lib/realisation-mode.js";
 import { bestRealisationIds, realisationQualityScore } from "../lib/profile-physical.js";
 import { buildRouteRealisationStatistics } from "../lib/route-realisation-statistics.js";
+import { buildRouteRecommendations } from "../lib/route-recommendations.js";
 import {
   BUDDY_DAYS,
   BUDDY_SLOTS,
@@ -84,26 +85,6 @@ function sortRealisationsForDisplay(realisations, routesById, sortBy, bestIds = 
 }
 
 
-function recommendRoutes(routesById, realisations) {
-  const routes = Object.values(routesById || {}).filter((route) => route.active !== false && gradeToIndex(route.cotationAjustee || route.cotationReference) >= 0);
-  const history = [...realisations].sort((a, b) => String(b.dateRealisation || "").localeCompare(String(a.dateRealisation || "")));
-  const lastDate = history[0]?.dateRealisation;
-  const daysSince = lastDate ? Math.max(0, Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000)) : 15;
-  const completed = history.slice(0, 20).filter((item) => ["a_vue", "flash", "travaillee", "en_tete", "moulinette"].includes(item.styleRealisation));
-  const indices = completed.map((item) => gradeToIndex(routesById[item.voieId]?.cotationAjustee || routesById[item.voieId]?.cotationReference)).filter((index) => index >= 0);
-  const level = indices.length ? Math.round(indices.reduce((sum, index) => sum + index, 0) / indices.length) : 8;
-  const recovery = daysSince > 14 ? -2 : daysSince < 2 ? -1 : 0;
-  const used = new Set();
-  return [["Échauffement", -3], ["Consolidation", -1], ["Progression", 0], ["Projet", 1], ["Technique", 0], ["Bonus", 2]].map(([label, offset]) => {
-    const candidates = routes.filter((route) => !used.has(String(route.id))).sort((a, b) =>
-      Math.abs(gradeToIndex(a.cotationAjustee || a.cotationReference) - level - recovery - offset) -
-      Math.abs(gradeToIndex(b.cotationAjustee || b.cotationReference) - level - recovery - offset));
-    const route = candidates[0];
-    if (route) used.add(String(route.id));
-    return route ? { label, route } : null;
-  }).filter(Boolean);
-}
-
 export default function Profil({
   USE_API,
   authUser,
@@ -131,6 +112,7 @@ export default function Profil({
   const [selectedParticipantId, setSelectedParticipantId] = React.useState(() => String(myParticipantId || ""));
   const [realisations, setRealisations] = React.useState(() => Array.isArray(allRealisations) ? allRealisations : []);
   const [realisationSort, setRealisationSort] = React.useState("date");
+  const [recommendationMode, setRecommendationMode] = React.useState("consolidation");
   const [profileError, setProfileError] = React.useState("");
   const [theCragImporting, setTheCragImporting] = React.useState(false);
   const [theCragImportStatus, setTheCragImportStatus] = React.useState(null);
@@ -217,9 +199,10 @@ export default function Profil({
   const selectedParticipant = participants.find((participant) => String(participant.id) === String(selectedParticipantId))
     || (String(selectedParticipantId) === String(myParticipantId) ? myParticipant : null);
   const isOwnProfile = Boolean(selectedParticipant && String(selectedParticipant.id) === String(myParticipantId));
-  const selectedRealisations = realisations
+  const selectedRealisations = React.useMemo(() => realisations
     .filter((realisation) => String(realisation.participantId) === String(selectedParticipantId))
-    .sort((a, b) => String(b.dateRealisation || "").localeCompare(String(a.dateRealisation || "")));
+    .sort((a, b) => String(b.dateRealisation || "").localeCompare(String(a.dateRealisation || ""))),
+  [realisations, selectedParticipantId]);
   const bestIds = bestRealisationIds(selectedRealisations, routesById);
   const displayedRealisations = sortRealisationsForDisplay(selectedRealisations, routesById, realisationSort, bestIds);
   const selectedRouteRealisationStats = buildRouteRealisationStatistics(Object.values(routesById || {}), selectedRealisations);
@@ -233,7 +216,16 @@ export default function Profil({
     ? grades.reduce((best, current) => gradeToIndex(current) > gradeToIndex(best) ? current : best)
     : "";
   const profileIsVisible = isOwnProfile || selectedParticipant?.profilePublic !== false;
-  const recommendations = isOwnProfile ? recommendRoutes(routesById, selectedRealisations) : [];
+  const recommendationPlan = React.useMemo(() => isOwnProfile
+    ? buildRouteRecommendations({
+      routesById,
+      realisations: selectedRealisations,
+      currentCpr: cpr,
+      resetAt: selectedParticipant?.cprResetAt,
+      mode: recommendationMode,
+    })
+    : null,
+  [isOwnProfile, routesById, selectedRealisations, cpr, selectedParticipant?.cprResetAt, recommendationMode]);
 
   const {
     refreshRealisations,
@@ -489,10 +481,39 @@ export default function Profil({
               {isOwnProfile && (
                 <div className="card">
                   <h3>Mes prochaines voies</h3>
-                  <div className="small">Cinq propositions et un bonus adaptés aux dernières réalisations et au délai depuis la dernière séance.</div>
-                  <div className="stack">{recommendations.map(({ label, route }) => (
-                    <div className="subcard" key={route.id}><strong>{label}</strong> · {formatRouteForRealisation(route)}</div>
-                  ))}</div>
+                  <div className="small">Choisis un objectif : cinq voies et un bonus adaptés au CPR récent et au temps depuis la dernière séance.</div>
+                  <div className="group profile-recommendation-modes" role="group" aria-label="Objectif des recommandations">
+                    <Button type="button" variant={recommendationMode === "consolidation" ? "primary" : "secondary"}
+                      aria-pressed={recommendationMode === "consolidation"} onClick={() => setRecommendationMode("consolidation")}>
+                      Consolidation
+                    </Button>
+                    <Button type="button" variant={recommendationMode === "progression" ? "primary" : "secondary"}
+                      aria-pressed={recommendationMode === "progression"} onClick={() => setRecommendationMode("progression")}>
+                      Progression
+                    </Button>
+                  </div>
+                  {recommendationPlan?.recentCprSessions.length > 0 ? (
+                    <div className="small">
+                      CPR des dernières séances : {recommendationPlan.recentCprSessions.map((session) =>
+                        `${formatDateShortFr(session.date)} : ${session.averageIndex.toFixed(2)}`).join(" · ")}.
+                      Référence : {recommendationPlan.referenceIndex.toFixed(2)} ({recommendationPlan.referenceGrade}).
+                    </div>
+                  ) : (
+                    <div className="small">
+                      {recommendationPlan?.hasCprReference ? "Référence CPR actuel" : "Référence estimée depuis les réalisations"}
+                      {" : "}{recommendationPlan?.referenceIndex.toFixed(2)} ({recommendationPlan?.referenceGrade}).
+                    </div>
+                  )}
+                  <div className="small">
+                    {recommendationMode === "consolidation"
+                      ? "Consolidation : privilégier la régularité autour du niveau CPR."
+                      : "Progression : viser des cotations supérieures au CPR, en privilégiant la tête."}
+                  </div>
+                  <div className="stack">
+                    {recommendationPlan?.recommendations.length ? recommendationPlan.recommendations.map(({ label, route }) => (
+                      <div className="subcard" key={route.id}><strong>{label}</strong> · {formatRouteForRealisation(route)}</div>
+                    )) : <div className="muted-box">Aucune voie active disponible.</div>}
+                  </div>
                 </div>
               )}
               <ClimberProfilePanel realisations={selectedRealisations} routesById={routesById} cprGrade={cpr.currentGrade || ""} />
