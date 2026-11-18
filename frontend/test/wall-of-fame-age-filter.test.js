@@ -58,3 +58,16 @@ test("les rangs du Tableau d'honneur sont recalculés après filtrage", () => {
   });
   assert.deepEqual(kudos.map(({ participant, rank }) => [participant.id, rank]), [["3", 1]]);
 });
+
+test("les membres filtrent les profils publics sans accéder à leur année de naissance", () => {
+  const publicParticipants = [
+    { id: "1", sexe: "f", categorieFfme: "Sénior" },
+    { id: "2", sexe: "h", categorieFfme: "Vétéran 1" },
+    { id: "3", sexe: "f", categorieFfme: "Vétéran 1" },
+    { id: "4", sexe: "f", categorieFfme: "" },
+    { id: "5", profilePublic: false },
+  ];
+  assert.deepEqual(ids(filterWallOfFameParticipants(publicParticipants, { ageCategory: "Vétéran 1" })), ["2", "3"]);
+  assert.deepEqual(ids(filterWallOfFameParticipants(publicParticipants, { sex: "f", ageCategory: "Vétéran 1" })), ["3"]);
+  assert.deepEqual(ids(filterWallOfFameParticipants(publicParticipants, { ageCategory: UNSPECIFIED_FFME_CATEGORY })), ["4", "5"]);
+});
