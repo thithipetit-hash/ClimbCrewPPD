@@ -2,7 +2,7 @@ name: Verify Public After Deploy
 
 on:
   workflow_run:
-    workflows: ["Validate and Deploy"]
+    workflows: ["Validate and Deploy", "Deploy Production"]
     types: [completed]
 
 permissions:
@@ -10,25 +10,25 @@ permissions:
 
 jobs:
   verify:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'production' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && ((github.event.workflow_run.name == 'Validate and Deploy' && github.event.workflow_run.head_branch == 'main' && github.repository == 'thithipetit-hash/ClimbCrewPPD') || github.event.workflow_run.name == 'Deploy Production') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout deployed commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 1
 
-      - name: Vérifier le marqueur public de production
+      - name: Vérifier le marqueur public du déploiement
         env:
-          PUBLIC_BASE_URL: https://climbcrew.dip-tcs.com
+          PUBLIC_BASE_URL: ${{ github.event.workflow_run.name == 'Deploy Production' && 'https://climbcrew.dip-tcs.com' || 'https://pre-climbcrew.dip-tcs.com' }}
           EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
         shell: bash
         run: |
           set -euo pipefail
           EXPECTED_VERSION="$(tr -d '\r\n' < VERSION)"
-          MARKER_URL="${PUBLIC_BASE_URL}/deployment-version.json?verify=${EXPECTED_SHA}"
+          MARKER_URL="${PUBLIC_BASE_URL}/api/version?verify=${EXPECTED_SHA}"
           for attempt in $(seq 1 24); do
             echo "Tentative ${attempt}/24: ${MARKER_URL}"
             RESPONSE="$(curl --fail --silent --show-error --location --connect-timeout 5 --max-time 10 --header 'Cache-Control: no-cache' "$MARKER_URL" || true)"
@@ -43,5 +43,5 @@ jobs:
             fi
             [ "$attempt" -eq 24 ] || sleep 5
           done
-          echo 'ERROR: la production publique ne correspond pas au déploiement validé.'
+          echo 'ERROR: le site public ne correspond pas au déploiement validé.'
           exit 1

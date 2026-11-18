@@ -1,0 +1,85 @@
+/* Mise en page de la saisie des challenges, sans débordement horizontal sur mobile. */
+.challenges-page,
+.challenges-page > *,
+.challenges-page .card,
+.challenge-create-form,
+.challenge-form-grid,
+.challenge-route-picker,
+.challenge-route-list {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.challenge-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--cc-space-2, 5px);
+}
+
+.challenge-create-form label {
+  min-width: 0;
+}
+
+.challenge-create-form input:not([type="checkbox"]),
+.challenge-create-form select,
+.challenge-create-form textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.challenge-create-form textarea {
+  resize: vertical;
+}
+
+.challenge-route-list {
+  max-height: 320px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.app .challenge-route-option {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  min-height: 40px !important;
+  margin: 0 !important;
+  padding: 7px 8px !important;
+  white-space: normal !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  line-height: 1.2 !important;
+  cursor: pointer;
+}
+
+.app .challenge-route-option > input[type="checkbox"] {
+  margin-top: 1px !important;
+}
+
+.challenge-route-label {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .challenge-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .challenge-create-form textarea {
+    min-height: 80px !important;
+  }
+
+  .challenge-route-list {
+    max-height: min(46vh, 360px);
+  }
+
+  .app .challenge-route-option {
+    min-height: 44px !important;
+  }
+}

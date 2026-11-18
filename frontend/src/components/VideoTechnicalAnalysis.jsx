@@ -202,6 +202,7 @@ export default function VideoTechnicalAnalysis({
 
   const metrics = analysis?.metrics;
   const pauses = Array.isArray(metrics?.pauses) ? metrics.pauses : [];
+  const motionEvents = Array.isArray(metrics?.events) ? metrics.events : [];
   const recommendations = Array.isArray(analysis?.recommendations) ? analysis.recommendations : [];
   const coach = analysis?.coach || (metrics ? buildClimbingCoach(metrics, analysis?.rules || {}) : null);
   const coachPriorities = Array.isArray(coach?.priorities) ? coach.priorities : [];
@@ -281,6 +282,11 @@ export default function VideoTechnicalAnalysis({
             <Metric label="Pauses" value={pauses.length} />
             <Metric label="Ajustements pieds" value={Number(metrics.footAdjustments?.total || 0)} />
             <Metric label="Pics dynamiques" value={Number(metrics.dynamicMoves || 0)} />
+            <Metric label="Confiance observation" value={`${Math.round((Number(metrics.observationConfidence ?? metrics.detectionRatio) || 0) * 100)} %`} />
+            <Metric label="Trajectoire bassin" value={metrics.hipMotion ? `${Math.round((Number(metrics.hipMotion.pathEfficiency) || 0) * 100)} % directe` : "—"} />
+            <Metric label="Décalage bassin" value={metrics.bodyPosition ? `${Number(metrics.bodyPosition.meanHipLateralOffsetHipWidths || 0).toFixed(2)} × largeur bassin` : "—"} />
+            <Metric label="Position compacte" value={metrics.bodyPosition ? `${Math.round((Number(metrics.bodyPosition.compactSeconds || 0) / Math.max(1, Number(metrics.analyzedSeconds || 1))) * 100)} %` : "—"} />
+            <Metric label="Angle moyen genoux" value={Number.isFinite(Number(metrics.meanKneeAngleDegrees)) ? `${Math.round(Number(metrics.meanKneeAngleDegrees))}°` : "—"} />
             <Metric label="Bras gauche fléchi" value={analysis.display?.bentLeft || formatTimestamp(metrics.bentArmSeconds?.left)} />
             <Metric label="Bras droit fléchi" value={analysis.display?.bentRight || formatTimestamp(metrics.bentArmSeconds?.right)} />
           </div>
@@ -340,6 +346,7 @@ export default function VideoTechnicalAnalysis({
             <div className="subcard" style={{ marginTop: 12 }}>
               <strong>Couche entraîneur</strong>
               <div className="small" style={{ marginTop: 4 }}>{coach?.summary}</div>
+              {coach?.confidenceLabel && <div className="small" style={{ marginTop: 4 }}><b>Confiance :</b> {coach.confidenceLabel} ({Math.round((Number(coach.confidence) || 0) * 100)} %)</div>}
               <div className="stack" style={{ marginTop: 8 }}>
                 {coachPriorities.map((item, index) => (
                   <div className="muted-box" key={item.code}>
@@ -353,6 +360,23 @@ export default function VideoTechnicalAnalysis({
                 ))}
               </div>
               {coach?.note && <div className="small" style={{ marginTop: 8 }}>{coach.note}</div>}
+            </div>
+          )}
+
+          {motionEvents.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <strong>Timeline technique</strong>
+              <div className="small" style={{ marginTop: 4 }}>Préparation → exécution → stabilisation et mouvements candidats. « ? » signifie que la technique doit être confirmée visuellement. Cliquer pour revoir le passage.</div>
+              <div className="group" style={{ marginTop: 6 }}>
+                {motionEvents.slice(0, 24).map((event, index) => {
+                  const labels = { pause: "Pause", dynamic: "Dynamique", "foot-adjustment": event.side === "left" ? "Ajustement pied G" : "Ajustement pied D", cross: event.side === "left" ? "Croisé main G ?" : "Croisé main D ?", "foot-switch": "Changement de pieds ?", "flag-candidate": event.side === "left" ? "Drapeau G ?" : "Drapeau D ?", movement: "Préparation", "movement-peak": "Exécution", stabilization: "Stabilisation" };
+                  return videoAvailable ? (
+                    <button type="button" className="pill" key={`${event.type}-${event.time}-${index}`} onClick={() => { if (!videoRef.current) return; videoRef.current.currentTime = Math.max(0, event.time - 1); videoRef.current.play().catch(() => {}); }}>
+                      {formatTimestamp(event.time)} · {labels[event.type] || event.type}
+                    </button>
+                  ) : <span className="pill" key={`${event.type}-${event.time}-${index}`}>{formatTimestamp(event.time)} · {labels[event.type] || event.type}</span>;
+                })}
+              </div>
             </div>
           )}
 

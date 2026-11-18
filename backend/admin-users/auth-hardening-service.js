@@ -2,21 +2,18 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import {
   BCRYPT_ROUNDS,
+  COOKIE_SAMESITE,
   CSRF_COOKIE_NAME,
   RESET_TOKEN_DURATION_MS,
+  SECURE_COOKIES,
   SESSION_COOKIE_NAME,
+  SESSION_DURATION_MS,
 } from "./config.js";
 import { getPool } from "./database.js";
 import { writeAccessLog } from "./access-log-service.js";
 import { cleanEmail, hashToken, isStrongPassword } from "./security.js";
 import { serializeUser } from "./user-serializer.js";
 import { sendPasswordResetCode } from "./email-service.js";
-
-const IS_PRODUCTION = process.env.NODE_ENV === "production";
-const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * Number(process.env.SESSION_DURATION_DAYS || 7);
-const configuredSameSite = String(process.env.COOKIE_SAMESITE || "lax").toLowerCase();
-const COOKIE_SAMESITE = ["lax", "strict", "none"].includes(configuredSameSite) ? configuredSameSite : "lax";
-const SECURE_COOKIES = String(process.env.SECURE_COOKIES || (IS_PRODUCTION ? "true" : "false")).toLowerCase() === "true";
 
 export const RESET_CODE_BYTES = 8;
 export const RESET_CODE_HEX_LENGTH = RESET_CODE_BYTES * 2;
@@ -159,7 +156,11 @@ export async function secureForgotPassword(req, res) {
 
   try {
     const userResult = await getPool().query(
-      `select id, email, prenom, nom, status from users where lower(email) = $1 limit 1`,
+      `select id, email, prenom, nom, status
+       from users
+       where climbcrew_normalize_email(email) = climbcrew_normalize_email($1)
+       order by case when lower(email) = lower($1) then 0 else 1 end, id
+       limit 1`,
       [email],
     );
     const user = userResult.rows[0] || null;
@@ -267,7 +268,11 @@ export async function secureResetPassword(req, res) {
   try {
     await client.query("begin");
     const userResult = await client.query(
-      `select * from users where lower(email) = $1 limit 1`,
+      `select *
+       from users
+       where climbcrew_normalize_email(email) = climbcrew_normalize_email($1)
+       order by case when lower(email) = lower($1) then 0 else 1 end, id
+       limit 1`,
       [email],
     );
     const user = userResult.rows[0] || null;

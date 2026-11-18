@@ -1,0 +1,1 @@
+-- Réponses à un message façon messagerie instantanée.\nalter table chat_messages\n  add column if not exists reply_to_id bigint references chat_messages(id) on delete set null;\n\ncreate index if not exists chat_messages_reply_to_idx\n  on chat_messages (reply_to_id);\n

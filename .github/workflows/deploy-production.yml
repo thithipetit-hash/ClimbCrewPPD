@@ -1,0 +1,286 @@
+name: Deploy Production
+
+on:
+  workflow_run:
+    workflows: ["Validate and Deploy"]
+    types: [completed]
+    branches: [production]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: climbcrew-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Déployer la production réelle
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'production' }}
+    runs-on: self-hosted
+    timeout-minutes: 35
+    env:
+      DEPLOY_ROOT: /opt/climbcrew
+      PROD_DOMAIN: climbcrew.dip-tcs.com
+      VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Vérifier que le runner pointe bien sur la production
+        shell: bash
+        run: |
+          set -euo pipefail
+          for command in git docker curl sudo nginx; do
+            command -v "$command" >/dev/null 2>&1 || { echo "ERROR: commande absente: $command"; exit 1; }
+          done
+          docker compose version >/dev/null
+          test -n "$VALIDATED_SHA" || { echo 'ERROR: SHA validé absent'; exit 1; }
+          test -d "$DEPLOY_ROOT/.git" || { echo "ERROR: clone persistant absent: $DEPLOY_ROOT"; exit 1; }
+          test -f "$DEPLOY_ROOT/.env.production" || { echo 'ERROR: .env.production absent'; exit 1; }
+          CURRENT_ORIGIN="$(cd "$DEPLOY_ROOT" && git remote get-url origin 2>/dev/null || true)"
+          EXPECTED_ORIGIN="https://github.com/${GITHUB_REPOSITORY}.git"
+          [ "$CURRENT_ORIGIN" = "$EXPECTED_ORIGIN" ] || { echo "ERROR: origin inattendu: $CURRENT_ORIGIN"; exit 1; }
+          sudo nginx -t
+          sudo nginx -T 2>&1 | grep -qsE 'server_name[[:space:]]+climbcrew\.dip-tcs\.com' || {
+            echo 'ERROR: ce runner ne publie pas climbcrew.dip-tcs.com.'
+            exit 1
+          }
+          if docker inspect climbcrew-backend >/dev/null 2>&1; then
+            CURRENT_ROOT="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' climbcrew-backend 2>/dev/null || true)"
+            if [ -n "$CURRENT_ROOT" ] && [ "$CURRENT_ROOT" != "$DEPLOY_ROOT" ]; then
+              echo "ERROR: climbcrew-backend appartient à $CURRENT_ROOT, pas à $DEPLOY_ROOT"
+              exit 1
+            fi
+          fi
+          echo "Cible production confirmée: $DEPLOY_ROOT -> $PROD_DOMAIN"
+
+      - name: Sauvegarder et vérifier PostgreSQL avant bascule
+        id: backup_db
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker inspect climbcrew-db >/dev/null 2>&1 || { echo 'ERROR: conteneur PostgreSQL de production absent'; exit 1; }
+          docker ps --format '{{.Names}}' | grep -qx 'climbcrew-db' || { echo 'ERROR: PostgreSQL de production arrêté'; exit 1; }
+          BACKUP_DIR="$DEPLOY_ROOT/backups/predeploy"
+          mkdir -p "$BACKUP_DIR"
+          STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+          BACKUP_FILE="$BACKUP_DIR/prod-predeploy-${STAMP}.dump"
+          docker exec climbcrew-db sh -lc 'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$BACKUP_FILE"
+          test -s "$BACKUP_FILE" || { echo 'ERROR: sauvegarde PostgreSQL vide'; exit 1; }
+          docker exec -i climbcrew-db pg_restore --list < "$BACKUP_FILE" >/dev/null
+          sha256sum "$BACKUP_FILE"
+          printf 'backup_file=%s\n' "$BACKUP_FILE" >> "$GITHUB_OUTPUT"
+
+          DATA_SNAPSHOT="$BACKUP_DIR/prod-predeploy-${STAMP}.ids"
+          docker exec -i climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' > "$DATA_SNAPSHOT" <<'SQL'
+          select 'users:' || id::text from users
+          union all select 'participants:' || id::text from participants
+          union all select 'sessions:' || id::text from sessions
+          union all select 'session_participants:' || session_id || ':' || participant_id from session_participants
+          union all select 'routes:' || id::text from routes
+          union all select 'realisations:' || id::text from realisations
+          union all select 'route_videos:' || id::text from route_videos
+          union all select 'route_ratings:' || route_id || ':' || user_id::text from route_ratings
+          order by 1;
+          SQL
+          test -s "$DATA_SNAPSHOT" || { echo 'ERROR: inventaire métier pré-déploiement vide'; exit 1; }
+          printf 'data_snapshot=%s\n' "$DATA_SNAPSHOT" >> "$GITHUB_OUTPUT"
+
+          ls -1t "$BACKUP_DIR"/prod-predeploy-*.dump 2>/dev/null | tail -n +11 | xargs -r rm -f
+          ls -1t "$BACKUP_DIR"/prod-predeploy-*.ids 2>/dev/null | tail -n +11 | xargs -r rm -f
+          echo "Sauvegarde production créée et vérifiée: $BACKUP_FILE"
+
+      - name: Synchroniser le dépôt sur le SHA production validé
+        id: sync_repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_ROOT"
+          PREVIOUS_SHA="$(git rev-parse HEAD)"
+          printf 'previous_sha=%s\n' "$PREVIOUS_SHA" >> "$GITHUB_OUTPUT"
+          FETCH_OK=false
+          for attempt in 1 2 3 4 5; do
+            if timeout 90s git fetch --no-tags --prune origin 'refs/heads/production:refs/remotes/origin/production'; then
+              FETCH_OK=true
+              break
+            fi
+            sleep $((attempt * 10))
+          done
+          [ "$FETCH_OK" = true ] || { echo 'ERROR: git fetch impossible'; exit 1; }
+          CURRENT_PROD_SHA="$(git rev-parse refs/remotes/origin/production)"
+          [ "$CURRENT_PROD_SHA" = "$VALIDATED_SHA" ] || {
+            echo "ERROR: validation obsolète: production=$CURRENT_PROD_SHA, validé=$VALIDATED_SHA"
+            exit 1
+          }
+          git cat-file -e "${VALIDATED_SHA}^{commit}" 2>/dev/null || { echo 'ERROR: SHA validé absent'; exit 1; }
+          git checkout -B production "$VALIDATED_SHA"
+          [ "$(git rev-parse HEAD)" = "$VALIDATED_SHA" ] || exit 1
+          printf 'candidate_checked_out=true\n' >> "$GITHUB_OUTPUT"
+          echo "Production verrouillée sur $VALIDATED_SHA (ancien SHA: $PREVIOUS_SHA)"
+
+      - name: Synchroniser la configuration de production
+        shell: bash
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          BACKUP_EMAIL_ENCRYPTION_KEY: ${{ secrets.BACKUP_EMAIL_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          ENV_FILE="$DEPLOY_ROOT/.env.production"
+          set_env_var() {
+            local key="$1" value="$2"
+            if grep -q "^${key}=" "$ENV_FILE"; then
+              sed -i "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
+            else
+              printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+            fi
+          }
+          set_env_var REQUIRE_ADMIN_ACCOUNT_APPROVAL true
+          set_env_var ALLOW_FIRST_ADMIN_BOOTSTRAP false
+          set_env_var PUBLIC_URL "https://${PROD_DOMAIN}"
+          set_env_var FRONTEND_ORIGIN "https://${PROD_DOMAIN}"
+          set_env_var CORS_ORIGIN "https://${PROD_DOMAIN}"
+          if [ -n "${SMTP_USER:-}" ] && [ -n "${SMTP_PASSWORD:-}" ]; then
+            set_env_var EMAIL_ENABLED true
+            set_env_var SMTP_HOST smtp.gmail.com
+            set_env_var SMTP_PORT 587
+            set_env_var SMTP_SECURE false
+            set_env_var SMTP_REQUIRE_TLS true
+            set_env_var SMTP_USER "$SMTP_USER"
+            set_env_var SMTP_PASSWORD "$SMTP_PASSWORD"
+            set_env_var EMAIL_FROM_NAME ClimbClubCristal
+            set_env_var EMAIL_FROM_ADDRESS "$SMTP_USER"
+          fi
+          if [ -n "${BACKUP_EMAIL_ENCRYPTION_KEY:-}" ]; then
+            set_env_var BACKUP_EMAIL_ENCRYPTION_KEY "$BACKUP_EMAIL_ENCRYPTION_KEY"
+          fi
+          echo 'Configuration de production synchronisée.'
+
+      - name: Construire et démarrer le SHA validé
+        id: start_candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_ROOT"
+          export GITHUB_SHA="$VALIDATED_SHA"
+          if ! docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build; then
+            echo 'ERROR: démarrage de la pile production impossible'
+            docker compose --env-file .env.production -f docker-compose.prod.yml ps || true
+            docker logs --tail 300 climbcrew-backend || true
+            exit 1
+          fi
+          printf 'candidate_started=true\n' >> "$GITHUB_OUTPUT"
+          echo "Pile production démarrée pour $VALIDATED_SHA"
+
+      - name: Contrôler la santé locale
+        shell: bash
+        run: |
+          set -euo pipefail
+          BACKEND_OK=false
+          for attempt in $(seq 1 24); do
+            HEALTH_RESPONSE="$(curl --fail --silent --max-time 5 http://127.0.0.1:3000/health || true)"
+            if [[ -n "$HEALTH_RESPONSE" ]] && ! grep -Eq '"degraded"[[:space:]]*:[[:space:]]*true' <<<"$HEALTH_RESPONSE"; then
+              BACKEND_OK=true
+              break
+            fi
+            sleep 5
+          done
+          [ "$BACKEND_OK" = true ] || { docker logs --tail 200 climbcrew-backend || true; exit 1; }
+
+          FRONTEND_OK=false
+          for attempt in $(seq 1 12); do
+            if curl --fail --silent --max-time 5 http://127.0.0.1:8080/ >/dev/null; then
+              FRONTEND_OK=true
+              break
+            fi
+            sleep 5
+          done
+          [ "$FRONTEND_OK" = true ] || {
+            docker compose --env-file "$DEPLOY_ROOT/.env.production" -f "$DEPLOY_ROOT/docker-compose.prod.yml" ps || true
+            exit 1
+          }
+          echo "Backend OK · Frontend OK · SHA $VALIDATED_SHA"
+
+      - name: Vérifier la conservation des comptes et données existants
+        shell: bash
+        env:
+          DATA_SNAPSHOT: ${{ steps.backup_db.outputs.data_snapshot }}
+        run: |
+          set -euo pipefail
+          test -n "$DATA_SNAPSHOT" && test -s "$DATA_SNAPSHOT" || {
+            echo 'ERROR: inventaire métier pré-déploiement introuvable'
+            exit 1
+          }
+          CURRENT_SNAPSHOT="$(mktemp)"
+          trap 'rm -f "$CURRENT_SNAPSHOT"' EXIT
+          docker exec -i climbcrew-db sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' > "$CURRENT_SNAPSHOT" <<'SQL'
+          select 'users:' || id::text from users
+          union all select 'participants:' || id::text from participants
+          union all select 'sessions:' || id::text from sessions
+          union all select 'session_participants:' || session_id || ':' || participant_id from session_participants
+          union all select 'routes:' || id::text from routes
+          union all select 'realisations:' || id::text from realisations
+          union all select 'route_videos:' || id::text from route_videos
+          union all select 'route_ratings:' || route_id || ':' || user_id::text from route_ratings
+          order by 1;
+          SQL
+          MISSING="$(comm -23 "$DATA_SNAPSHOT" "$CURRENT_SNAPSHOT" || true)"
+          if [ -n "$MISSING" ]; then
+            echo 'ERROR: données existantes absentes après migration/déploiement :'
+            printf '%s\n' "$MISSING" | head -100
+            exit 1
+          fi
+          echo 'Conservation des données de production vérifiée.'
+
+      - name: Vérifier la version et le SHA localement
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_VERSION="$(tr -d '[:space:]' < "$DEPLOY_ROOT/VERSION")"
+          FRONTEND_MARKER="$(curl --fail --silent --max-time 10 "http://127.0.0.1:8080/deployment-version.json?sha=${VALIDATED_SHA}")"
+          printf '%s' "$FRONTEND_MARKER" | grep -Eq "\"version\"[[:space:]]*:[[:space:]]*\"${EXPECTED_VERSION}\"" || {
+            echo 'ERROR: version frontend locale inattendue'
+            echo "$FRONTEND_MARKER"
+            exit 1
+          }
+          printf '%s' "$FRONTEND_MARKER" | grep -Eq "\"commit\"[[:space:]]*:[[:space:]]*\"${VALIDATED_SHA}\"" || {
+            echo 'ERROR: commit frontend local inattendu'
+            echo "$FRONTEND_MARKER"
+            exit 1
+          }
+
+          API_MARKER="$(curl --fail --silent --max-time 10 "http://127.0.0.1:3000/api/version?verify=${VALIDATED_SHA}")"
+          printf '%s' "$API_MARKER" | grep -Eq "\"version\"[[:space:]]*:[[:space:]]*\"${EXPECTED_VERSION}\"" || {
+            echo 'ERROR: version API locale inattendue'
+            echo "$API_MARKER"
+            exit 1
+          }
+          printf '%s' "$API_MARKER" | grep -Eq "\"commit\"[[:space:]]*:[[:space:]]*\"${VALIDATED_SHA}\"" || {
+            echo 'ERROR: commit API local inattendu'
+            echo "$API_MARKER"
+            exit 1
+          }
+
+          {
+            echo '### Déploiement production ClimbCrew'
+            echo "- Version: \`$EXPECTED_VERSION\`"
+            echo "- SHA: \`$VALIDATED_SHA\`"
+            echo "- Domaine: \`$PROD_DOMAIN\`"
+            echo '- PostgreSQL sauvegardé et vérifié avant bascule'
+            echo '- Conservation des données existantes: OK'
+            echo '- Backend: OK'
+            echo '- Frontend: OK'
+            echo '- Marqueurs locaux version/SHA: OK'
+            echo '- Vérification HTTPS publique: déléguée au workflow post-déploiement'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restaurer le code précédent en cas d'échec après bascule
+        if: ${{ failure() && steps.sync_repo.outputs.candidate_checked_out == 'true' && steps.sync_repo.outputs.previous_sha != '' }}
+        shell: bash
+        env:
+          PREVIOUS_SHA: ${{ steps.sync_repo.outputs.previous_sha }}
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_ROOT"
+          git checkout -B production "$PREVIOUS_SHA"
+          export GITHUB_SHA="$PREVIOUS_SHA"
+          docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+          echo "Code production restauré sur $PREVIOUS_SHA. Le dump PostgreSQL pré-déploiement est conservé pour restauration manuelle si nécessaire."

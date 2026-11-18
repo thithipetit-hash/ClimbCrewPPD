@@ -1,4 +1,5 @@
 import { getPool } from "./database.js";
+import { markSchedulerDegraded, markSchedulerHealthy } from "../scheduler-health.js";
 
 const DEFAULT_UNVERIFIED_ACCOUNT_RETENTION_DAYS = 8;
 const DEFAULT_SECURITY_TOKEN_RETENTION_DAYS = 7;
@@ -187,14 +188,18 @@ export async function startSecurityRetentionScheduler() {
     if (deleted > 0) {
       console.log(`[security-retention] ${deleted} enregistrement(s) obsolète(s) purgé(s).`);
     }
+    markSchedulerHealthy("security-retention");
   } catch (error) {
+    markSchedulerDegraded("security-retention");
     console.error("Purge initiale des données de sécurité impossible :", error);
   }
 
   timer = setInterval(async () => {
     try {
       await purgeExpiredSecurityData();
+      markSchedulerHealthy("security-retention");
     } catch (error) {
+      markSchedulerDegraded("security-retention");
       console.error("Purge périodique des données de sécurité impossible :", error);
     }
   }, DEFAULT_SWEEP_INTERVAL_MS);

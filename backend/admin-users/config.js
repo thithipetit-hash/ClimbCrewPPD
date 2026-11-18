@@ -1,3 +1,7 @@
+import { createSecurityConfig } from "../config/security-config.js";
+
+const SECURITY_CONFIG = createSecurityConfig(process.env);
+
 /**
  * Configuration centralisée des évolutions liées aux comptes utilisateurs.
  *
@@ -8,12 +12,6 @@
  * se traduirait cependant par une connexion qui semble fonctionner puis par des
  * erreurs 401/403 dans les écrans Administration et Gestion des comptes.
  */
-
-function envBoolean(name, fallback = false) {
-  const value = process.env[name];
-  if (value === undefined || value === null || value === "") return fallback;
-  return ["1", "true", "yes", "oui", "on"].includes(String(value).trim().toLowerCase());
-}
 
 /**
  * Vérifie que le serveur historique est bien démarré avec le préchargement qui
@@ -54,28 +52,29 @@ export const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "climbcrew
 export const CSRF_COOKIE_NAME = process.env.CSRF_COOKIE_NAME || "climbcrew_csrf";
 
 /**
- * Lorsque cette option vaut false, la vérification de l'adresse e-mail active
- * automatiquement le compte. Elle reste configurable pour pouvoir rétablir
- * ultérieurement une approbation manuelle sans modifier le code.
+ * Les comptes restent systématiquement pending après vérification e-mail.
+ * Leur association à une fiche grimpeur et leur activation sont des actions
+ * administrateur explicites.
  */
-export const REQUIRE_ADMIN_ACCOUNT_APPROVAL = envBoolean(
-  "REQUIRE_ADMIN_ACCOUNT_APPROVAL",
-  false,
-);
+export const ACCOUNT_REQUEST_NOTIFICATION_RECIPIENTS = String(
+  process.env.ACCOUNT_REQUEST_NOTIFICATION_RECIPIENTS || "",
+)
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
 
 /**
  * Coût de hachage bcrypt.
  * La production utilise une valeur plus élevée afin de ralentir les attaques
  * par essais successifs, au prix d'un temps de connexion légèrement supérieur.
  */
-export const BCRYPT_ROUNDS = Number(
-  process.env.BCRYPT_ROUNDS || (process.env.NODE_ENV === "production" ? 12 : 10)
-);
+export const BCRYPT_ROUNDS = SECURITY_CONFIG.bcryptRounds;
 
-/** Durée de validité, en millisecondes, d'un code de réinitialisation. */
-export const RESET_TOKEN_DURATION_MS = 1000 * 60 * Number(
-  process.env.RESET_TOKEN_DURATION_MINUTES || 60
-);
+/** Durées et politique cookie canoniques partagées avec le serveur principal. */
+export const SESSION_DURATION_MS = SECURITY_CONFIG.sessionDurationMs;
+export const RESET_TOKEN_DURATION_MS = SECURITY_CONFIG.resetTokenDurationMs;
+export const COOKIE_SAMESITE = SECURITY_CONFIG.cookieSameSite;
+export const SECURE_COOKIES = SECURITY_CONFIG.secureCookies;
 
 /** Empêche l'ajout plusieurs fois des routes complémentaires sur une même application. */
 export const INSTALL_FLAG = Symbol.for("climbcrew.adminUserEnhancements.installed");

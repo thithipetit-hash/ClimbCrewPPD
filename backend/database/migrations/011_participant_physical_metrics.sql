@@ -1,0 +1,38 @@
+-- Données physiques facultatives du profil grimpeur.
+alter table participants add column if not exists height_cm numeric(5,1);
+alter table participants add column if not exists weight_kg numeric(5,1);
+alter table participants add column if not exists arm_span_cm numeric(5,1);
+alter table participants add column if not exists standing_reach_cm numeric(5,1);
+alter table participants add column if not exists grip_strength_right_kg numeric(5,1);
+alter table participants add column if not exists grip_strength_left_kg numeric(5,1);
+alter table participants add column if not exists hang_20mm_seconds numeric(6,1);
+alter table participants add column if not exists jug_hang_seconds numeric(6,1);
+alter table participants add column if not exists strict_pullups integer;
+alter table participants add column if not exists flexed_arm_hang_seconds numeric(6,1);
+alter table participants add column if not exists weighted_pullup_kg numeric(5,1);
+alter table participants add column if not exists hip_mobility_cm numeric(5,1);
+
+alter table participants drop constraint if exists participants_height_cm_check;
+alter table participants add constraint participants_height_cm_check check (height_cm is null or height_cm between 80 and 250);
+alter table participants drop constraint if exists participants_weight_kg_check;
+alter table participants add constraint participants_weight_kg_check check (weight_kg is null or weight_kg between 20 and 250);
+alter table participants drop constraint if exists participants_arm_span_cm_check;
+alter table participants add constraint participants_arm_span_cm_check check (arm_span_cm is null or arm_span_cm between 80 and 280);
+alter table participants drop constraint if exists participants_standing_reach_cm_check;
+alter table participants add constraint participants_standing_reach_cm_check check (standing_reach_cm is null or standing_reach_cm between 100 and 350);
+alter table participants drop constraint if exists participants_grip_right_check;
+alter table participants add constraint participants_grip_right_check check (grip_strength_right_kg is null or grip_strength_right_kg between 0 and 150);
+alter table participants drop constraint if exists participants_grip_left_check;
+alter table participants add constraint participants_grip_left_check check (grip_strength_left_kg is null or grip_strength_left_kg between 0 and 150);
+alter table participants drop constraint if exists participants_hang_20mm_check;
+alter table participants add constraint participants_hang_20mm_check check (hang_20mm_seconds is null or hang_20mm_seconds between 0 and 600);
+alter table participants drop constraint if exists participants_jug_hang_check;
+alter table participants add constraint participants_jug_hang_check check (jug_hang_seconds is null or jug_hang_seconds between 0 and 600);
+alter table participants drop constraint if exists participants_flexed_arm_hang_check;
+alter table participants add constraint participants_flexed_arm_hang_check check (flexed_arm_hang_seconds is null or flexed_arm_hang_seconds between 0 and 300);
+alter table participants drop constraint if exists participants_pullups_check;
+alter table participants add constraint participants_pullups_check check (strict_pullups is null or strict_pullups between 0 and 200);
+alter table participants drop constraint if exists participants_weighted_pullup_check;
+alter table participants add constraint participants_weighted_pullup_check check (weighted_pullup_kg is null or weighted_pullup_kg between 0 and 200);
+alter table participants drop constraint if exists participants_hip_mobility_check;
+alter table participants add constraint participants_hip_mobility_check check (hip_mobility_cm is null or hip_mobility_cm between 0 and 300);

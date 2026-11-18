@@ -142,6 +142,18 @@ const METRICS = [
     format: formatPercent,
     deltaFormat: (delta) => `${delta >= 0 ? "+" : ""}${Math.round(delta * 100)} pt`,
   },
+  {
+    key: "hipPathEfficiency", label: "Directivité bassin", value: (metrics) => metrics.hipMotion?.pathEfficiency, format: formatPercent, deltaFormat: (delta) => `${delta >= 0 ? "+" : ""}${Math.round(delta * 100)} pt`,
+  },
+  {
+    key: "hipLateral", label: "Décalage latéral bassin", value: (metrics) => metrics.bodyPosition?.meanHipLateralOffsetHipWidths, format: (value) => value === null ? "—" : `${value.toFixed(2)} ×`,
+  },
+  {
+    key: "compactRatio", label: "Position compacte", value: (metrics) => metrics.bodyPosition && metrics.analyzedSeconds ? metrics.bodyPosition.compactSeconds / metrics.analyzedSeconds : null, format: formatPercent, deltaFormat: (delta) => `${delta >= 0 ? "+" : ""}${Math.round(delta * 100)} pt`,
+  },
+  {
+    key: "movementSegments", label: "Séquences de mouvement", value: (metrics) => Array.isArray(metrics.movementSegments) ? metrics.movementSegments.length : null, format: formatCount,
+  },
 ];
 
 function buildCompatibilityRows(analysisA, analysisB) {

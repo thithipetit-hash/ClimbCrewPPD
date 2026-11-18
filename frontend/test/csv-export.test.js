@@ -17,7 +17,7 @@ test("le nom du fichier est normalisé", () => {
 });
 
 test("l'export des réalisations utilise les colonnes attendues par theCrag", async () => {
-  const source = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const source = await readFile(new URL("../src/lib/thecrag.js", import.meta.url), "utf8");
   // Le bouton d'export lui-même vit dans pages/Profil.jsx (Mon profil).
   const profil = await readFile(new URL("../src/pages/Profil.jsx", import.meta.url), "utf8");
 

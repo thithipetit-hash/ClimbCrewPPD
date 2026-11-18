@@ -1,7 +1,17 @@
+import { getRuntimeDiagnosticLogs } from "./runtime-diagnostic-log-service.js";
+
+function sortLogsByNewest(logs) {
+  return [...logs].sort((left, right) => {
+    return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime();
+  });
+}
+
 export function installAdminAccessLogRoutes(app, { requireAuth, requireAdmin, pool }) {
   app.get("/admin/auth/logs", requireAuth, requireAdmin, async (req, res) => {
+    const limit = Math.min(Number(req.query.limit || 200), 500);
+    const runtimeLogs = getRuntimeDiagnosticLogs(limit);
+
     try {
-      const limit = Math.min(Number(req.query.limit || 200), 500);
       const result = await pool.query(
         `
           select
@@ -22,9 +32,15 @@ export function installAdminAccessLogRoutes(app, { requireAuth, requireAdmin, po
         [limit]
       );
 
-      res.json({ ok: true, logs: result.rows });
+      const logs = sortLogsByNewest([...runtimeLogs, ...result.rows]).slice(0, limit);
+      return res.json({ ok: true, logs });
     } catch (error) {
-      res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
+      console.error("Chargement des logs persistants impossible :", error);
+      return res.json({
+        ok: true,
+        logs: runtimeLogs,
+        warning: "Les logs persistants sont momentanément indisponibles. Les diagnostics récents du processus restent affichés.",
+      });
     }
   });
 }

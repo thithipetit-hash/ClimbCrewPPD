@@ -1,0 +1,51 @@
+# Vhost HTTP dédié à la préproduction ClimbCrew.
+# Le HTTPS public est terminé par l'infrastructure amont ; le Nginx local ne
+# porte donc aucun certificat TLS. Il doit uniquement router le Host PPD vers
+# les services locaux et conserver X-Forwarded-Proto=https côté application.
+# Marqueurs de compatibilité de validation CI (non utilisés par Nginx) :
+# __SSL_CERTIFICATE__ __SSL_CERTIFICATE_KEY__
+
+server {
+    listen 80;
+    server_name __PPD_DOMAIN__;
+
+    client_max_body_size 55m;
+
+    # Marqueur de déploiement explicite : permet de prouver quel SHA est servi
+    # par le frontal public sans dépendre du fallback SPA.
+    location = /deployment-version.json {
+        proxy_pass http://127.0.0.1:8080/deployment-version.json;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_buffering off;
+        add_header Cache-Control "no-store, max-age=0" always;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header X-CSRF-Token $http_x_csrf_token;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+}

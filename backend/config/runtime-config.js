@@ -1,8 +1,13 @@
 import pg from "pg";
+import { createSecurityConfig } from "./security-config.js";
 
-const { Pool } = pg;
+const { Pool, types } = pg;
 
-function envBoolean(value, fallback = false) {
+// Les colonnes SQL DATE doivent rester des chaînes AAAA-MM-JJ dans l'API afin
+// de préserver exactement le contrat frontend historique après la migration 025.
+types.setTypeParser(1082, (value) => value);
+
+function booleanEnv(value, fallback = false) {
   if (value === undefined || value === null || value === "") return fallback;
   return String(value).toLowerCase() === "true";
 }
@@ -19,7 +24,8 @@ function integerEnv(env, name, fallback, { min, max }) {
 }
 
 export function createRuntimeConfig(env = process.env) {
-  const isProduction = env.NODE_ENV === "production";
+  const security = createSecurityConfig(env);
+  const isProduction = security.isProduction;
   const databaseUrl = String(env.DATABASE_URL || "").trim();
 
   if (!databaseUrl) {
@@ -27,13 +33,7 @@ export function createRuntimeConfig(env = process.env) {
   }
 
   const port = integerEnv(env, "PORT", 3000, { min: 1, max: 65535 });
-  const bcryptRounds = integerEnv(env, "BCRYPT_ROUNDS", isProduction ? 12 : 10, {
-    min: isProduction ? 10 : 4,
-    max: 20,
-  });
   const trustProxy = integerEnv(env, "TRUST_PROXY", 1, { min: 0, max: 10 });
-  const sessionDurationDays = integerEnv(env, "SESSION_DURATION_DAYS", 7, { min: 1, max: 365 });
-  const resetTokenDurationMinutes = integerEnv(env, "RESET_TOKEN_DURATION_MINUTES", 60, { min: 5, max: 1440 });
   const writeRateLimitPerMinute = integerEnv(env, "WRITE_RATE_LIMIT_PER_MINUTE", 120, { min: 1, max: 10000 });
 
   return {
@@ -49,16 +49,17 @@ export function createRuntimeConfig(env = process.env) {
     isProduction,
     sessionCookieName: env.SESSION_COOKIE_NAME || "climbcrew_session",
     csrfCookieName: env.CSRF_COOKIE_NAME || "climbcrew_csrf",
-    cookieSameSite: (env.COOKIE_SAMESITE || "lax").toLowerCase(),
-    secureCookies: envBoolean(env.SECURE_COOKIES, isProduction),
-    allowWeakFirstAdminPassword: !isProduction && envBoolean(env.ALLOW_WEAK_FIRST_ADMIN_PASSWORD || env.DEV_ADMIN_ENABLED, false),
-    bcryptRounds,
+    cookieSameSite: security.cookieSameSite,
+    secureCookies: security.secureCookies,
+    allowWeakFirstAdminPassword: !isProduction
+      && String(env.ALLOW_WEAK_FIRST_ADMIN_PASSWORD || env.DEV_ADMIN_ENABLED || "").toLowerCase() === "true",
+    bcryptRounds: security.bcryptRounds,
     trustProxy,
-    sessionDurationMs: 1000 * 60 * 60 * 24 * sessionDurationDays,
-    resetTokenDurationMs: 1000 * 60 * resetTokenDurationMinutes,
+    sessionDurationMs: security.sessionDurationMs,
+    resetTokenDurationMs: security.resetTokenDurationMs,
     maxJsonBodySize: env.MAX_JSON_BODY_SIZE || "1mb",
     writeRateLimitPerMinute,
-    pgSsl: envBoolean(env.PG_SSL, false),
+    pgSsl: booleanEnv(env.PG_SSL, false),
     pgSslRejectUnauthorized: String(env.PG_SSL_REJECT_UNAUTHORIZED || "true").toLowerCase() !== "false",
   };
 }

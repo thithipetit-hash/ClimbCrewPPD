@@ -1,0 +1,295 @@
+.user-data-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.user-data-desktop-table thead input,
+.user-data-desktop-table thead select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 3px 2px;
+  font-size: inherit;
+}
+
+.user-data-desktop-table th:last-child,
+.user-data-desktop-table td:last-child {
+  width: 96px !important;
+  min-width: 96px;
+}
+
+.user-data-desktop-table th:last-child button,
+.user-data-desktop-table td:last-child button {
+  width: 100% !important;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.user-data-mobile-controls,
+.user-data-mobile-list {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .user-data-page .user-data-desktop-table {
+    display: none;
+  }
+
+  .user-data-page .user-data-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .user-data-page .user-data-actions button {
+    width: 100%;
+  }
+
+  .user-data-mobile-controls {
+    display: block;
+    margin-bottom: 10px;
+  }
+
+  .user-data-mobile-controls > summary,
+  .user-data-mobile-card > summary {
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .user-data-mobile-controls > summary::-webkit-details-marker,
+  .user-data-mobile-card > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .user-data-mobile-controls > summary {
+    font-weight: 800;
+  }
+
+  .user-data-mobile-sort {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, .8fr);
+    gap: 8px;
+    align-items: end;
+    margin-top: 10px;
+  }
+
+  .user-data-mobile-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .user-data-mobile-filter-field {
+    min-width: 0;
+  }
+
+  .user-data-mobile-filter-field label {
+    min-height: 28px;
+    margin-bottom: 4px;
+    font-size: 10px;
+    line-height: 1.15;
+  }
+
+  .user-data-mobile-filter-field input,
+  .user-data-mobile-filter-field select,
+  .user-data-mobile-sort select {
+    min-width: 0;
+    min-height: 38px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .user-data-clear-filters {
+    width: 100%;
+    margin-top: 10px;
+  }
+
+  .user-data-mobile-list {
+    display: grid;
+    gap: 9px;
+  }
+
+  .user-data-mobile-card {
+    overflow: hidden;
+    border: 1px solid var(--theme-card-border, rgba(148, 163, 184, .25));
+    border-radius: 14px;
+    background: var(--theme-card-soft, rgba(2, 6, 23, .45));
+  }
+
+  .user-data-mobile-card > summary {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 34px 10px 11px;
+  }
+
+  .user-data-mobile-card > summary::after {
+    content: "›";
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 22px;
+    line-height: 1;
+    transition: transform .16s ease;
+  }
+
+  .user-data-mobile-card[open] > summary::after {
+    transform: translateY(-50%) rotate(90deg);
+  }
+
+  .user-data-mobile-summary-main,
+  .user-data-mobile-summary-meta {
+    display: flex;
+    min-width: 0;
+  }
+
+  .user-data-mobile-summary-main {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .user-data-mobile-summary-main strong {
+    overflow: hidden;
+    font-size: 15px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user-data-mobile-summary-main > span {
+    overflow: hidden;
+    color: var(--theme-text-muted, #94a3b8);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user-data-mobile-summary-meta {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .user-data-modified {
+    color: #facc15;
+    font-weight: 800;
+  }
+
+  .user-data-mobile-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+    border-top: 1px solid var(--theme-card-border, rgba(148, 163, 184, .25));
+  }
+
+  .user-data-mobile-field {
+    min-width: 0;
+  }
+
+  .user-data-mobile-field.is-wide,
+  .user-data-mobile-field.is-read-only {
+    grid-column: 1 / -1;
+  }
+
+  .user-data-mobile-field label {
+    margin-bottom: 4px;
+    font-size: 10px;
+    line-height: 1.15;
+  }
+
+  .user-data-mobile-control {
+    min-width: 0;
+  }
+
+  .user-data-mobile-control input:not([type="checkbox"]),
+  .user-data-mobile-control select {
+    min-width: 0;
+    min-height: 38px;
+    padding: 6px 8px !important;
+    font-size: 13px !important;
+  }
+
+  .user-data-mobile-field.is-boolean {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    align-items: center;
+    min-height: 42px;
+    padding: 7px 8px;
+    border: 1px solid var(--theme-card-border, rgba(148, 163, 184, .2));
+    border-radius: 11px;
+  }
+
+  .user-data-mobile-field.is-boolean label {
+    margin: 0;
+  }
+
+  .user-data-mobile-field.is-boolean .user-data-mobile-control {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .user-data-mobile-field.is-boolean input[type="checkbox"] {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    min-height: 24px;
+    margin: 0;
+  }
+
+  .user-data-mobile-field.is-read-only {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    min-height: 38px;
+    padding: 7px 9px;
+    border-radius: 10px;
+    background: rgba(148, 163, 184, .09);
+  }
+
+  .user-data-mobile-field.is-read-only label {
+    margin: 0;
+  }
+
+  .user-data-mobile-field.is-read-only .user-data-mobile-control {
+    font-weight: 800;
+    text-align: right;
+  }
+
+  .user-data-mobile-delete {
+    width: calc(100% - 20px);
+    margin: 0 10px 10px;
+  }
+}
+
+@media (max-width: 420px) {
+  .user-data-mobile-filter-grid,
+  .user-data-mobile-sort {
+    grid-template-columns: 1fr;
+  }
+
+  .user-data-mobile-filter-field label {
+    min-height: 0;
+  }
+
+  .user-data-mobile-card > summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .user-data-mobile-summary-meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 4px 8px;
+  }
+}

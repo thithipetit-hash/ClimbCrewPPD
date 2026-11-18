@@ -1,4 +1,5 @@
 import { getPool } from "./database.js";
+import { markSchedulerDegraded, markSchedulerHealthy } from "../scheduler-health.js";
 
 const DEFAULT_RETENTION_DAYS = 90;
 const DEFAULT_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -34,14 +35,18 @@ export async function startAccessLogRetentionScheduler() {
     if (result.deleted > 0) {
       console.log(`Journaux d’accès purgés : ${result.deleted} entrée(s), rétention ${result.retentionDays} jours.`);
     }
+    markSchedulerHealthy("access-log-retention");
   } catch (error) {
+    markSchedulerDegraded("access-log-retention");
     console.error("Purge initiale des journaux d’accès impossible :", error);
   }
 
   timer = setInterval(async () => {
     try {
       await purgeExpiredAccessLogs();
+      markSchedulerHealthy("access-log-retention");
     } catch (error) {
+      markSchedulerDegraded("access-log-retention");
       console.error("Purge périodique des journaux d’accès impossible :", error);
     }
   }, DEFAULT_SWEEP_INTERVAL_MS);

@@ -1,0 +1,15 @@
+.seasonal-pumpkin-avatar {
+  display: block;
+  background-image: url("/media/avatars/seasonal/pumpkins-2026-approved.webp?v=261025002");
+  background-size: 500% 400%;
+  background-repeat: no-repeat;
+  background-color: transparent;
+}
+.profile-gecko-stage[data-level] .seasonal-pumpkin-avatar {
+  transform: none;
+  filter: none;
+}
+.chat-avatar.seasonal-pumpkin-avatar {
+  flex-shrink: 0;
+  border-radius: 50%;
+}

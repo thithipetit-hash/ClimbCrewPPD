@@ -2,14 +2,19 @@ import crypto from "node:crypto";
 import express from "express";
 import { validateRealisationPayload } from "./validation.js";
 import { assertRealisationIntegrity } from "./realisation-integrity.js";
-
-const LOCAL_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
-const VIDEO_UPLOAD_CHUNK_MAX_BYTES = 1024 * 1024;
-const VIDEO_UPLOAD_MAX_PARTS = 80;
-const VIDEO_UPLOAD_ID_PATTERN = /^[A-Za-z0-9._-]{8,120}$/;
-const VIDEO_CHUNK_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
-const LOCAL_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/ogg", "video/quicktime"]);
-let nextVideoChunkCleanupAt = 0;
+import { buildRealisationChatMessage } from "./realisation-chat-message.js";
+import { importTheCragRealisations } from "./thecrag-import-service.js";
+import {
+  LOCAL_VIDEO_MAX_BYTES,
+  LOCAL_VIDEO_TYPES,
+  VIDEO_UPLOAD_CHUNK_MAX_BYTES,
+  VIDEO_UPLOAD_ID_PATTERN,
+  assertVideoChunkBody,
+  cleanupExpiredVideoChunks,
+  decodeVideoFileName,
+  readVideoChunkRequest,
+  validateStoredVideoChunks,
+} from "./video-upload-policy.js";
 
 function normalizeVideoUrls(value) {
   if (value === undefined) return undefined;
@@ -62,35 +67,6 @@ function rowToIntegrityCandidate(row, patch, participantId) {
     chute,
     assureurId: chute ? (patch.assureurId ?? row.assureur_id ?? "") : "",
   };
-}
-
-function decodeVideoFileName(value) {
-  let fileName = "video";
-  try {
-    fileName = decodeURIComponent(String(value || "video"));
-  } catch {
-    fileName = "video";
-  }
-  return fileName.replace(/[\r\n]/g, "").slice(0, 180) || "video";
-}
-
-function parseIntegerHeader(req, name) {
-  const value = Number.parseInt(String(req.headers[name] || ""), 10);
-  return Number.isInteger(value) ? value : NaN;
-}
-
-async function cleanupExpiredVideoChunks(pool) {
-  const now = Date.now();
-  if (now < nextVideoChunkCleanupAt) return;
-  // Réserver immédiatement le prochain créneau évite que plusieurs blocs reçus
-  // en parallèle déclenchent tous le même DELETE.
-  nextVideoChunkCleanupAt = now + VIDEO_CHUNK_CLEANUP_INTERVAL_MS;
-  try {
-    await pool.query(`delete from route_video_upload_chunks where created_at < now() - interval '24 hours'`);
-  } catch (error) {
-    nextVideoChunkCleanupAt = 0;
-    throw error;
-  }
 }
 
 async function persistRealisationVideo({
@@ -183,11 +159,45 @@ async function persistRealisationVideo({
   };
 }
 
+
 export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
-  app.post("/realisations", requireAuth, async (req, res) => {
-    try {
+
+  app.post(
+    "/realisations/import-thecrag",
+    requireAuth,
+    express.raw({ type: ["application/vnd.ms-excel", "application/octet-stream"], limit: "8mb" }),
+    async (req, res) => {
       const participantId = req.auth?.user?.participantId;
       if (!participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
+      if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+        return res.status(400).json({ error: "Fichier theCrag vide." });
+      }
+      const startDate = String(req.query.startDate || req.headers["x-thecrag-start-date"] || "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+        return res.status(400).json({ error: "Date de début theCrag obligatoire (AAAA-MM-JJ)." });
+      }
+
+      try {
+        const result = await importTheCragRealisations({
+          pool,
+          participantId,
+          buffer: req.body,
+          startDate,
+        });
+        return res.json(result);
+      } catch (error) {
+        return res.status(error.status || 400).json({ error: error.message || "Import theCrag impossible." });
+      }
+    },
+  );
+
+  app.post("/realisations", requireAuth, async (req, res) => {
+    try {
+      const isAdmin = req.auth?.user?.role === "admin";
+      const participantId = isAdmin
+        ? (req.body?.participantId || req.auth?.user?.participantId)
+        : req.auth?.user?.participantId;
+      if (!participantId) return res.status(403).json({ error: "Choisissez un grimpeur pour cette réalisation." });
       const realisation = validateRealisationPayload({
         ...(req.body || {}),
         participantId: String(participantId),
@@ -201,16 +211,50 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
         `
           insert into realisations (
             id, participant_id, session_id, voie_id, date_realisation, style_realisation,
-            commentaire, cotation_proposee, nb_essais, rating, chute, assureur_id, video_urls
-          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
+            commentaire, cotation_proposee, nb_essais, mode_realisation, rating, chute, assureur_id, video_urls
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb)
         `,
         [
           realisation.id, realisation.participantId, realisation.sessionId, realisation.voieId,
           realisation.dateRealisation, realisation.styleRealisation, realisation.commentaire || "",
-          realisation.cotationProposee || "", realisation.nbEssais || "", realisation.rating ?? null,
-          Boolean(realisation.chute), realisation.assureurId || null, JSON.stringify(realisation.videoUrls),
+          realisation.cotationProposee || "", realisation.nbEssais || "", realisation.modeRealisation,
+          realisation.rating ?? null, Boolean(realisation.chute), realisation.assureurId || null,
+          JSON.stringify(realisation.videoUrls),
         ],
       );
+      try {
+        const info = await pool.query(
+          `select p.prenom, p.nom, r.nom_voie, r.numero_corde, r.couleur_prises, r.nom_ouvreur, r.cotation_reference, r.cotation_ajustee
+           from participants p cross join routes r
+           where p.id = $1 and r.id = $2 limit 1`,
+          [participantId, realisation.voieId],
+        );
+        const row = info.rows[0] || {};
+        const who = [row.prenom, row.nom].filter(Boolean).join(" ") || "Un grimpeur";
+        const routeParts = [
+          row.numero_corde ? `corde ${row.numero_corde}` : "",
+          row.couleur_prises ? String(row.couleur_prises).trim() : "",
+          row.nom_ouvreur ? `ouverte par ${row.nom_ouvreur}` : "",
+        ].filter(Boolean);
+        const route = row.nom_voie
+          ? `« ${String(row.nom_voie).trim()} »`
+          : (routeParts.length ? routeParts.join(" · ") : "une voie");
+        const grade = realisation.cotationProposee || row.cotation_ajustee || row.cotation_reference || "cotation non renseignée";
+        const message = buildRealisationChatMessage({
+          who,
+          route,
+          grade,
+          modeRealisation: realisation.modeRealisation,
+          styleRealisation: realisation.styleRealisation,
+        });
+        await pool.query(
+          `insert into chat_messages (participant_id, message, kind, event_type, event_ref)
+           values ($1,$2,'system','realisation',$3)`,
+          [participantId, message, realisation.id],
+        );
+      } catch (chatError) {
+        console.error("realisation chat event error:", chatError);
+      }
       res.json(realisation);
     } catch (error) {
       res.status(error.status || 500).json({ error: error.message || String(error), fields: error.fields || undefined });
@@ -272,36 +316,9 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
       const participantId = req.auth?.user?.participantId;
       if (!participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
 
-      const uploadId = String(req.params.uploadId || "");
-      const partNumber = Number.parseInt(String(req.params.partNumber || ""), 10);
-      const totalParts = parseIntegerHeader(req, "x-total-parts");
-      const totalBytes = parseIntegerHeader(req, "x-total-bytes");
-      const mimeType = String(req.headers["x-video-mime-type"] || "").trim().toLowerCase();
-      const fileName = decodeVideoFileName(req.headers["x-file-name"]);
-
-      if (!VIDEO_UPLOAD_ID_PATTERN.test(uploadId)) {
-        return res.status(400).json({ error: "Identifiant de transfert vidéo invalide." });
-      }
-      if (!Number.isInteger(totalParts) || totalParts < 1 || totalParts > VIDEO_UPLOAD_MAX_PARTS) {
-        return res.status(400).json({ error: "Nombre de blocs vidéo invalide." });
-      }
-      if (!Number.isInteger(partNumber) || partNumber < 0 || partNumber >= totalParts) {
-        return res.status(400).json({ error: "Numéro de bloc vidéo invalide." });
-      }
-      if (!Number.isInteger(totalBytes) || totalBytes < 1 || totalBytes > LOCAL_VIDEO_MAX_BYTES) {
-        return res.status(400).json({ error: "Taille totale de vidéo invalide." });
-      }
-      if (!LOCAL_VIDEO_TYPES.has(mimeType)) {
-        return res.status(400).json({ error: "Format vidéo refusé. Utilisez MP4, WebM, OGG ou MOV." });
-      }
-      if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
-        return res.status(400).json({ error: "Bloc vidéo vide." });
-      }
-      if (req.body.length > VIDEO_UPLOAD_CHUNK_MAX_BYTES) {
-        return res.status(413).json({ error: "Bloc vidéo trop volumineux." });
-      }
-
       try {
+        const { uploadId, partNumber, totalParts, totalBytes, mimeType, fileName } = readVideoChunkRequest(req);
+        assertVideoChunkBody(req.body);
         await cleanupExpiredVideoChunks(pool);
 
         const realisationResult = await pool.query(
@@ -386,48 +403,10 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
         `,
         [participantId, uploadId, req.params.id],
       );
-      if (!chunksResult.rowCount) {
-        const error = new Error("Aucun bloc vidéo reçu pour ce transfert.");
-        error.status = 400;
-        throw error;
-      }
-
-      const first = chunksResult.rows[0];
-      const totalParts = Number(first.total_parts);
-      const totalBytes = Number(first.total_bytes);
-      if (totalParts < 1 || totalParts > VIDEO_UPLOAD_MAX_PARTS || chunksResult.rowCount !== totalParts) {
-        const error = new Error("Le transfert vidéo est incomplet.");
-        error.status = 409;
-        throw error;
-      }
-
-      let receivedBytes = 0;
-      for (let index = 0; index < chunksResult.rows.length; index += 1) {
-        const chunk = chunksResult.rows[index];
-        const consistent = Number(chunk.part_number) === index
-          && String(chunk.realisation_id) === String(req.params.id)
-          && String(chunk.route_id) === String(first.route_id)
-          && String(chunk.file_name) === String(first.file_name)
-          && String(chunk.mime_type) === String(first.mime_type)
-          && Number(chunk.total_parts) === totalParts
-          && Number(chunk.total_bytes) === totalBytes;
-        if (!consistent) {
-          const error = new Error("Les blocs de la vidéo ne sont pas cohérents.");
-          error.status = 409;
-          throw error;
-        }
-        receivedBytes += Number(chunk.content_bytes || 0);
-      }
-      if (receivedBytes !== totalBytes || receivedBytes > LOCAL_VIDEO_MAX_BYTES) {
-        const error = new Error("La taille de la vidéo assemblée est invalide.");
-        error.status = 409;
-        throw error;
-      }
-      if (!LOCAL_VIDEO_TYPES.has(String(first.mime_type))) {
-        const error = new Error("Format vidéo refusé. Utilisez MP4, WebM, OGG ou MOV.");
-        error.status = 400;
-        throw error;
-      }
+      const { first, totalBytes, receivedBytes } = validateStoredVideoChunks(
+        chunksResult.rows,
+        { expectedRealisationId: req.params.id },
+      );
 
       // PostgreSQL assemble les fragments dans leur ordre ; Node ne conserve
       // plus simultanément N buffers puis une seconde copie via Buffer.concat.
@@ -579,26 +558,28 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
   app.put("/realisations/:id", requireAuth, async (req, res) => {
     try {
       const participantId = req.auth?.user?.participantId;
-      if (!participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
+      const isAdmin = req.auth?.user?.role === "admin";
+      if (!isAdmin && !participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
       const patch = validateRealisationPayload(req.body || {}, { partial: true });
       delete patch.participantId;
 
       const currentResult = await pool.query(
         `
-          select session_id, voie_id, date_realisation, chute, assureur_id, video_urls
+          select participant_id, session_id, voie_id, date_realisation, chute, assureur_id, video_urls
           from realisations
-          where id = $1 and participant_id = $2
+          where id = $1 and ($2::boolean or participant_id::text = $3)
           limit 1
         `,
-        [req.params.id, participantId],
+        [req.params.id, isAdmin, String(participantId || "")],
       );
       if (currentResult.rowCount === 0) {
         return res.status(403).json({ error: "Cette réalisation ne vous appartient pas" });
       }
 
       const current = currentResult.rows[0];
-      const candidate = rowToIntegrityCandidate(current, patch, participantId);
-      await assertRealisationIntegrity({ pool, realisation: candidate, participantId });
+      const ownerParticipantId = String(current.participant_id);
+      const candidate = rowToIntegrityCandidate(current, patch, ownerParticipantId);
+      await assertRealisationIntegrity({ pool, realisation: candidate, participantId: ownerParticipantId });
 
       let videoUrlsForUpdate = null;
       if (req.body?.videoUrls !== undefined) {
@@ -619,18 +600,20 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
             commentaire = coalesce($6, commentaire),
             cotation_proposee = coalesce($7, cotation_proposee),
             nb_essais = coalesce($8, nb_essais),
-            rating = coalesce($9, rating),
-            chute = coalesce($10, chute),
-            assureur_id = case when $10 = false then null else coalesce($11, assureur_id) end,
-            video_urls = case when $12::jsonb is null then video_urls else $12::jsonb end,
+            mode_realisation = coalesce($9, mode_realisation),
+            rating = coalesce($10, rating),
+            chute = coalesce($11, chute),
+            assureur_id = case when $11 = false then null else coalesce($12, assureur_id) end,
+            video_urls = case when $13::jsonb is null then video_urls else $13::jsonb end,
             updated_at = now()
-          where id = $1 and participant_id = $13
+          where id = $1 and participant_id = $14
         `,
         [
           req.params.id, patch.sessionId ?? null, patch.voieId ?? null, patch.dateRealisation ?? null,
           patch.styleRealisation ?? null, patch.commentaire ?? null, patch.cotationProposee ?? null,
-          patch.nbEssais ?? null, patch.rating ?? null, patch.chute ?? null, patch.assureurId ?? null,
-          videoUrlsForUpdate === null ? null : JSON.stringify(videoUrlsForUpdate), participantId,
+          patch.nbEssais ?? null, patch.modeRealisation ?? null, patch.rating ?? null, patch.chute ?? null,
+          patch.assureurId ?? null, videoUrlsForUpdate === null ? null : JSON.stringify(videoUrlsForUpdate),
+          ownerParticipantId,
         ],
       );
       if (result.rowCount === 0) return res.status(403).json({ error: "Cette réalisation ne vous appartient pas" });
@@ -640,13 +623,51 @@ export function installRealisationManagementRoutes(app, { requireAuth, pool }) {
     }
   });
 
+  app.delete("/realisations/me", requireAuth, async (req, res) => {
+    const participantId = req.auth?.user?.participantId;
+    if (!participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
+
+    let client;
+    try {
+      client = await pool.connect();
+      await client.query("begin");
+      await client.query(
+        `delete from route_video_upload_chunks where participant_id = $1`,
+        [String(participantId)],
+      );
+      await client.query(
+        `
+          delete from route_videos
+          where source_realisation_id in (
+            select id from realisations where participant_id = $1
+          )
+        `,
+        [String(participantId)],
+      );
+      const result = await client.query(
+        `delete from realisations where participant_id = $1`,
+        [String(participantId)],
+      );
+      await client.query("commit");
+      return res.json({ ok: true, affected: result.rowCount });
+    } catch (error) {
+      if (client) {
+        try { await client.query("rollback"); } catch { /* transaction déjà terminée */ }
+      }
+      return res.status(error.status || 500).json({ error: error.message || "Reset des réalisations impossible." });
+    } finally {
+      client?.release();
+    }
+  });
+
   app.delete("/realisations/:id", requireAuth, async (req, res) => {
     try {
       const participantId = req.auth?.user?.participantId;
-      if (!participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
+      const isAdmin = req.auth?.user?.role === "admin";
+      if (!isAdmin && !participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
       const result = await pool.query(
-        `delete from realisations where id = $1 and participant_id = $2`,
-        [req.params.id, participantId],
+        `delete from realisations where id = $1 and ($2::boolean or participant_id::text = $3)`,
+        [req.params.id, isAdmin, String(participantId || "")],
       );
       if (result.rowCount === 0) return res.status(403).json({ error: "Cette réalisation ne vous appartient pas" });
       res.json({ ok: true });
