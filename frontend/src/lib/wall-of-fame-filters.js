@@ -7,7 +7,7 @@ export function filterWallOfFameParticipants(participants, { sex = "all", ageCat
     if (sex !== "all" && participant.sexe !== sex) return false;
     if (ageCategory === "all") return true;
 
-    const participantAgeCategory = getFfmeAgeCategory(participant.anneeNaissance);
+    const participantAgeCategory = getFfmeAgeCategory(participant.anneeNaissance) || participant.categorieFfme || "";
     return ageCategory === UNSPECIFIED_FFME_CATEGORY
       ? !participantAgeCategory
       : participantAgeCategory === ageCategory;
