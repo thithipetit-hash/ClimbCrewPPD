@@ -16,7 +16,7 @@ concurrency:
 jobs:
   deploy:
     name: Déployer la production réelle
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'production' }}
+    if: ${{ github.repository == 'fabienkazak-maker/ClimbCrew' && github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'production' }}
     runs-on: self-hosted
     timeout-minutes: 35
     env:
