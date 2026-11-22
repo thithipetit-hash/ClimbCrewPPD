@@ -273,7 +273,6 @@ function App() {
   const modalAllEligibleParticipants = useMemo(() => {
     return sortParticipantsCurrentUserFirst(
       state.participants
-        .filter((participant) => Boolean(participant.cotisation))
         .filter((participant) => getParticipantSessionDays(state.sessions, participant.id).length > 0),
       authUser?.participantId
     );
@@ -737,7 +736,7 @@ function App() {
       ? (requestedParticipantId || myParticipantId || "")
       : (myParticipantId || "");
     const requestedParticipant = participantsById[requestedParticipantId];
-    const latestRegisteredDay = requestedParticipant?.cotisation
+    const latestRegisteredDay = requestedParticipant
       ? getParticipantSessionDays(state.sessions, requestedParticipantId)[0] || ""
       : "";
     const defaultParticipantId = latestRegisteredDay ? requestedParticipantId : "";
@@ -783,12 +782,6 @@ function App() {
     }
     if (!newRealisation.participantId || !newRealisation.selectedDay || !newRealisation.voieId) {
       setSyncMessage("Erreur : sélectionnez un jour et une voie.");
-      return;
-    }
-
-    const participant = participantsById[newRealisation.participantId];
-    if (!participant?.cotisation) {
-      setSyncMessage("Erreur : votre cotisation doit être à jour pour enregistrer une réalisation.");
       return;
     }
 
