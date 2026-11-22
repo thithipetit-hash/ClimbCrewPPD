@@ -2,15 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { assertRealisationIntegrity } from "../realisation-integrity.js";
 
-function poolFor({ route = true, session = true, cotisation = true, belayer = true } = {}) {
+function poolFor({ route = true, session = true, belayer = true } = {}) {
   const queries = [];
   return {
     queries,
     async query(sql) {
       queries.push(sql);
       if (sql.includes("from routes")) return { rowCount: route ? 1 : 0, rows: route ? [{ id: "r1" }] : [] };
-      if (sql.includes("select s.date, p.cotisation")) {
-        return { rowCount: session ? 1 : 0, rows: session ? [{ date: "2026-08-29", cotisation }] : [] };
+      if (sql.includes("select s.date")) {
+        return { rowCount: session ? 1 : 0, rows: session ? [{ date: "2026-08-29" }] : [] };
       }
       if (sql.includes("select 1") && sql.includes("session_participants")) {
         return { rowCount: belayer ? 1 : 0, rows: belayer ? [{ ok: 1 }] : [] };
@@ -42,7 +42,7 @@ test("la validation reste compatible avec session_participants.participant_id en
     assertRealisationIntegrity({ pool, realisation: base, participantId: "1" }),
   );
 
-  const sessionSql = pool.queries.find((sql) => sql.includes("select s.date, p.cotisation"));
+  const sessionSql = pool.queries.find((sql) => sql.includes("select s.date"));
   assert.match(sessionSql, /sp\.participant_id::text = \$2/);
   assert.match(sessionSql, /s\.status = 'encadree' and s\.encadrant_id::text = \$2/);
   assert.match(sessionSql, /s\.status = 'libre' and s\.referent_id::text = \$2/);

@@ -273,7 +273,6 @@ function App() {
   const modalAllEligibleParticipants = useMemo(() => {
     return sortParticipantsCurrentUserFirst(
       state.participants
-        .filter((participant) => Boolean(participant.cotisation))
         .filter((participant) => getParticipantSessionDays(state.sessions, participant.id).length > 0),
       authUser?.participantId
     );
@@ -298,7 +297,7 @@ function App() {
       state.sessions
         .filter((session) => session.date === newRealisation.selectedDay)
         .filter(isManagedSession)
-        .flatMap((session) => getSessionParticipantIds(session))
+        .flatMap((session) => getSessionAttendanceIds(session))
     );
 
     return modalAllEligibleParticipants.filter((participant) => participantIdsForSelectedDay.has(String(participant.id)));
@@ -403,13 +402,20 @@ function App() {
   }, [state.participants, authUser?.participantId]);
 
   const cprByParticipantId = useMemo(() => {
+    const realisationsByParticipant = new Map();
+    for (const realisation of state.realisations) {
+      const participantId = String(realisation.participantId);
+      if (!realisationsByParticipant.has(participantId)) realisationsByParticipant.set(participantId, []);
+      realisationsByParticipant.get(participantId).push(realisation);
+    }
+    const calculatedAt = Date.now();
     return Object.fromEntries(
       state.participants.map((participant) => [
         participant.id,
         calculateSimpleCpr(
-          state.realisations.filter((realisation) => String(realisation.participantId) === String(participant.id)),
+          realisationsByParticipant.get(String(participant.id)) || [],
           routesById,
-          Date.now(),
+          calculatedAt,
           participant.cprResetAt,
         ),
       ])
@@ -737,7 +743,7 @@ function App() {
       ? (requestedParticipantId || myParticipantId || "")
       : (myParticipantId || "");
     const requestedParticipant = participantsById[requestedParticipantId];
-    const latestRegisteredDay = requestedParticipant?.cotisation
+    const latestRegisteredDay = requestedParticipant
       ? getParticipantSessionDays(state.sessions, requestedParticipantId)[0] || ""
       : "";
     const defaultParticipantId = latestRegisteredDay ? requestedParticipantId : "";
@@ -775,20 +781,16 @@ function App() {
     onError: setSyncMessage,
   });
 
+  const realisationSubmitInFlight = React.useRef(false);
+
   async function addRealisation() {
-    if (realisationSaving) return;
+    if (realisationSubmitInFlight.current || realisationSaving) return;
     if (authUser?.role !== "admin" && (!myParticipantId || String(newRealisation.participantId) !== String(myParticipantId))) {
       setSyncMessage("Erreur : vous pouvez enregistrer uniquement vos propres réalisations.");
       return;
     }
     if (!newRealisation.participantId || !newRealisation.selectedDay || !newRealisation.voieId) {
       setSyncMessage("Erreur : sélectionnez un jour et une voie.");
-      return;
-    }
-
-    const participant = participantsById[newRealisation.participantId];
-    if (!participant?.cotisation) {
-      setSyncMessage("Erreur : votre cotisation doit être à jour pour enregistrer une réalisation.");
       return;
     }
 
@@ -807,6 +809,7 @@ function App() {
       participantId: String(newRealisation.participantId),
     };
 
+    realisationSubmitInFlight.current = true;
     setRealisationSaving(true);
     try {
       const savedRealisation = await persistRealisationToApi(realisation);
@@ -829,6 +832,7 @@ function App() {
     } catch (error) {
       setSyncMessage(`Erreur : ${String(error.message || error)}`);
     } finally {
+      realisationSubmitInFlight.current = false;
       setRealisationSaving(false);
     }
   }

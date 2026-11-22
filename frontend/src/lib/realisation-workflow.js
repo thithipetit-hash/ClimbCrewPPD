@@ -18,7 +18,7 @@ export function getParticipantSessionDays(sessions, participantId) {
   const targetId = String(participantId);
   return [...new Set((sessions || [])
     .filter(isManagedSession)
-    .filter((session) => getSessionParticipantIds(session).includes(targetId))
+    .filter((session) => getSessionAttendanceIds(session).includes(targetId))
     .map((session) => session.date))]
     .sort((a, b) => b.localeCompare(a));
 }
@@ -28,7 +28,7 @@ export function resolveSessionIdForRealisation(sessions, participantId, selected
   return (sessions || [])
     .filter((session) => session.date === selectedDay)
     .filter(isManagedSession)
-    .filter((session) => getSessionParticipantIds(session).includes(String(participantId)))
+    .filter((session) => getSessionAttendanceIds(session).includes(String(participantId)))
     .sort((a, b) => a.slot.localeCompare(b.slot))[0]?.id || "";
 }
 

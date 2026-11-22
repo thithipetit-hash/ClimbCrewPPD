@@ -24,9 +24,8 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
   // maintient la validation compatible pendant toute la phase de migration.
   const sessionResult = await pool.query(
     `
-      select s.date, p.cotisation
+      select s.date
       from sessions s
-      join participants p on p.id::text = $2
       where s.id = $1
         and (
           exists (
@@ -48,13 +47,6 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
   }
 
   const session = sessionResult.rows[0];
-  if (!session.cotisation) {
-    throw new RealisationIntegrityError(
-      "Le grimpeur doit être cotisant pour enregistrer une réalisation.",
-      "participantId",
-      403,
-    );
-  }
   if (String(realisation.dateRealisation).slice(0, 10) !== String(session.date).slice(0, 10)) {
     throw new RealisationIntegrityError(
       "La date de réalisation doit correspondre à la date de la séance.",
