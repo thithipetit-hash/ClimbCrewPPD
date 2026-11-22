@@ -51,3 +51,24 @@ test("les actions GitHub critiques sont épinglées par SHA", async () => {
   }
   assert.deepEqual(offenders, [], `Actions non épinglées : ${offenders.join(", ")}`);
 });
+
+test("la publication de production exige le dépôt officiel et une validation de push", async () => {
+  const source = await workflow("deploy-production.yml");
+  assert.match(source, /github\.repository == 'fabienkazak-maker\/ClimbCrew'/);
+  assert.match(source, /github\.event\.workflow_run\.event == 'push'/);
+  assert.match(source, /head_branch == 'production'/);
+});
+
+test("la protection contre un push direct couvre aussi la branche production", async () => {
+  const source = await workflow("deploy.yml");
+  assert.match(source, /steps\.validated_commit\.outputs\.branch == 'production'/);
+  assert.match(source, /os\.getenv\("TARGET_BRANCH"\)/);
+});
+
+test("la surveillance des sauvegardes ne dépend pas du runner sur le serveur", async () => {
+  const verifier = await workflow("verify-backups.yml");
+  const monitor = await workflow("monitor-backup-freshness.yml");
+  assert.match(verifier, /cancel-in-progress: false/);
+  assert.match(monitor, /runs-on: ubuntu-latest/);
+  assert.match(monitor, /verify-backups\.yml\/runs/);
+});
