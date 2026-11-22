@@ -7,13 +7,13 @@ const sessions = [
   { id:"2026-09-05-soir", date:"2026-09-05", slot:"soir", status:"libre", referentId:"r1", participantIds:["p1"] },
 ];
 
-test("les jours et la séance de réalisation proviennent de l'inscription explicite", () => {
+test("les jours et la séance de réalisation incluent les responsables de séance", () => {
   assert.deepEqual(getParticipantSessionDays(sessions, "p1"), ["2026-09-05", "2026-09-04"]);
-  assert.deepEqual(getParticipantSessionDays(sessions, "e1"), []);
-  assert.deepEqual(getParticipantSessionDays(sessions, "r1"), []);
+  assert.deepEqual(getParticipantSessionDays(sessions, "e1"), ["2026-09-04"]);
+  assert.deepEqual(getParticipantSessionDays(sessions, "r1"), ["2026-09-05"]);
   assert.equal(resolveSessionIdForRealisation(sessions, "p1", "2026-09-04"), "2026-09-04-midi");
-  assert.equal(resolveSessionIdForRealisation(sessions, "e1", "2026-09-04"), "");
-  assert.equal(resolveSessionIdForRealisation(sessions, "r1", "2026-09-05"), "");
+  assert.equal(resolveSessionIdForRealisation(sessions, "e1", "2026-09-04"), "2026-09-04-midi");
+  assert.equal(resolveSessionIdForRealisation(sessions, "r1", "2026-09-05"), "2026-09-05-soir");
 
   const registeredRoles = [
     { ...sessions[0], participantIds: ["p1", "e1"] },
