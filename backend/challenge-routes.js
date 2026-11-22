@@ -20,7 +20,8 @@ export function cleanIsoDate(value, { required = false } = {}) {
     }
     return null;
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || new Date(`${date}T12:00:00Z`).toISOString().slice(0, 10) !== date) {
+  const parsedDate = new Date(`${date}T12:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) {
     const error = new Error("Date invalide.");
     error.statusCode = 400;
     throw error;
