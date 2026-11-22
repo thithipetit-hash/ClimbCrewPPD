@@ -16,8 +16,8 @@ function createFixture() {
     async query(sql, params = []) {
       queries.push({ sql, params });
       if (sql.includes("select id from routes")) return { rowCount: 1, rows: [{ id: "v1" }] };
-      if (sql.includes("select s.date, p.cotisation")) {
-        return { rowCount: 1, rows: [{ date: "2026-10-29", cotisation: true }] };
+      if (sql.includes("select s.date")) {
+        return { rowCount: 1, rows: [{ date: "2026-10-29" }] };
       }
       if (sql.includes("from realisations") && sql.includes("select participant_id, session_id")) {
         const [, isAdmin, actorId] = params;
