@@ -15,7 +15,7 @@ test("un repère non visible produit une mesure absente et non une vitesse nulle
 test("les intervalles techniques sont fermés au dernier échantillon visible", () => {
   assert.match(source, /finishTrackedIntervals\(previousTime\)/);
   assert.doesNotMatch(source, /finishInterval\(pauses, pauseStart, duration/);
-  assert.match(source, /engineVersion: "1\.5\.0"/);
+  assert.match(source, /engineVersion: contacts \? "1\.6\.0" : "1\.5\.0"/);
   assert.match(source, /previousPose\.leftAnkle && pose\.leftAnkle/);
 });
 
