@@ -104,6 +104,8 @@ export default function VideoTechnicalAnalysis({
   const [comparisonUrl, setComparisonUrl] = React.useState("");
   const [computedResult, setComputedResult] = React.useState(null);
   const [progress, setProgress] = React.useState(0);
+  const [analysisMode, setAnalysisMode] = React.useState("standard");
+  const [previousRun,setPreviousRun] = React.useState(null);
   const [error, setError] = React.useState("");
   const [saveError, setSaveError] = React.useState("");
   const [saveStatus, setSaveStatus] = React.useState("");
@@ -150,6 +152,8 @@ export default function VideoTechnicalAnalysis({
     const controller = new AbortController();
     abortRef.current = controller;
     setAnalyzing(true);
+    if (computedResult?.url === selectedUrl) setPreviousRun(computedResult);
+    else setPreviousRun(null);
     setComputedResult(null);
     setError("");
     setSaveError("");
@@ -162,6 +166,7 @@ export default function VideoTechnicalAnalysis({
       if (controller.signal.aborted) return;
       const result = await analyzeClimbingVideo(videoRef.current, {
         rules,
+        mode: analysisMode,
         signal: controller.signal,
         onProgress: setProgress,
         onPoseFrame: (frame) => poseFrames.push(frame),
@@ -173,6 +178,10 @@ export default function VideoTechnicalAnalysis({
       if (controller.signal.aborted) return;
       setComputedResult({ url: selectedUrl, analysis: resultWithCoach });
       setPoseReplay({ url: selectedUrl, frames: poseFrames, sampleFps: result.rules.sampleFps });
+      if (analysisMode === "legacy") {
+        setSaveStatus("Analyse de référence locale : les mesures enregistrées ne sont pas remplacées.");
+        return;
+      }
       if (localOnly) {
         setSaveStatus("Analyse locale terminée. Ni la vidéo ni les mesures ne sont enregistrées.");
         return;
@@ -287,6 +296,11 @@ export default function VideoTechnicalAnalysis({
 
       {videoAvailable && editable && (
         <div className="group" style={{ marginTop: 10 }}>
+          <label className="small">Mode d’analyse <select value={analysisMode} disabled={analyzing} onChange={event => setAnalysisMode(event.target.value)} aria-label="Mode d’analyse">
+            <option value="standard">Standard — cycles de contact</option>
+            <option value="detailed">Approfondi — 8 images/s</option>
+            <option value="legacy">Référence — moteur 1.5</option>
+          </select></label>
           <Button onClick={runAnalysis} disabled={analyzing}>{analysis ? "Relancer l’analyse" : "Analyser la technique"}</Button>
           {analyzing && <Button variant="secondary" onClick={cancelAnalysis}>Annuler</Button>}
           {analyzing && <span className="small">Analyse {Math.round(progress * 100)} %</span>}
@@ -319,7 +333,13 @@ export default function VideoTechnicalAnalysis({
             <Metric label="Pauses longues" value={hasMotionCoverage(metrics,"pauseSeconds") && Array.isArray(metrics.longPauses) ? metrics.longPauses.length : "—"} />
             <Metric label="Temps immobile observé" value={pauseRatio === null || !hasMotionCoverage(metrics,"pauseSeconds") ? "—" : `${Math.round(pauseRatio * 100)} %`} />
             <Metric label="Repositionnements pieds candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? Number(metrics.footAdjustments?.total || 0) : "Couverture insuffisante"} />
-            <Metric label="Pics dynamiques candidats" value={hasMotionCoverage(metrics,"motionSeconds") ? Number(metrics.dynamicMoves || 0) : "Couverture insuffisante"} />
+            {metrics.contactObservation && <>
+               <Metric label="Transferts pieds candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? metrics.contactObservation.footTransfers : "Couverture insuffisante"} />
+               <Metric label="Transferts mains candidats" value={metrics.contactObservation.bothHandsSeconds/metrics.duration >= .5 ? metrics.contactObservation.handTransfers : "Couverture insuffisante"} />
+               <Metric label="Retours de pied candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? metrics.contactObservation.footReturns : "—"} />
+               <Metric label="Pivots de pied candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? metrics.contactObservation.footPivots : "—"} />
+             </>}
+             <Metric label="Pics dynamiques candidats" value={hasMotionCoverage(metrics,"motionSeconds") ? Number(metrics.dynamicMoves || 0) : "Couverture insuffisante"} />
             <Metric label="Confiance observation" value={`${Math.round((Number(metrics.observationConfidence ?? metrics.detectionRatio) || 0) * 100)} %`} />
             <Metric label="Composante verticale du bassin" value={metrics.hipMotion && hasMotionCoverage(metrics,"motionSeconds") ? `${Math.round((Number(metrics.hipMotion.pathEfficiency) || 0) * 100)} %` : "—"} />
             <Metric label="Décalage bassin" value={metrics.bodyPosition ? `${Number(metrics.bodyPosition.meanHipLateralOffsetHipWidths || 0).toFixed(2)} × largeur bassin` : "—"} />
@@ -329,7 +349,15 @@ export default function VideoTechnicalAnalysis({
             <Metric label="Bras droit fléchi" value={analysis.display?.bentRight || formatTimestamp(metrics.bentArmSeconds?.right)} />
           </div>
 
-          <AnalysisGraphics metrics={metrics} onSeek={videoAvailable && !analyzing ? (time) => { if (videoRef.current) { videoRef.current.currentTime = time; videoRef.current.pause(); } } : undefined} />
+          {metrics.contactObservation && <div className="muted-box small">Cycles 2D déplacement–stabilisation · {analysis.rules?.sampleFps} images/s. Prises non localisées : contacts non confirmés. Couverture pieds G/D : {Math.round(100*metrics.contactObservation.coverage.leftFoot/metrics.duration)} / {Math.round(100*metrics.contactObservation.coverage.rightFoot/metrics.duration)} % ; mains G/D : {Math.round(100*metrics.contactObservation.coverage.leftHand/metrics.duration)} / {Math.round(100*metrics.contactObservation.coverage.rightHand/metrics.duration)} %.</div>}
+           {previousRun?.url === selectedUrl && previousRun.analysis?.metrics && <div className="muted-box small">
+             <strong>Comparaison des deux dernières analyses de cette vidéo (en mémoire)</strong>
+             <div>Précédente : moteur {previousRun.analysis.engineVersion}, {previousRun.analysis.rules?.sampleFps} images/s · Actuelle : moteur {analysis.engineVersion}, {analysis.rules?.sampleFps} images/s.</div>
+             <div>Ajustements pieds candidats : {hasMotionCoverage(previousRun.analysis.metrics,"feetSeconds") ? previousRun.analysis.metrics.footAdjustments?.total : "—"} → {hasMotionCoverage(metrics,"feetSeconds") ? metrics.footAdjustments?.total : "—"}.</div>
+             <div>Couverture pieds : {Math.round(100*(previousRun.analysis.metrics.motionObservation?.feetSeconds ?? 0)/previousRun.analysis.metrics.duration)} % → {Math.round(100*(metrics.motionObservation?.feetSeconds ?? 0)/metrics.duration)} %. Les deux méthodes diffèrent : moins d’événements ne prouve pas une meilleure précision.</div>
+           </div>}
+           <Button type="button" variant="secondary" onClick={() => { const blob = new Blob([JSON.stringify(analysis,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="analyse-"+analysis.engineVersion+".json";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000); }}>Exporter les mesures JSON</Button>
+           <AnalysisGraphics metrics={metrics} onSeek={videoAvailable && !analyzing ? (time) => { if (videoRef.current) { videoRef.current.currentTime = time; videoRef.current.pause(); } } : undefined} />
 
           {comparisonChoices.length > 0 && primarySavedAnalysis && (
             <div className="subcard" style={{ marginTop: 12 }}>
@@ -410,7 +438,7 @@ export default function VideoTechnicalAnalysis({
               <div className="small" style={{ marginTop: 4 }}>Préparation → exécution → stabilisation et mouvements candidats. « ? » signifie que la technique doit être confirmée visuellement. Cliquer pour revoir le passage.</div>
               <div className="group" style={{ marginTop: 6 }}>
                 {motionEvents.slice(0, 24).map((event, index) => {
-                  const labels = { pause: "Pause", dynamic: "Dynamique", "foot-adjustment": event.side === "left" ? "Ajustement pied G" : "Ajustement pied D", cross: event.side === "left" ? "Croisé main G ?" : "Croisé main D ?", "foot-switch": "Changement de pieds ?", "flag-candidate": event.side === "left" ? "Drapeau G ?" : "Drapeau D ?", movement: "Préparation", "movement-peak": "Exécution", stabilization: "Stabilisation" };
+                  const labels = { "foot-transfer": "Transfert pied ?", "hand-transfer": "Transfert main ?", "foot-return": "Retour pied ?", "foot-pivot": "Pivot pied ?", pause: "Pause", dynamic: "Dynamique", "foot-adjustment": event.side === "left" ? "Ajustement pied G" : "Ajustement pied D", cross: event.side === "left" ? "Croisé main G ?" : "Croisé main D ?", "foot-switch": "Changement de pieds ?", "flag-candidate": event.side === "left" ? "Drapeau G ?" : "Drapeau D ?", movement: "Préparation", "movement-peak": "Exécution", stabilization: "Stabilisation" };
                   return videoAvailable ? (
                     <button type="button" className="pill" key={`${event.type}-${event.time}-${index}`} onClick={() => { if (!videoRef.current) return; videoRef.current.currentTime = Math.max(0, event.time - 1); videoRef.current.play().catch(() => {}); }}>
                       {formatTimestamp(event.time)} · {labels[event.type] || event.type}
