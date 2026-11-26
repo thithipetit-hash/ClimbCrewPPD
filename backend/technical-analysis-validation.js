@@ -170,12 +170,20 @@ function normalizeMotionExtras(metrics, duration) {
     const feetSeconds = finiteNumber(motion.feetSeconds, "motionObservation.feetSeconds", { min: 0, max: motionSeconds });
     output.motionObservation = { cameraPairs, reliableCameraPairs, motionSeconds, pauseSeconds, feetSeconds };
   }
+  if (metrics.contactObservation !== undefined) {
+    const contact = objectValue(metrics.contactObservation, "metrics.contactObservation");
+    const coverage = objectValue(contact.coverage, "metrics.contactObservation.coverage");
+    output.contactObservation = {
+      ...Object.fromEntries(["footTransfers","handTransfers","footReturns","footPivots"].map(key => [key, finiteNumber(contact[key], "metrics.contactObservation."+key, {min:0,max:20000,integer:true})])),
+      coverage: Object.fromEntries(["leftFoot","rightFoot","leftHand","rightHand"].map(key => [key,finiteNumber(coverage[key], "metrics.contactObservation.coverage."+key,{min:0,max:duration})])),
+    };
+  }
   if (metrics.events !== undefined) {
     if (!Array.isArray(metrics.events) || metrics.events.length > MAX_EVENTS) throw badRequest("metrics.events est invalide.");
     output.events = metrics.events.map((item, index) => {
       const event = objectValue(item, `metrics.events[${index}]`);
       const type = boundedString(event.type, `metrics.events[${index}].type`, 40, { required: true });
-      if (!["pause", "dynamic", "foot-adjustment", "cross", "foot-switch", "flag-candidate", "movement", "movement-peak", "stabilization"].includes(type)) throw badRequest(`metrics.events[${index}].type est invalide.`);
+      if (!["pause", "dynamic", "foot-adjustment", "foot-transfer", "hand-transfer", "foot-return", "foot-pivot", "cross", "foot-switch", "flag-candidate", "movement", "movement-peak", "stabilization"].includes(type)) throw badRequest(`metrics.events[${index}].type est invalide.`);
       const normalized = { type, time: finiteNumber(event.time, `metrics.events[${index}].time`, { min: 0, max: duration }), confidence: finiteNumber(event.confidence, `metrics.events[${index}].confidence`, { min: 0, max: 1 }) };
       if (event.end !== undefined) normalized.end = finiteNumber(event.end, `metrics.events[${index}].end`, { min: normalized.time, max: duration });
       if (event.phase !== undefined) {

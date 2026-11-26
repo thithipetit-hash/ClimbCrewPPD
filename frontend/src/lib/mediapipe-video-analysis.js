@@ -3,6 +3,7 @@ import { correctImageAspect, hasMotionCoverage } from "./video-analysis-observat
 import { SKELETON_JOINTS } from "./video-analysis-display.js";
 import { createCameraTracker } from "./video-camera-motion.js";
 import { createMotionTracker } from "./video-motion-tracking.js";
+import { createContactTracker } from "./video-contact-tracking.js";
 
 const MEDIAPIPE_MODULE_URL = "/mediapipe-runtime/vision_bundle.mjs";
 const MEDIAPIPE_WASM_URL = "/mediapipe-runtime/wasm";
@@ -93,6 +94,10 @@ function buildFramePose(landmarks, rules, aspectRatio) {
     rightWrist: point(LANDMARK.RIGHT_WRIST),
     leftAnkle: point(LANDMARK.LEFT_ANKLE),
     rightAnkle: point(LANDMARK.RIGHT_ANKLE),
+    leftFoot: point(31), rightFoot: point(32),
+    leftFootSecondary: point(29), rightFootSecondary: point(30),
+    leftHand: midpoint(point(17), point(19)), rightHand: midpoint(point(18), point(20)),
+    leftHandSecondary: point(15), rightHandSecondary: point(16),
     leftHip,
     rightHip,
     shoulderCenter,
@@ -256,7 +261,9 @@ function buildRecommendations(metrics, rules) {
 
 export async function analyzeClimbingVideo(video, options = {}) {
   if (!video) throw new Error("Vidéo absente.");
-  const rules = normalizeVideoAnalysisRules(options.rules || loadVideoAnalysisRules());
+  const mode = options.mode === "legacy" ? "legacy" : options.mode === "detailed" ? "detailed" : "standard";
+  const baseRules = options.rules || loadVideoAnalysisRules();
+  const rules = normalizeVideoAnalysisRules(mode === "detailed" ? { ...baseRules, sampleFps: 8 } : baseRules);
   await ensureMetadata(video);
 
   const duration = Number(video.duration);
@@ -276,6 +283,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
 
   const camera = createCameraTracker(video);
   const motionTracker = createMotionTracker(rules, video.videoHeight);
+  const contacts = mode === "legacy" ? null : createContactTracker(rules, video.videoHeight);
   let reliableCameraPairs = 0;
   let motionSeconds = 0;
   let pauseSeconds = 0;
@@ -384,6 +392,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
         // intervalles au dernier instant réellement observé et on repart à zéro.
         finishTrackedIntervals(previousTime);
         motionTracker.reset();
+        contacts?.reset();
         movementStart = null; movementPeakTime = null; movementPeakSpeed = 0;
         previousPose = null;
         previousTime = null;
@@ -416,6 +425,14 @@ export async function analyzeClimbingVideo(video, options = {}) {
         shoulderHipOffsetMax = Math.max(shoulderHipOffsetMax, offset);
       }
       const motion = motionTracker.update(strictPose, time, cameraTranslation);
+      if (!motion) contacts?.reset();
+      const contactEvents = contacts?.update(strictPose, time, motion ? cameraTranslation : null) || [];
+      for (const event of contactEvents) {
+        if (event.type === "foot-adjustment") {
+          if (event.side === "left") leftFootAdjustments++; else rightFootAdjustments++;
+        }
+        events.push(event);
+      }
       if (!motion) {
         finishInterval(pauses, pauseStart, previousTime, rules.pauseMinSeconds);
         pauseStart = null;
@@ -451,7 +468,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
           pauseStart = null;
         }
 
-        for (const side of motion.feet) {
+        for (const side of contacts ? [] : motion.feet) {
           if (side === "left") leftFootAdjustments += 1;
           else rightFootAdjustments += 1;
           events.push({ type: "foot-adjustment", side, time, confidence: 0.65 });
@@ -566,7 +583,9 @@ export async function analyzeClimbingVideo(video, options = {}) {
     const sortedHipLateral = [...hipLateralValues].sort((a, b) => a - b);
     hipLateralMax = sortedHipLateral[Math.min(sortedHipLateral.length - 1, Math.floor((sortedHipLateral.length - 1) * 0.98))];
   }
+  const contactObservation = contacts?.summary(duration);
   const metrics = {
+    ...(contactObservation ? { contactObservation } : {}),
     duration,
     analyzedSeconds: duration * detectionRatio,
     sampleCount: sampleTimes.length,
@@ -601,7 +620,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
       reliableCameraPairs,
       motionSeconds: Math.min(duration, motionSeconds),
       pauseSeconds: Math.min(duration, pauseSeconds),
-      feetSeconds: Math.min(duration, feetSeconds),
+      feetSeconds: Math.min(duration, contactObservation ? Math.min(contactObservation.coverage.leftFoot, contactObservation.coverage.rightFoot) : feetSeconds),
     },
     events: events.slice(0, 1000),
     movementSegments: movementSegments.slice(0, 500),
@@ -610,7 +629,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
 
   return {
     engine: "MediaPipe Pose Landmarker Lite",
-    engineVersion: "1.5.0",
+    engineVersion: contacts ? "1.6.0" : "1.5.0",
     localProcessing: true,
     rules,
     metrics,
