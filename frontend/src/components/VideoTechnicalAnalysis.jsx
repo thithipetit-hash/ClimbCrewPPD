@@ -321,7 +321,7 @@ export default function VideoTechnicalAnalysis({
             <Metric label="Repositionnements pieds candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? Number(metrics.footAdjustments?.total || 0) : "Couverture insuffisante"} />
             <Metric label="Pics dynamiques candidats" value={hasMotionCoverage(metrics,"motionSeconds") ? Number(metrics.dynamicMoves || 0) : "Couverture insuffisante"} />
             <Metric label="Confiance observation" value={`${Math.round((Number(metrics.observationConfidence ?? metrics.detectionRatio) || 0) * 100)} %`} />
-            <Metric label="Composante verticale du bassin" value={metrics.hipMotion ? `${Math.round((Number(metrics.hipMotion.pathEfficiency) || 0) * 100)} %` : "—"} />
+            <Metric label="Composante verticale du bassin" value={metrics.hipMotion && hasMotionCoverage(metrics,"motionSeconds") ? `${Math.round((Number(metrics.hipMotion.pathEfficiency) || 0) * 100)} %` : "—"} />
             <Metric label="Décalage bassin" value={metrics.bodyPosition ? `${Number(metrics.bodyPosition.meanHipLateralOffsetHipWidths || 0).toFixed(2)} × largeur bassin` : "—"} />
             <Metric label="Position compacte" value={metrics.bodyPosition ? `${Math.round((Number(metrics.bodyPosition.compactSeconds || 0) / Math.max(1, Number(metrics.analyzedSeconds || 1))) * 100)} %` : "—"} />
             <Metric label="Angle moyen genoux" value={metrics.meanKneeAngleDegrees != null && Number.isFinite(Number(metrics.meanKneeAngleDegrees)) ? `${Math.round(Number(metrics.meanKneeAngleDegrees))}°` : "—"} />

@@ -237,6 +237,10 @@ function buildRecommendations(metrics, rules) {
     );
   }
 
+  if (metrics.motionObservation && !["motionSeconds", "pauseSeconds", "feetSeconds"].every(key => hasMotionCoverage(metrics, key))) {
+    pushRecommendation(recommendations, "limited-motion-coverage", "info", "Couverture temporelle partielle", "Les intervalles où le fond ou les articulations ne sont pas assez stables sont exclus. L’absence de signal ne démontre pas l’absence de mouvement ou de repos.");
+  }
+
   if (!recommendations.length) {
     pushRecommendation(
       recommendations,
@@ -365,6 +369,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
         options.onPoseFrame({ time, points });
       }
       let pose = buildFramePose(landmarks, rules, aspectRatio);
+      const strictPose = pose;
       if (!pose && landmarks?.length) {
         // Second passage plus tolérant : utile quand le grimpeur est petit dans
         // une image large ou brièvement occulté. Les mesures restent marquées
@@ -410,14 +415,14 @@ export async function analyzeClimbingVideo(video, options = {}) {
         shoulderHipOffsetSamples += 1;
         shoulderHipOffsetMax = Math.max(shoulderHipOffsetMax, offset);
       }
-      const motion = motionTracker.update(pose, time, cameraTranslation);
+      const motion = motionTracker.update(strictPose, time, cameraTranslation);
       if (!motion) {
         finishInterval(pauses, pauseStart, previousTime, rules.pauseMinSeconds);
         pauseStart = null;
         movementStart = null; movementPeakTime = null; movementPeakSpeed = 0;
         previousCrossSide = null; previousFlagSide = null;
       } else {
-        const { dt, torso, hipSpeed, bodySpeed, stabilitySpeed, pauseSpeed } = motion;
+        const { dt, hipSpeed, bodySpeed, stabilitySpeed, pauseSpeed } = motion;
         motionSeconds += dt;
         if (motion.feetKnown) feetSeconds += dt;
         if (stabilitySpeed !== null) pauseSeconds += dt;

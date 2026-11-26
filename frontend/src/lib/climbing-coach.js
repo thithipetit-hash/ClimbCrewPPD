@@ -34,6 +34,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
   const hipLateral = Math.max(0, finite(metrics.bodyPosition?.meanHipLateralOffsetHipWidths, 0));
   const compactRatio = ratio(metrics.bodyPosition?.compactSeconds, analyzedSeconds);
   const candidates = [];
+  const limitedMotion = metrics.motionObservation && !["motionSeconds", "pauseSeconds", "feetSeconds"].every(key => hasMotionCoverage(metrics, key));
 
   if (hasMotionCoverage(metrics, "pauseSeconds") && (longPauses.length > 0 || pauses.length >= 3)) {
     const threshold = finite(rules.longPauseMinSeconds, 4);
@@ -150,7 +151,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
       "coach-consolidation",
       10,
       "Consolider le geste",
-      "Aucun des signaux mécaniques suivis ne ressort fortement sur cette vidéo.",
+      limitedMotion ? "La couverture temporelle est partielle : filmer de plus près ou avec un cadre plus stable avant d’interpréter l’absence de signaux." : "Aucun des signaux mécaniques suivis ne ressort fortement sur cette vidéo.",
       "Conserver la qualité de placement et chercher surtout une grimpe relâchée et intentionnelle.",
       "Refaire une voie facile en choisissant un seul thème d’attention : pieds, bassin ou relâchement des bras.",
       "1 à 2 passages de consolidation.",
@@ -169,7 +170,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
     priorities,
     confidence: observationConfidence,
     confidenceLabel: observationConfidence >= 0.8 ? "élevée" : observationConfidence >= 0.6 ? "moyenne" : "faible",
-    note: lowDetection
+    note: lowDetection || limitedMotion
       ? "La détection du corps est partielle : utiliser ces priorités comme pistes à confirmer visuellement ou sur une autre vidéo."
       : "Les priorités sont déduites des mesures de cette vidéo et doivent être interprétées avec le contexte de la voie. La trajectoire du bassin reste une mesure 2D et ne mesure pas directement le centre de gravité ni les forces.",
   };

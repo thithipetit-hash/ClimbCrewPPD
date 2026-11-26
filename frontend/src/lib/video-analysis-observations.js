@@ -27,7 +27,7 @@ export function observedPauseRatio(metrics) {
   return Math.min(1, total / seconds);
 }
 
- // Les anciennes analyses n’ont pas de mesure de couverture temporelle distincte.
+// Les anciennes analyses n’ont pas de mesure de couverture temporelle distincte.
 export function hasMotionCoverage(metrics, key) {
   if (!metrics?.motionObservation) return true;
   return Number.isFinite(metrics.duration) && metrics.duration > 0
