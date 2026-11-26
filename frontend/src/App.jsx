@@ -14,6 +14,7 @@ import Voies from "./pages/Voies.jsx";
 import Progression from "./pages/Progression.jsx";
 import Profil from "./pages/Profil.jsx";
 import Competences from "./pages/Competences.jsx";
+import AnalyseVideo from "./pages/AnalyseVideo.jsx";
 import Chat from "./pages/Chat.jsx";
 import Parametres from "./pages/Parametres.jsx";
 import Administration from "./pages/Administration.jsx";
@@ -23,7 +24,7 @@ import Logs from "./pages/Logs.jsx";
 import Statistiques from "./pages/Statistiques.jsx";
 import WallOfFame from "./pages/WallOfFame.jsx";
 
-import { THEME_OPTIONS, THEME_PREFERENCE_KEY, resolveThemePreference } from "./lib/theme.js";
+import { THEME_OPTIONS, THEME_PREFERENCE_KEY } from "./lib/theme.js";
 import { ROPE_NUMBERS, ROUTE_COLORS, STYLE_LABELS, TABS } from "./lib/ui-config.js";
 import {
   MAX_PARTICIPANTS,
@@ -59,6 +60,7 @@ import { normalizeAppData } from "./lib/normalize.js";
 import { APP_VERSION } from "./lib/version.js";
 import { EMPTY_APP_DATA, useAppBusinessState } from "./hooks/useAppBusinessState.js";
 import { useAppUiState } from "./hooks/useAppUiState.js";
+import { useAppliedTheme } from "./hooks/useAppliedTheme.js";
 import { useAuthState } from "./hooks/useAuthState.js";
 import { useAppBootstrap } from "./hooks/useAppBootstrap.js";
 import { useParticipantEditorState } from "./hooks/useParticipantEditorState.js";
@@ -164,31 +166,7 @@ function App() {
     return () => window.clearTimeout(timeoutId);
   }, [syncMessage]);
 
-  useEffect(() => {
-    const applyTheme = () => {
-      const resolvedTheme = resolveThemePreference(themePreference);
-      document.documentElement.dataset.theme = resolvedTheme;
-      document.documentElement.dataset.themePreference = themePreference;
-      localStorage.setItem(THEME_PREFERENCE_KEY, themePreference);
-    };
-
-    applyTheme();
-
-    if (themePreference !== "auto" || typeof window.matchMedia !== "function") {
-      return undefined;
-    }
-
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const onSystemThemeChange = () => applyTheme();
-
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", onSystemThemeChange);
-      return () => mediaQuery.removeEventListener("change", onSystemThemeChange);
-    }
-
-    mediaQuery.addListener(onSystemThemeChange);
-    return () => mediaQuery.removeListener(onSystemThemeChange);
-  }, [themePreference]);
+  useAppliedTheme(themePreference);
 
   const { reloadApiState } = useAppBootstrap({
     useApi: USE_API,
@@ -1408,6 +1386,15 @@ async function handleThemePreferenceChange(nextTheme) {
         )}
 
         {tab === "competences" && <Competences accountId={authUser?.id} />}
+
+        {tab === "analyse_video" && (
+          <AnalyseVideo
+            myRealisations={myRealisations}
+            routesById={routesById}
+            onUpdate={updateRealisation}
+            onRefresh={() => reloadApiState({ isMounted: () => true })}
+          />
+        )}
 
         {tab === "chat" && (
           <Chat

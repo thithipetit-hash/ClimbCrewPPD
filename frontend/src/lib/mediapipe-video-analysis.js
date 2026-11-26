@@ -1,4 +1,5 @@
 import { loadVideoAnalysisRules, normalizeVideoAnalysisRules } from "./video-analysis-rules.js";
+import { correctImageAspect } from "./video-analysis-observations.js";
 
 const MEDIAPIPE_MODULE_URL = "/mediapipe-runtime/vision_bundle.mjs";
 const MEDIAPIPE_WASM_URL = "/mediapipe-runtime/wasm";
@@ -70,8 +71,8 @@ export function normalizeObservedSpeed(previous, current, torsoLength, dt) {
   return distance(previous, current) / torsoLength / dt;
 }
 
-function buildFramePose(landmarks, rules) {
-  const point = (index) => visibleLandmark(landmarks, index, rules.minVisibility);
+function buildFramePose(landmarks, rules, aspectRatio) {
+  const point = (index) => correctImageAspect(visibleLandmark(landmarks, index, rules.minVisibility), aspectRatio);
   const leftShoulder = point(LANDMARK.LEFT_SHOULDER);
   const rightShoulder = point(LANDMARK.RIGHT_SHOULDER);
   const leftHip = point(LANDMARK.LEFT_HIP);
@@ -252,6 +253,8 @@ export async function analyzeClimbingVideo(video, options = {}) {
   await ensureMetadata(video);
 
   const duration = Number(video.duration);
+  const aspectRatio = video.videoWidth / video.videoHeight;
+  if (!Number.isFinite(aspectRatio) || aspectRatio <= 0) throw new Error("Dimensions vidéo invalides.");
   if (!Number.isFinite(duration) || duration <= 0) throw new Error("Durée vidéo invalide.");
   if (duration > MAX_ANALYSIS_SECONDS) throw new Error("Analyse limitée aux vidéos de 8 minutes maximum.");
 
@@ -343,12 +346,12 @@ export async function analyzeClimbingVideo(video, options = {}) {
       await seekVideo(video, time);
       const result = poseLandmarker.detectForVideo(video, Math.round(time * 1000));
       const landmarks = result?.landmarks?.[0];
-      let pose = buildFramePose(landmarks, rules);
+      let pose = buildFramePose(landmarks, rules, aspectRatio);
       if (!pose && landmarks?.length) {
         // Second passage plus tolérant : utile quand le grimpeur est petit dans
         // une image large ou brièvement occulté. Les mesures restent marquées
         // par la confiance globale et ne sont acceptées que si le tronc existe.
-        pose = buildFramePose(landmarks, { ...rules, minVisibility: Math.min(rules.minVisibility, 0.25) });
+        pose = buildFramePose(landmarks, { ...rules, minVisibility: Math.min(rules.minVisibility, 0.25) }, aspectRatio);
         if (pose) partialSamples += 1;
       }
       options.onProgress?.((index + 1) / sampleTimes.length);
@@ -364,7 +367,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
 
       validSamples += 1;
       if (hipTrajectory.length < MAX_TRAJECTORY_POINTS && (validSamples === 1 || validSamples % Math.max(1, Math.ceil(sampleTimes.length / MAX_TRAJECTORY_POINTS)) === 0)) {
-        hipTrajectory.push({ t: time, x: pose.hipCenter.x, y: pose.hipCenter.y });
+        hipTrajectory.push({ t: time, x: pose.hipCenter.x / aspectRatio, y: pose.hipCenter.y });
       }
       const kneeAngles = [pose.leftKneeAngle, pose.rightKneeAngle].filter(Number.isFinite);
       if (kneeAngles.length) {
@@ -598,7 +601,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
 
   return {
     engine: "MediaPipe Pose Landmarker Lite",
-    engineVersion: "1.3.2",
+    engineVersion: "1.4.0",
     localProcessing: true,
     rules,
     metrics,

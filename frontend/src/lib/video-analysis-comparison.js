@@ -1,3 +1,5 @@
+import { observedPauseRatio } from "./video-analysis-observations.js";
+
 function finiteNumberOrNull(value) {
   if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
@@ -76,6 +78,13 @@ const METRICS = [
     format: formatCount,
   },
   {
+    key: "pauseRatio",
+    label: "Part du temps immobile observé",
+    value: observedPauseRatio,
+    format: formatPercent,
+    deltaFormat: (delta) => `${delta >= 0 ? "+" : ""}${Math.round(delta * 100)} pt`,
+  },
+  {
     key: "pausesPerMinute",
     label: "Pauses par minute analysée",
     value: (metrics) => ratePerMinute(Array.isArray(metrics.pauses) ? metrics.pauses.length : null, metrics),
@@ -143,7 +152,7 @@ const METRICS = [
     deltaFormat: (delta) => `${delta >= 0 ? "+" : ""}${Math.round(delta * 100)} pt`,
   },
   {
-    key: "hipPathEfficiency", label: "Directivité bassin", value: (metrics) => metrics.hipMotion?.pathEfficiency, format: formatPercent, deltaFormat: (delta) => `${delta >= 0 ? "+" : ""}${Math.round(delta * 100)} pt`,
+    key: "hipPathEfficiency", label: "Composante verticale bassin", value: (metrics) => metrics.hipMotion?.pathEfficiency, format: formatPercent, deltaFormat: (delta) => `${delta >= 0 ? "+" : ""}${Math.round(delta * 100)} pt`,
   },
   {
     key: "hipLateral", label: "Décalage latéral bassin", value: (metrics) => metrics.bodyPosition?.meanHipLateralOffsetHipWidths, format: (value) => value === null ? "—" : `${value.toFixed(2)} ×`,
