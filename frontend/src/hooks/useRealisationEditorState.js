@@ -9,9 +9,11 @@ export function useRealisationEditorState({ defaultRouteId = "" } = {}) {
   const [realisationModalRouteId, setRealisationModalRouteId] = useState(null);
   const [selectedRouteProgress, setSelectedRouteProgress] = useState("");
   const [expandedRealisationIds, setExpandedRealisationIds] = useState([]);
+  const [realisationSaving, setRealisationSaving] = useState(false);
 
   return {
     newRealisation, setNewRealisation, realisationModalRouteId, setRealisationModalRouteId,
     selectedRouteProgress, setSelectedRouteProgress, expandedRealisationIds, setExpandedRealisationIds,
+    realisationSaving, setRealisationSaving,
   };
 }

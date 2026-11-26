@@ -35,11 +35,11 @@
         .add-participant-field { grid-column: span 1; }
         .passport-row { color: inherit; background: transparent; }
         .participant-identity { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
-        .passport-dot { width: 14px; height: 14px; flex: 0 0 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.72); box-shadow: 0 0 0 1px rgba(15,23,42,.35); }
+        .passport-dot { width: 14px; height: 14px; flex: 0 0 14px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; border: 1px solid rgba(255,255,255,.72); box-shadow: 0 0 0 1px rgba(15,23,42,.35); font-size: 9px; font-weight: 900; line-height: 1; }
         .participant-name { font-weight: 800; }
         .remove-button { display: inline-flex; align-items: center; justify-content: center; width: 26px; min-width: 26px; height: 26px; min-height: 26px; background: rgba(148,163,184,.28); color: inherit; border: 1px solid rgba(148,163,184,.45); border-radius: 999px; padding: 0; font-size: 20px; line-height: 1; box-shadow: none; }
         .remove-button:hover { background: rgba(148,163,184,.45); color: inherit; }
-        .hero { background: rgba(15,23,42,.88); border: 1px solid rgba(148,163,184,.25); border-radius: 18px; padding: 10px; box-shadow: 0 14px 36px rgba(0,0,0,.25); }
+        .hero { position: sticky; top: max(0px, env(safe-area-inset-top)); z-index: 30; background: rgba(15,23,42,.88); border: 1px solid rgba(148,163,184,.25); border-radius: 18px; padding: 10px; box-shadow: 0 14px 36px rgba(0,0,0,.25); }
         .hero h1 { margin: 0; font-size: 24px; line-height: 1.05; }
         .brand-title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
         .topbar-version { display: inline-flex; align-items: center; flex: 0 0 auto; padding: 3px 7px; border: 1px solid var(--theme-card-border); border-radius: 999px; background: var(--theme-card-soft); color: var(--theme-text-muted); font-size: 10px; font-weight: 800; line-height: 1; letter-spacing: .02em; }
@@ -1319,4 +1319,188 @@ button:not(.danger):not(.secondary):not(.ghost),
     height: 13px;
     flex-basis: 13px;
   }
+}
+
+
+/* Séance sans encadrant/référent requis : neutralisation visuelle. */
+.app .session-card.session-card-missing-supervisor {
+  background: #6b7280 !important;
+  border-color: #9ca3af !important;
+}
+
+
+.chat-page { min-height: 65vh; display: flex; flex-direction: column; gap: 12px; }
+.chat-thread { flex: 1; min-height: 360px; max-height: 65vh; overflow-y: auto; padding: 12px; border-radius: 14px; background: rgba(127,127,127,.08); }
+.chat-row { display: flex; justify-content: flex-start; margin: 7px 0; }
+.chat-row-mine { justify-content: flex-end; }
+.chat-bubble { max-width: min(78%, 620px); padding: 9px 12px; border-radius: 8px 16px 16px 16px; background: var(--card-bg, #fff); box-shadow: 0 1px 3px rgba(0,0,0,.12); overflow-wrap: anywhere; }
+.chat-bubble-mine { border-radius: 16px 8px 16px 16px; background: #d9fdd3; color: #172117; }
+.chat-composer { display: flex; gap: 8px; align-items: center; }
+.chat-composer input { flex: 1; min-width: 0; }
+.profile-physical-collapsible > summary { list-style: none; }
+.profile-physical-collapsible > summary::-webkit-details-marker { display: none; }
+@media (max-width: 640px) {
+  .chat-page { min-height: calc(100vh - 190px); }
+  .chat-thread { min-height: 300px; max-height: calc(100vh - 300px); }
+  .chat-bubble { max-width: 88%; }
+}
+
+
+/* FAQ / demandes d'évolution : densité mobile et hiérarchie visuelle. */
+.evolution-score { font-size: .9rem; min-width: auto; white-space: nowrap; }
+.evolution-admin-label { flex-basis: 100%; font-weight: 800; }
+.evolution-content { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+.buddy-card { padding: 0; overflow: hidden; }
+.buddy-summary { cursor: pointer; padding: 12px 14px; gap: 12px; }
+.buddy-count { white-space: nowrap; font-size: .78rem; font-weight: 800; padding: 5px 9px; border-radius: 999px; background: var(--surface-muted, rgba(127,127,127,.09)); }
+.buddy-content { display: grid; gap: 12px; padding: 0 14px 14px; }
+.buddy-preference-grid { display: grid; gap: 4px; }
+.buddy-preference-header, .buddy-preference-row { display: grid; grid-template-columns: minmax(76px, 1fr) repeat(3, minmax(48px, 72px)); gap: 5px; align-items: center; }
+.buddy-preference-header { font-size: .74rem; font-weight: 800; opacity: .78; text-align: center; }
+.buddy-preference-header > span:first-child { text-align: left; }
+.buddy-preference-row > strong { font-size: .82rem; }
+.buddy-session-toggle { min-height: 30px !important; padding: 3px 6px !important; border-radius: 9px !important; border: 1px solid var(--border-color, rgba(127,127,127,.35)); background: transparent; color: inherit; font-weight: 800; }
+.buddy-session-toggle.active { background: var(--accent, #c96b35); color: #fff; border-color: transparent; }
+.buddy-actions { display: flex; justify-content: flex-end; }
+.buddy-match-list { display: grid; gap: 7px; padding-top: 10px; border-top: 1px solid var(--border-color, rgba(127,127,127,.25)); }
+.buddy-match { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px; background: var(--surface-muted, rgba(127,127,127,.08)); }
+@media (max-width: 620px) {
+  .evolution-page { gap: 10px; padding-bottom: calc(82px + env(safe-area-inset-bottom, 0px)); }
+  .evolution-list { gap: 9px; }
+  .evolution-summary { grid-template-columns: auto minmax(0,1fr) auto; }
+  .evolution-summary-meta { grid-column: 2 / -1; font-size: .76rem; }
+  .evolution-summary .evolution-score { grid-column: 3; grid-row: 1; padding: 5px 7px; }
+  .evolution-content { gap: 9px; padding: 0 10px 12px; }
+  .evolution-description { margin: 2px 0; line-height: 1.35; }
+  .evolution-votes { gap: 6px; }
+  .vote-button { min-height: 36px; padding: 6px 10px; }
+  .evolution-admin-status { padding: 6px; gap: 5px; }
+  .status-button, .evolution-status { padding: 4px 7px; font-size: .72rem; }
+  .evolution-comments { padding-top: 9px; gap: 7px; }
+  .comment-form textarea { min-height: 72px; }
+  .buddy-summary { align-items: flex-start; }
+  .buddy-match { display: grid; }
+}
+
+
+/* Acquittement homogène des saisies et enregistrements */
+.save-feedback {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.save-feedback.dirty,
+.save-feedback.saving { color: #facc15; }
+.save-feedback.success { color: #86efac; }
+.save-feedback.error { color: #fca5a5; }
+
+.confirmation-toast.error-toast {
+  background: #7f1d1d !important;
+  color: #fee2e2 !important;
+  border-color: rgba(254, 202, 202, .45) !important;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: .65;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+
+
+/* ==========================================================================
+   Ambiance daltonien : contraste fort + repères de forme/motif
+   ========================================================================== */
+:root[data-theme="daltonien"] {
+  --theme-page-bg: #07121f;
+  --theme-app-bg: linear-gradient(145deg,#07121f,#102a43,#16324f);
+  --theme-card-bg: rgba(8, 25, 42, .96);
+  --theme-card-soft: rgba(18, 48, 74, .82);
+  --theme-card-border: rgba(255, 213, 79, .62);
+  --theme-text: #fffaf0;
+  --theme-text-muted: #d9e2ec;
+  --theme-input-bg: #0b1f33;
+  --theme-input-border: rgba(255, 213, 79, .68);
+  --theme-sidebar-bg: rgba(5, 18, 31, .98);
+  --theme-accent: #ffd54f;
+  --theme-accent-text: #07121f;
+  --theme-stat-bg: rgba(18, 48, 74, .9);
+}
+
+:root[data-theme="daltonien"] .passport-row {
+  border-width: 2px !important;
+  border-color: #fffaf0 !important;
+  background-blend-mode: overlay;
+}
+:root[data-theme="daltonien"] .passport-row[data-passport="jaune"] {
+  background-image: repeating-linear-gradient(45deg, transparent 0 8px, rgba(0,0,0,.18) 8px 11px);
+}
+:root[data-theme="daltonien"] .passport-row[data-passport="orange"] {
+  background-image: repeating-linear-gradient(90deg, transparent 0 8px, rgba(0,0,0,.20) 8px 11px);
+}
+:root[data-theme="daltonien"] .passport-row[data-passport="vert"] {
+  background-image: radial-gradient(circle at 5px 5px, rgba(0,0,0,.28) 0 2px, transparent 2.5px);
+  background-size: 12px 12px;
+}
+:root[data-theme="daltonien"] .passport-row[data-passport="bleu"] {
+  background-image: repeating-linear-gradient(135deg, transparent 0 8px, rgba(255,255,255,.22) 8px 11px);
+}
+:root[data-theme="daltonien"] .session-card {
+  border-left-width: 7px !important;
+}
+:root[data-theme="daltonien"] .session-card.session-status-libre {
+  border-left-style: double !important;
+}
+:root[data-theme="daltonien"] .session-card.session-status-encadree {
+  border-left-style: solid !important;
+}
+:root[data-theme="daltonien"] .session-card.session-status-fermee {
+  border-left-style: dashed !important;
+}
+
+/* QR voies et scanner */
+.route-qr-modal { max-width: 420px; }
+.route-qr-content { display: grid; justify-items: center; gap: 12px; text-align: center; }
+.route-qr-content img { max-width: 100%; height: auto; background: #fff; padding: 10px; border-radius: 14px; }
+.qr-download-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: var(--theme-accent);
+  color: var(--theme-accent-text);
+  font-weight: 800;
+  text-decoration: none;
+}
+.scan-qr-page { display: grid; gap: 12px; }
+.qr-scanner-frame {
+  position: relative;
+  width: min(100%, 560px);
+  aspect-ratio: 4 / 3;
+  margin: 0 auto 12px;
+  overflow: hidden;
+  border: 2px solid var(--theme-card-border);
+  border-radius: 18px;
+  background: #020617;
+}
+.qr-scanner-frame video { width: 100%; height: 100%; object-fit: cover; }
+.qr-scanner-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #e2e8f0;
+  background: #0f172a;
+  font-weight: 800;
 }

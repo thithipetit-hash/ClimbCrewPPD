@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const INTRO_VIDEO_SRC = "/media/climbcrew-startup.mp4";
 const EXIT_DURATION_MS = 260;
-const SAFETY_TIMEOUT_MS = 2000;
 const VIDEO_ERROR_GRACE_MS = 600;
 
 export default function StartupVideoGate({ children }) {
@@ -49,10 +48,7 @@ export default function StartupVideoGate({ children }) {
   useEffect(() => {
     if (!showIntro) return undefined;
 
-    const safetyTimer = window.setTimeout(finishIntro, SAFETY_TIMEOUT_MS);
-
     return () => {
-      window.clearTimeout(safetyTimer);
       if (exitTimerRef.current) {
         window.clearTimeout(exitTimerRef.current);
       }

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Button from "../components/Button.jsx";
+import VideoAnalysisRulesAdmin from "../components/VideoAnalysisRulesAdmin.jsx";
 import { API_BASE, apiFetch, readCookie } from "../lib/api.js";
 
 function formatBackupSize(bytes) {
@@ -33,7 +34,15 @@ function ServerSection({ title, summary, children }) {
   );
 }
 
-export default function Logs({ USE_API, canManageAccountsAndLogs, adminAccessLogs }) {
+export default function Logs({
+  USE_API,
+  canManageAccountsAndLogs,
+  adminAccessLogs,
+  onRefreshLogs,
+  exportAllData,
+  importJsonFile,
+  importMessage,
+}) {
   const [backups, setBackups] = useState([]);
   const [backupConfig, setBackupConfig] = useState(null);
   const [backupStatus, setBackupStatus] = useState("");
@@ -41,6 +50,60 @@ export default function Logs({ USE_API, canManageAccountsAndLogs, adminAccessLog
   const [broadcastDraft, setBroadcastDraft] = useState({ title: "", body: "" });
   const [broadcastStatus, setBroadcastStatus] = useState("");
   const [broadcastSending, setBroadcastSending] = useState(false);
+  const [routeArchiveState, setRouteArchiveState] = useState({ status: "idle", message: "" });
+  const [accountLogsOnly, setAccountLogsOnly] = useState(true);
+
+  const displayedLogs = accountLogsOnly
+    ? adminAccessLogs.filter((log) => String(log.event_type || "").startsWith("account_creation"))
+    : adminAccessLogs;
+
+  async function archiveActiveRoutes() {
+    if (!window.confirm("Archiver toutes les voies actives ? Elles resteront dans l’historique mais ne seront plus affichées dans l’onglet Voies.")) return;
+
+    setRouteArchiveState({ status: "saving", message: "Archivage des voies…" });
+    try {
+      const routes = await apiFetch("/routes");
+      const activeRoutes = Array.isArray(routes)
+        ? routes.filter((route) => route?.active !== false)
+        : [];
+
+      if (activeRoutes.length === 0) {
+        setRouteArchiveState({ status: "success", message: "Aucune voie active à archiver." });
+        return;
+      }
+
+      const results = await Promise.allSettled(
+        activeRoutes.map((route) => apiFetch(`/routes/${encodeURIComponent(route.id)}`, {
+          method: "PUT",
+          body: JSON.stringify({ active: false }),
+        })),
+      );
+      const archivedCount = results.filter(
+        (result) => result.status === "fulfilled" && result.value?.active === false,
+      ).length;
+      const failedCount = activeRoutes.length - archivedCount;
+
+      if (failedCount > 0) {
+        setRouteArchiveState({
+          status: "error",
+          message: `Archivage incomplet : ${archivedCount}/${activeRoutes.length} voie(s) archivée(s). Rechargement…`,
+        });
+        window.setTimeout(() => window.location.reload(), 1400);
+        return;
+      }
+
+      setRouteArchiveState({
+        status: "success",
+        message: `${archivedCount} voie${archivedCount > 1 ? "s" : ""} archivée${archivedCount > 1 ? "s" : ""}. Rechargement…`,
+      });
+      window.setTimeout(() => window.location.reload(), 900);
+    } catch (error) {
+      setRouteArchiveState({
+        status: "error",
+        message: `Archivage impossible : ${String(error?.message || error)}`,
+      });
+    }
+  }
 
   async function loadBackups() {
     const result = await apiFetch("/admin/backups");
@@ -188,12 +251,56 @@ export default function Logs({ USE_API, canManageAccountsAndLogs, adminAccessLog
 
   return (
     <>
-      <ServerSection title="Logs" summary={`${adminAccessLogs.length} événement${adminAccessLogs.length > 1 ? "s" : ""}`}>
+      <ServerSection title="Gestion des voies" summary="Archive les voies actives sans supprimer leur historique">
+        <div className="small" style={{ marginBottom: 10 }}>
+          Les voies archivées restent conservées avec leurs réalisations, mais ne sont plus affichées dans l’onglet Voies.
+        </div>
+        <Button
+          variant="danger"
+          disabled={routeArchiveState.status === "saving"}
+          onClick={archiveActiveRoutes}
+        >
+          {routeArchiveState.status === "saving" ? "Archivage…" : "Archiver les voies"}
+        </Button>
+        {routeArchiveState.message && (
+          <div
+            className={routeArchiveState.status === "error" ? "error" : routeArchiveState.status === "success" ? "success" : "muted-box"}
+            style={{ marginTop: 10 }}
+          >
+            {routeArchiveState.message}
+          </div>
+        )}
+      </ServerSection>
+
+      <ServerSection title="Analyse technique" summary="Règles et seuils de l’analyse vidéo MediaPipe">
+        <VideoAnalysisRulesAdmin />
+      </ServerSection>
+
+      <ServerSection title="Import / export des données métier">
+        <div className="group">
+          <Button variant="secondary" onClick={exportAllData}>Export JSON</Button>
+          <label className="pill" style={{ cursor: "pointer" }}>Import JSON<input type="file" accept=".json,application/json" style={{ display: "none" }} onChange={importJsonFile} /></label>
+        </div>
+        {importMessage && <div className="success" style={{ marginTop: 10 }}>{importMessage}</div>}
+      </ServerSection>
+
+      <ServerSection title="Logs" summary={`${displayedLogs.length} événement${displayedLogs.length > 1 ? "s" : ""} affiché${displayedLogs.length > 1 ? "s" : ""}`}>
+        <div className="group" style={{ marginBottom: 12 }}>
+          <Button variant="secondary" onClick={onRefreshLogs}>Actualiser les logs</Button>
+          <Button variant="secondary" onClick={() => setAccountLogsOnly((value) => !value)}>
+            {accountLogsOnly ? "Afficher tous les logs" : "Création de compte uniquement"}
+          </Button>
+        </div>
+        <div className="small" style={{ marginBottom: 12 }}>
+          Les diagnostics de création de compte affichent le requestId, l’étape atteinte et les détails techniques utiles, sans mot de passe ni token.
+        </div>
         <div className="stack" style={{ minWidth: 0, maxWidth: "100%" }}>
-          {adminAccessLogs.length === 0 ? (
-            <div className="muted-box">Aucun log disponible.</div>
+          {displayedLogs.length === 0 ? (
+            <div className="muted-box">
+              {accountLogsOnly ? "Aucun diagnostic récent de création de compte." : "Aucun log disponible."}
+            </div>
           ) : (
-            adminAccessLogs.map((log) => (
+            displayedLogs.map((log) => (
               <div
                 className="subcard"
                 key={log.id}
@@ -214,6 +321,14 @@ export default function Logs({ USE_API, canManageAccountsAndLogs, adminAccessLog
                 <div className="small" style={logTextStyle}>
                   {log.ip_address || "IP inconnue"} · {log.user_agent || "navigateur inconnu"}
                 </div>
+                {log.details?.requestId && (
+                  <div className="small" style={logTextStyle}><strong>Request ID :</strong> {log.details.requestId}</div>
+                )}
+                {(log.details?.stage || log.details?.diagnosticStage) && (
+                  <div className="small" style={logTextStyle}>
+                    <strong>Étape :</strong> {log.details.stage || log.details.diagnosticStage}
+                  </div>
+                )}
                 {log.details_text && <div className="small" style={logTextStyle}>Détails : {log.details_text}</div>}
               </div>
             ))

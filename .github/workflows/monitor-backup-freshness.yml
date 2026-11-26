@@ -1,0 +1,52 @@
+name: Alerte intégrité des sauvegardes
+
+on:
+  schedule:
+    - cron: "45 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  recent_restore:
+    name: Vérifier une restauration PostgreSQL validée sous 36 h
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Signaler l'absence de restauration vérifiée
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from datetime import datetime, timezone, timedelta
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          url = (f"https://api.github.com/repos/{repo}/actions/workflows/"
+                 "verify-backups.yml/runs?status=success&per_page=10")
+          request = urllib.request.Request(url, headers={
+              "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+          })
+          with urllib.request.urlopen(request, timeout=20) as response:
+              runs = json.load(response).get("workflow_runs", [])
+
+          now = datetime.now(timezone.utc)
+          threshold = now - timedelta(hours=36)
+          recent = [
+              run for run in runs
+              if run.get("status") == "completed"
+              and run.get("conclusion") == "success"
+              and datetime.fromisoformat(run["updated_at"].replace("Z", "+00:00")) >= threshold
+          ]
+          if not recent:
+              raise SystemExit("ERREUR : aucune restauration PostgreSQL contrôlée et réussie depuis 36 heures. Vérifier le runner du dépôt et les sauvegardes.")
+          print(f"Restauration vérifiée : {recent[0]['html_url']}")
+          PY

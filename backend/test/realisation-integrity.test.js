@@ -2,15 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { assertRealisationIntegrity } from "../realisation-integrity.js";
 
-function poolFor({ route = true, session = true, cotisation = true, belayer = true } = {}) {
+function poolFor({ route = true, session = true, belayer = true } = {}) {
   const queries = [];
   return {
     queries,
     async query(sql) {
       queries.push(sql);
       if (sql.includes("from routes")) return { rowCount: route ? 1 : 0, rows: route ? [{ id: "r1" }] : [] };
-      if (sql.includes("select s.date, p.cotisation")) {
-        return { rowCount: session ? 1 : 0, rows: session ? [{ date: "2026-08-29", cotisation }] : [] };
+      if (sql.includes("select s.date")) {
+        return { rowCount: session ? 1 : 0, rows: session ? [{ date: "2026-08-29" }] : [] };
       }
       if (sql.includes("select 1") && sql.includes("session_participants")) {
         return { rowCount: belayer ? 1 : 0, rows: belayer ? [{ ok: 1 }] : [] };
@@ -42,8 +42,10 @@ test("la validation reste compatible avec session_participants.participant_id en
     assertRealisationIntegrity({ pool, realisation: base, participantId: "1" }),
   );
 
-  const sessionSql = pool.queries.find((sql) => sql.includes("select s.date, p.cotisation"));
+  const sessionSql = pool.queries.find((sql) => sql.includes("select s.date"));
   assert.match(sessionSql, /sp\.participant_id::text = \$2/);
+  assert.match(sessionSql, /s\.status = 'encadree' and s\.encadrant_id::text = \$2/);
+  assert.match(sessionSql, /s\.status = 'libre' and s\.referent_id::text = \$2/);
   assert.doesNotMatch(sessionSql, /p\.id::text\s*=\s*sp\.participant_id/);
 });
 
@@ -51,6 +53,19 @@ test("la date doit être celle de la séance", async () => {
   await assert.rejects(
     assertRealisationIntegrity({ pool: poolFor(), realisation: { ...base, dateRealisation: "2026-08-28" }, participantId: "1" }),
     /date de réalisation/,
+  );
+});
+
+test("un binôme reste facultatif hors vol mais doit être inscrit s'il est renseigné", async () => {
+  await assert.doesNotReject(
+    assertRealisationIntegrity({ pool: poolFor(), realisation: base, participantId: "1" }),
+  );
+  await assert.rejects(
+    assertRealisationIntegrity({ pool: poolFor({ belayer: false }), realisation: { ...base, assureurId: "2" }, participantId: "1" }),
+    /même séance/,
+  );
+  await assert.doesNotReject(
+    assertRealisationIntegrity({ pool: poolFor(), realisation: { ...base, assureurId: "2" }, participantId: "1" }),
   );
 });
 
@@ -70,4 +85,6 @@ test("un vol exige un assureur distinct inscrit à la même séance", async () =
   );
   const belayerSql = pool.queries.find((sql) => sql.includes("select 1") && sql.includes("session_participants"));
   assert.match(belayerSql, /sp\.participant_id::text = \$2/);
+  assert.match(belayerSql, /s\.status = 'encadree' and s\.encadrant_id::text = \$2/);
+  assert.match(belayerSql, /s\.status = 'libre' and s\.referent_id::text = \$2/);
 });

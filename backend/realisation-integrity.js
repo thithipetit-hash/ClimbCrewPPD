@@ -24,11 +24,17 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
   // maintient la validation compatible pendant toute la phase de migration.
   const sessionResult = await pool.query(
     `
-      select s.date, p.cotisation
+      select s.date
       from sessions s
-      join session_participants sp on sp.session_id = s.id
-      join participants p on p.id::text = $2
-      where s.id = $1 and sp.participant_id::text = $2
+      where s.id = $1
+        and (
+          exists (
+            select 1 from session_participants sp
+            where sp.session_id = s.id and sp.participant_id::text = $2
+          )
+          or (s.status = 'encadree' and s.encadrant_id::text = $2)
+          or (s.status = 'libre' and s.referent_id::text = $2)
+        )
       limit 1
     `,
     [realisation.sessionId, ownerId],
@@ -41,13 +47,6 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
   }
 
   const session = sessionResult.rows[0];
-  if (!session.cotisation) {
-    throw new RealisationIntegrityError(
-      "Le grimpeur doit être cotisant pour enregistrer une réalisation.",
-      "participantId",
-      403,
-    );
-  }
   if (String(realisation.dateRealisation).slice(0, 10) !== String(session.date).slice(0, 10)) {
     throw new RealisationIntegrityError(
       "La date de réalisation doit correspondre à la date de la séance.",
@@ -55,8 +54,8 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
     );
   }
 
-  if (!realisation.chute) return;
   const assureurId = String(realisation.assureurId || "");
+  if (!realisation.chute && !assureurId) return;
   if (!assureurId) {
     throw new RealisationIntegrityError("Le binôme assureur est obligatoire lorsqu’un vol est enregistré.", "assureurId");
   }
@@ -67,9 +66,17 @@ export async function assertRealisationIntegrity({ pool, realisation, participan
   const belayerResult = await pool.query(
     `
       select 1
-      from session_participants sp
+      from sessions s
       join participants p on p.id::text = $2
-      where sp.session_id = $1 and sp.participant_id::text = $2
+      where s.id = $1
+        and (
+          exists (
+            select 1 from session_participants sp
+            where sp.session_id = s.id and sp.participant_id::text = $2
+          )
+          or (s.status = 'encadree' and s.encadrant_id::text = $2)
+          or (s.status = 'libre' and s.referent_id::text = $2)
+        )
       limit 1
     `,
     [realisation.sessionId, assureurId],

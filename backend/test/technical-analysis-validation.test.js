@@ -24,7 +24,7 @@ function validAnalysis() {
     engine: "MediaPipe Pose Landmarker Lite",
     engineVersion: "1.0.3",
     localProcessing: true,
-    rules,
+    rules: { ...rules },
     metrics: {
       duration: 60,
       analyzedSeconds: 54,
@@ -79,4 +79,27 @@ test("refuse un moteur ou des règles hors limites", () => {
   const badRules = validAnalysis();
   badRules.rules.sampleFps = 100;
   assert.throws(() => normalizeTechnicalAnalysis(badRules), /sampleFps/);
+});
+
+test("conserve la couverture temporelle 1.5 et refuse les durées incohérentes", () => {
+  const value = validAnalysis();
+  value.engineVersion = "1.5.0";
+  const motion = {cameraPairs:99,reliableCameraPairs:85,motionSeconds:45,pauseSeconds:40,feetSeconds:35};
+  value.metrics.motionObservation = motion;
+  assert.deepEqual(normalizeTechnicalAnalysis(value).metrics.motionObservation,motion);
+  value.metrics.motionObservation = {...motion,reliableCameraPairs:100};
+  assert.throws(()=>normalizeTechnicalAnalysis(value),/reliableCameraPairs/);
+  value.metrics.motionObservation = {...motion,pauseSeconds:46};
+  assert.throws(()=>normalizeTechnicalAnalysis(value),/pauseSeconds/);
+  value.metrics.motionObservation = {...motion,feetSeconds:-1};
+  assert.throws(()=>normalizeTechnicalAnalysis(value),/feetSeconds/);
+});
+
+test("conserve les nouveaux événements et la couverture 1.6",()=>{
+ const value=validAnalysis();value.engineVersion="1.6.0";
+ const contact={footTransfers:2,handTransfers:3,footReturns:1,footPivots:0,bothFeetSeconds:20,bothHandsSeconds:22,coverage:{leftFoot:25,rightFoot:30,leftHand:24,rightHand:26}};
+ value.metrics.contactObservation=contact;
+ value.metrics.events=[{type:"foot-transfer",side:"left",time:1,end:2,confidence:.55},{type:"hand-transfer",side:"right",time:3,end:4,confidence:.55}];
+ const r=normalizeTechnicalAnalysis(value);assert.deepEqual(r.metrics.contactObservation,contact);assert.deepEqual(r.metrics.events,value.metrics.events);
+ contact.bothFeetSeconds=26;assert.throws(()=>normalizeTechnicalAnalysis(value),/bothFeetSeconds/);
 });

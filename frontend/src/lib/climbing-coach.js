@@ -1,4 +1,6 @@
-const COACH_VERSION = 1;
+import { hasMotionCoverage } from "./video-analysis-observations.js";
+
+const COACH_VERSION = 2;
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -26,9 +28,15 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
   const bentSide = bentLeftRatio > bentRightRatio ? "gauche" : "droit";
   const armAsymmetryRatio = Math.max(0, finite(metrics.armAsymmetryRatio, 0));
   const dynamicMoves = Math.max(0, finite(metrics.dynamicMoves, 0));
+  const observationConfidence = Math.max(0, Math.min(1, finite(metrics.observationConfidence, detectionRatio)));
+  const hipPathEfficiency = Math.max(0, Math.min(1, finite(metrics.hipMotion?.pathEfficiency, 0)));
+  const hipTravel = Math.max(0, finite(metrics.hipMotion?.travelTorso, 0));
+  const hipLateral = Math.max(0, finite(metrics.bodyPosition?.meanHipLateralOffsetHipWidths, 0));
+  const compactRatio = ratio(metrics.bodyPosition?.compactSeconds, analyzedSeconds);
   const candidates = [];
+  const limitedMotion = metrics.motionObservation && !["motionSeconds", "pauseSeconds", "feetSeconds"].every(key => hasMotionCoverage(metrics, key));
 
-  if (longPauses.length > 0 || pauses.length >= 3) {
+  if (hasMotionCoverage(metrics, "pauseSeconds") && (longPauses.length > 0 || pauses.length >= 3)) {
     const threshold = finite(rules.longPauseMinSeconds, 4);
     candidates.push(priority(
       "coach-fluidity",
@@ -40,6 +48,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
       "Avant de bouger, préparer les deux ou trois mouvements suivants puis repartir sans rester suspendu inutilement.",
       "Sur 2 voies faciles, lire 3 mouvements à l’avance depuis le sol puis grimper avec l’objectif de garder un rythme continu. Une pause reste autorisée si elle est nécessaire à la sécurité.",
       "2 voies faciles, 1 essai concentré par voie.",
+      "Une immobilisation peut être un repos stratégique, une lecture ou un mousquetonnage ; elle ne constitue pas une erreur en soi.",
     ));
   }
 
@@ -55,15 +64,16 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
     ));
   }
 
-  if (footAdjustments >= 5) {
+  if (hasMotionCoverage(metrics, "feetSeconds") && footAdjustments >= 5) {
     candidates.push(priority(
       "coach-foot-precision",
       86 + Math.min(12, Math.round(footAdjustments)),
       "Précision des pieds",
-      `${Math.round(footAdjustments)} ajustements courts de pieds ont été détectés.`,
+      `${Math.round(footAdjustments)} repositionnements courts candidats ont été détectés.`,
       "Regarder la prise de pied jusqu’au contact et viser une pose unique, silencieuse, avant de transférer le poids.",
       "Faire des voies faciles en « pieds silencieux » : un placement volontaire par prise de pied, sans reprise sauf nécessité de sécurité.",
       "3 passages courts ou 2 voies faciles.",
+      "Le déplacement de cheville ne prouve pas un contact avec une prise ; confirmer les reprises d’appui à la vidéo.",
     ));
   }
 
@@ -81,7 +91,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
     ));
   }
 
-  if (dynamicMoves >= 3) {
+  if (hasMotionCoverage(metrics, "motionSeconds") && dynamicMoves >= 3) {
     candidates.push(priority(
       "coach-dynamic-control",
       45 + Math.min(12, dynamicMoves),
@@ -94,6 +104,45 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
     ));
   }
 
+  if (hipLateral >= 0.55) {
+    candidates.push(priority(
+      "coach-hip-position",
+      78 + Math.min(12, Math.round((hipLateral - 0.55) * 20)),
+      "Placement du bassin",
+      `Le bassin est fréquemment décalé latéralement par rapport aux épaules (indice moyen ${hipLateral.toFixed(2)} largeur de bassin).`,
+      "Observer si ce décalage sert une opposition, un drapeau ou une prise latérale ; sinon tester un recentrage ou une rotation du bassin.",
+      "Sur 2 passages faciles, comparer volontairement une version bassin recentré et une version avec rotation de hanche, puis conserver celle qui réduit l’effort des bras.",
+      "2 passages comparés.",
+      "Un décalage latéral peut être techniquement excellent : le tracé et les prises doivent confirmer l’interprétation.",
+    ));
+  }
+
+  if (compactRatio >= 0.35) {
+    candidates.push(priority(
+      "coach-leg-extension",
+      68 + Math.min(12, Math.round(compactRatio * 20)),
+      "Extension des jambes",
+      `Les genoux restent fortement fléchis environ ${Math.round(compactRatio * 100)} % du temps analysable.`,
+      "Chercher les moments où une poussée de jambe peut remplacer une traction prolongée des bras.",
+      "Sur une voie facile, marquer chaque mouvement en initiant la montée par la poussée du pied avant de tirer avec le bras.",
+      "2 voies faciles.",
+      "Une position compacte peut être nécessaire en toit, en dévers ou avant un mouvement dynamique.",
+    ));
+  }
+
+  if (hasMotionCoverage(metrics, "motionSeconds") && hipTravel >= 1.5 && hipPathEfficiency > 0 && hipPathEfficiency < 0.42) {
+    candidates.push(priority(
+      "coach-hip-trajectory",
+      72 + Math.min(15, Math.round((0.42 - hipPathEfficiency) * 100)),
+      "Trajectoire du bassin",
+      `La trajectoire observée du bassin comporte une faible composante verticale (indice ${Math.round(hipPathEfficiency * 100)} %).`,
+      "Revoir les changements de direction du bassin et chercher si certains déplacements latéraux peuvent être préparés plus tôt.",
+      "Sur une voie facile, grimper lentement en observant le chemin du bassin et chercher une trajectoire plus continue, sans imposer une position unique.",
+      "2 passages comparés en vidéo.",
+      "Cet indice décrit une trajectoire 2D du bassin, pas le centre de gravité réel ni la distance à la paroi.",
+    ));
+  }
+
   candidates.sort((a, b) => b.score - a.score || a.code.localeCompare(b.code));
   const priorities = candidates.slice(0, 2);
 
@@ -102,7 +151,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
       "coach-consolidation",
       10,
       "Consolider le geste",
-      "Aucun des signaux mécaniques suivis ne ressort fortement sur cette vidéo.",
+      limitedMotion ? "La couverture temporelle est partielle : filmer de plus près ou avec un cadre plus stable avant d’interpréter l’absence de signaux." : "Aucun des signaux mécaniques suivis ne ressort fortement sur cette vidéo.",
       "Conserver la qualité de placement et chercher surtout une grimpe relâchée et intentionnelle.",
       "Refaire une voie facile en choisissant un seul thème d’attention : pieds, bassin ou relâchement des bras.",
       "1 à 2 passages de consolidation.",
@@ -119,8 +168,10 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
       ? `Priorité entraîneur : ${titles[0]}.`
       : `Priorités entraîneur : ${titles[0]}, puis ${titles[1]}.`,
     priorities,
-    note: lowDetection
+    confidence: observationConfidence,
+    confidenceLabel: observationConfidence >= 0.8 ? "élevée" : observationConfidence >= 0.6 ? "moyenne" : "faible",
+    note: lowDetection || limitedMotion
       ? "La détection du corps est partielle : utiliser ces priorités comme pistes à confirmer visuellement ou sur une autre vidéo."
-      : "Les priorités sont déduites des mesures de cette vidéo et doivent être interprétées avec le contexte de la voie.",
+      : "Les priorités sont déduites des mesures de cette vidéo et doivent être interprétées avec le contexte de la voie. La trajectoire du bassin reste une mesure 2D et ne mesure pas directement le centre de gravité ni les forces.",
   };
 }

@@ -43,6 +43,7 @@ export default function RealisationVideoAnalysis({
   editable = false,
   onUpdate,
   onRefresh,
+  resultsOnly = false,
 }) {
   const inputRef = React.useRef(null);
   const [uploadedRouteUrls, setUploadedRouteUrls] = React.useState([]);
@@ -186,7 +187,7 @@ export default function RealisationVideoAnalysis({
 
   return (
     <>
-      <div className="subcard" style={{ marginTop: 10 }}>
+      {!resultsOnly && <div className="subcard" style={{ marginTop: 10 }}>
         <div className="card-header">
           <div>
             <strong>Vidéos de cette réalisation</strong>
@@ -274,12 +275,12 @@ export default function RealisationVideoAnalysis({
             ? "3 vidéos associées : effacez-en une avant d’en charger une autre."
             : "3 vidéos maximum par réalisation · 50 Mo maximum par fichier."}
         </div>
-      </div>
+      </div>}
 
       {analysisLoading && <div className="small" role="status" style={{ marginTop: 8 }}>Chargement des mesures enregistrées…</div>}
       {analysisLoadError && <div className="error" role="alert" style={{ marginTop: 8 }}>{analysisLoadError}</div>}
 
-      <VideoTechnicalAnalysis
+      {!analysisLoading && <VideoTechnicalAnalysis
         videoUrls={selectedVideoUrls}
         realisationId={realisation?.id || ""}
         technicalAnalysis={technicalAnalysis}
@@ -287,7 +288,7 @@ export default function RealisationVideoAnalysis({
         onSaved={(nextTechnicalAnalysis) => {
           setTechnicalAnalysis(nextTechnicalAnalysis || null);
         }}
-      />
+      />}
     </>
   );
 }

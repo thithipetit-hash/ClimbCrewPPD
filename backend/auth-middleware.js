@@ -94,10 +94,7 @@ export function createAuthMiddleware({
       res.once("finish", () => {
         const user = req.auth?.user;
         const path = String(req.path || req.url || "").split("?")[0];
-        const forwarded = req.headers["x-forwarded-for"];
-        const ipAddress = typeof forwarded === "string" && forwarded.length > 0
-          ? forwarded.split(",")[0].trim()
-          : req.ip || null;
+        const ipAddress = req.ip || req.socket?.remoteAddress || null;
         const details = {
           actor_email: user?.email || null,
           actor_role: user?.role || "admin",

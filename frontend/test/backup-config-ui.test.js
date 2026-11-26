@@ -15,12 +15,12 @@ const uiConfigSource = await readFile(
   "utf8",
 );
 
-test("l'onglet Log devient Administration Serveur", () => {
-  assert.match(uiConfigSource, /key: "logs", label: "Administration Serveur"/);
+test("l'onglet Log devient Administration", () => {
+  assert.match(uiConfigSource, /key: "logs", label: "Administration"/);
   assert.doesNotMatch(uiConfigSource, /label: "Log"/);
 });
 
-test("sauvegardes et restauration sont déplacées dans Administration Serveur", () => {
+test("sauvegardes et restauration sont regroupées dans Administration", () => {
   assert.match(serverAdministrationSource, /Sauvegardes et restauration/);
   assert.match(serverAdministrationSource, /Restaurer/);
   assert.match(serverAdministrationSource, /Importer une sauvegarde \.dump/);
@@ -30,7 +30,7 @@ test("sauvegardes et restauration sont déplacées dans Administration Serveur",
   assert.doesNotMatch(administrationSource, /Restaurer/);
 });
 
-test("messagerie, diffusion et logs sont regroupés dans Administration Serveur", () => {
+test("messagerie, diffusion et logs sont regroupés dans Administration", () => {
   assert.match(serverAdministrationSource, /title="Logs"/);
   assert.match(serverAdministrationSource, /title="Messagerie"/);
   assert.match(serverAdministrationSource, /Adresse d’expédition/);
@@ -40,7 +40,7 @@ test("messagerie, diffusion et logs sont regroupés dans Administration Serveur"
   assert.doesNotMatch(administrationSource, /Diffuser un message/);
 });
 
-test("aucune adresse de sauvegarde n'est codée en dur dans l'administration serveur", () => {
+test("aucune adresse de sauvegarde n'est codée en dur dans l'administration", () => {
   assert.doesNotMatch(serverAdministrationSource, /cristal\.climbcrew@gmail\.com/);
 });
 

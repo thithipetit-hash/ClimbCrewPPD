@@ -1,8 +1,7 @@
 # =============================================================================
 # Image de production du frontend pour le serveur Linux
 # =============================================================================
-# Render construit directement le site statique avec render.yaml. Ce fichier
-# reste utilisé par Docker Compose sur Linux et produit le même bundle Vite.
+# Ce Dockerfile construit le site statique utilisé par Docker Compose sur Linux.
 # Le contexte Docker est la racine du dépôt afin que VERSION reste l'unique
 # source du numéro applicatif pendant la compilation conteneurisée.
 

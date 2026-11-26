@@ -5,6 +5,10 @@ import { buildClimbingCoach } from "../lib/climbing-coach.js";
 import { analyzeClimbingVideo } from "../lib/mediapipe-video-analysis.js";
 import { buildTechnicalAnalysisComparison } from "../lib/video-analysis-comparison.js";
 import { fetchVideoAnalysisRules } from "../lib/video-analysis-rules.js";
+import { observedPauseRatio, hasMotionCoverage } from "../lib/video-analysis-observations.js";
+import { AnalysisGraphics, ComparisonGraphics } from "./VideoAnalysisGraphics.jsx";
+import VideoSkeletonOverlay from "./VideoSkeletonOverlay.jsx";
+import { selectAnalysisUrl, resolveDisplayedAnalysis } from "../lib/video-analysis-result.js";
 
 function playableVideoUrl(url) {
   if (String(url || "").startsWith("/")) return `${API_BASE}${url}`;
@@ -75,11 +79,12 @@ export default function VideoTechnicalAnalysis({
   realisationId = "",
   technicalAnalysis = null,
   editable = false,
+  localOnly = false,
   onSaved,
 }) {
   const analyzableUrls = React.useMemo(
-    () => [...new Set((videoUrls || []).filter(isLocalVideoUrl))],
-    [videoUrls],
+    () => [...new Set((videoUrls || []).filter((url) => localOnly ? String(url).startsWith("blob:") : isLocalVideoUrl(url)))],
+    [videoUrls, localOnly],
   );
   const storedVideos = React.useMemo(() => {
     const videos = technicalAnalysis?.videos;
@@ -94,28 +99,33 @@ export default function VideoTechnicalAnalysis({
     [analyzableUrls, savedUrls],
   );
 
-  const [selectedUrl, setSelectedUrl] = React.useState(selectionUrls[0] || "");
+  const [requestedUrl, setSelectedUrl] = React.useState("");
+  const selectedUrl = selectAnalysisUrl(requestedUrl, selectionUrls, savedUrls);
   const [comparisonUrl, setComparisonUrl] = React.useState("");
-  const [analysis, setAnalysis] = React.useState(() => storedVideos[selectionUrls[0]] || null);
+  const [computedResult, setComputedResult] = React.useState(null);
   const [progress, setProgress] = React.useState(0);
+  const [analysisMode, setAnalysisMode] = React.useState("standard");
+  const [previousRun,setPreviousRun] = React.useState(null);
   const [error, setError] = React.useState("");
   const [saveError, setSaveError] = React.useState("");
   const [saveStatus, setSaveStatus] = React.useState("");
   const [analyzing, setAnalyzing] = React.useState(false);
+  const [poseReplay, setPoseReplay] = React.useState(null);
   const videoRef = React.useRef(null);
+  const resultRef = React.useRef(null);
   const abortRef = React.useRef(null);
 
   React.useEffect(() => {
-    const nextUrl = selectionUrls.includes(selectedUrl) ? selectedUrl : (selectionUrls[0] || "");
-    if (nextUrl !== selectedUrl) {
-      setSelectedUrl(nextUrl);
-      return;
-    }
-    setAnalysis(nextUrl ? (storedVideos[nextUrl] || null) : null);
     setError("");
     setSaveError("");
     setSaveStatus("");
-  }, [selectionUrls, selectedUrl, storedVideos]);
+  }, [selectedUrl]);
+
+  React.useEffect(() => {
+    if (!analyzing && computedResult?.url === selectedUrl && resultRef.current) {
+      resultRef.current.scrollIntoView({ block: "start", behavior: "auto" });
+    }
+  }, [analyzing, computedResult, selectedUrl]);
 
   React.useEffect(() => {
     const alternatives = savedUrls.filter((url) => url !== selectedUrl);
@@ -126,6 +136,7 @@ export default function VideoTechnicalAnalysis({
 
   React.useEffect(() => () => abortRef.current?.abort(), []);
 
+  const analysis = analyzing ? null : resolveDisplayedAnalysis(selectedUrl, computedResult, storedVideos);
   const videoAvailable = analyzableUrls.includes(selectedUrl);
   const primarySavedAnalysis = storedVideos[selectedUrl] || null;
   const comparisonAnalysis = comparisonUrl ? (storedVideos[comparisonUrl] || null) : null;
@@ -141,23 +152,40 @@ export default function VideoTechnicalAnalysis({
     const controller = new AbortController();
     abortRef.current = controller;
     setAnalyzing(true);
-    setAnalysis(null);
+    if (computedResult?.url === selectedUrl) setPreviousRun(computedResult);
+    else setPreviousRun(null);
+    setComputedResult(null);
     setError("");
     setSaveError("");
     setSaveStatus("");
     setProgress(0);
+    setPoseReplay(null);
+    const poseFrames = [];
     try {
       const rules = await fetchVideoAnalysisRules();
+      if (controller.signal.aborted) return;
       const result = await analyzeClimbingVideo(videoRef.current, {
         rules,
+        mode: analysisMode,
         signal: controller.signal,
         onProgress: setProgress,
+        onPoseFrame: (frame) => poseFrames.push(frame),
       });
       const resultWithCoach = {
         ...result,
         coach: buildClimbingCoach(result.metrics, result.rules),
       };
-      setAnalysis(resultWithCoach);
+      if (controller.signal.aborted) return;
+      setComputedResult({ url: selectedUrl, analysis: resultWithCoach });
+      setPoseReplay({ url: selectedUrl, frames: poseFrames, sampleFps: result.rules.sampleFps });
+      if (analysisMode === "legacy") {
+        setSaveStatus("Analyse de référence locale : les mesures enregistrées ne sont pas remplacées.");
+        return;
+      }
+      if (localOnly) {
+        setSaveStatus("Analyse locale terminée. Ni la vidéo ni les mesures ne sont enregistrées.");
+        return;
+      }
 
       if (!realisationId) {
         setSaveError("Analyse calculée, mais la réalisation ne peut pas être identifiée pour enregistrer les mesures.");
@@ -172,7 +200,7 @@ export default function VideoTechnicalAnalysis({
             body: JSON.stringify({ videoUrl: selectedUrl, analysis: resultWithCoach }),
           },
         );
-        setAnalysis(saved?.analysis || resultWithCoach);
+        setComputedResult({ url: selectedUrl, analysis: saved?.analysis || resultWithCoach });
         setSaveStatus("Mesures et conseils entraîneur enregistrés avec cette réalisation.");
         if (typeof onSaved === "function") await onSaved(saved?.technicalAnalysis);
       } catch (saveFailure) {
@@ -190,6 +218,7 @@ export default function VideoTechnicalAnalysis({
 
   function cancelAnalysis() {
     abortRef.current?.abort();
+    setSaveStatus("Analyse annulée.");
   }
 
   if (!selectionUrls.length) {
@@ -202,6 +231,8 @@ export default function VideoTechnicalAnalysis({
 
   const metrics = analysis?.metrics;
   const pauses = Array.isArray(metrics?.pauses) ? metrics.pauses : [];
+  const pauseRatio = observedPauseRatio(metrics);
+  const motionEvents = Array.isArray(metrics?.events) ? metrics.events : [];
   const recommendations = Array.isArray(analysis?.recommendations) ? analysis.recommendations : [];
   const coach = analysis?.coach || (metrics ? buildClimbingCoach(metrics, analysis?.rules || {}) : null);
   const coachPriorities = Array.isArray(coach?.priorities) ? coach.priorities : [];
@@ -221,6 +252,7 @@ export default function VideoTechnicalAnalysis({
           <select
             aria-label="Vidéo ou analyse technique"
             value={selectedUrl}
+            disabled={analyzing}
             onChange={(event) => {
               setSelectedUrl(event.target.value);
               setError("");
@@ -242,16 +274,20 @@ export default function VideoTechnicalAnalysis({
       </div>
 
       {videoAvailable ? (
+        <div style={{ position: "relative", marginTop: 8 }}>
         <video
           ref={videoRef}
           controls
           playsInline
           preload="metadata"
+          onError={() => setError("Cette vidéo ne peut pas être lue par le navigateur. Essayez un fichier MP4 compatible.")}
           src={playableVideoUrl(selectedUrl)}
-          style={{ width: "100%", maxHeight: "58vh", marginTop: 8, borderRadius: 12, background: "#000" }}
+          style={{ display: "block", width: "100%", maxHeight: "58vh", objectFit: "contain", borderRadius: 12, background: "#000" }}
         >
           Votre navigateur ne permet pas la lecture de cette vidéo.
         </video>
+        {poseReplay?.url === selectedUrl && !analyzing && <VideoSkeletonOverlay videoRef={videoRef} frames={poseReplay.frames} sampleFps={poseReplay.sampleFps} />}
+        </div>
       ) : (
         <div className="muted-box" style={{ marginTop: 8 }}>
           La vidéo n’est plus disponible, mais les mesures de son analyse technique sont conservées avec la réalisation.
@@ -260,11 +296,20 @@ export default function VideoTechnicalAnalysis({
 
       {videoAvailable && editable && (
         <div className="group" style={{ marginTop: 10 }}>
+          <label className="small">Mode d’analyse <select value={analysisMode} disabled={analyzing} onChange={event => setAnalysisMode(event.target.value)} aria-label="Mode d’analyse">
+            <option value="standard">Standard — cycles de contact</option>
+            <option value="detailed">Approfondi — 8 images/s</option>
+            <option value="legacy">Référence — moteur 1.5</option>
+          </select></label>
           <Button onClick={runAnalysis} disabled={analyzing}>{analysis ? "Relancer l’analyse" : "Analyser la technique"}</Button>
           {analyzing && <Button variant="secondary" onClick={cancelAnalysis}>Annuler</Button>}
           {analyzing && <span className="small">Analyse {Math.round(progress * 100)} %</span>}
         </div>
       )}
+
+      {analysis?.metrics && <Button type="button" variant="secondary" onClick={() => resultRef.current?.scrollIntoView({ block: "start" })}>Voir les résultats</Button>}
+
+      {videoAvailable && analysis && !analyzing && poseReplay?.url !== selectedUrl && <p className="small">Relancer l’analyse pour afficher le squelette : les repères détaillés restent uniquement en mémoire sur cet appareil.</p>}
 
       {analyzing && (
         <progress value={progress} max={1} style={{ width: "100%", marginTop: 8 }} aria-label="Progression de l’analyse vidéo" />
@@ -274,16 +319,45 @@ export default function VideoTechnicalAnalysis({
       {saveError && <div className="error" style={{ marginTop: 10 }}>{saveError}</div>}
       {saveStatus && <div className="small" role="status" style={{ marginTop: 10 }}>{saveStatus}</div>}
 
+      {!analysis && !analyzing && !error && !saveError && <p className="small" role="status">Aucun résultat pour cette vidéo. {videoAvailable && editable ? "Cliquez sur Analyser la technique." : "Aucune mesure disponible."}</p>}
       {analysis && metrics && (
-        <div style={{ marginTop: 12 }}>
+        <div ref={resultRef} style={{ marginTop: 12, scrollMarginTop: 16 }}>
+          <h3>Résultats de l’analyse</h3>
+          {analysis.engineVersion && !metrics.motionObservation && <div className="muted-box">Ancienne méthode ({analysis.engineVersion}) : les mouvements de caméra et le bruit articulaire peuvent gonfler les événements. Relancer l’analyse avec le moteur actuel pour obtenir des mesures filtrées.</div>}
+          {metrics.motionObservation && <div className="muted-box small">Moteur {analysis.engineVersion} · compensation de translation du mur · couverture temporelle : mouvements {Math.round(100*metrics.motionObservation.motionSeconds/metrics.duration)} %, pieds {Math.round(100*metrics.motionObservation.feetSeconds/metrics.duration)} %, pauses {Math.round(100*metrics.motionObservation.pauseSeconds/metrics.duration)} %. Les périodes insuffisamment observables ne sont pas des repos. Les appuis restent des candidats.</div>}
           <div className="stats-grid">
             <Metric label="Corps détecté" value={analysis.display?.detection || `${Math.round((Number(metrics.detectionRatio) || 0) * 100)} %`} />
-            <Metric label="Pauses" value={pauses.length} />
-            <Metric label="Ajustements pieds" value={Number(metrics.footAdjustments?.total || 0)} />
-            <Metric label="Pics dynamiques" value={Number(metrics.dynamicMoves || 0)} />
+            <Metric label="Durée vidéo" value={formatTimestamp(metrics.duration)} />
+            <Metric label="Temps analysable" value={formatTimestamp(metrics.analyzedSeconds)} />
+            <Metric label="Pauses détectées" value={hasMotionCoverage(metrics,"pauseSeconds") ? pauses.length : "Couverture insuffisante"} />
+            <Metric label="Pauses longues" value={hasMotionCoverage(metrics,"pauseSeconds") && Array.isArray(metrics.longPauses) ? metrics.longPauses.length : "—"} />
+            <Metric label="Temps immobile observé" value={pauseRatio === null || !hasMotionCoverage(metrics,"pauseSeconds") ? "—" : `${Math.round(pauseRatio * 100)} %`} />
+            <Metric label="Repositionnements pieds candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? Number(metrics.footAdjustments?.total || 0) : "Couverture insuffisante"} />
+            {metrics.contactObservation && <>
+               <Metric label="Transferts pieds candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? metrics.contactObservation.footTransfers : "Couverture insuffisante"} />
+               <Metric label="Transferts mains candidats" value={metrics.contactObservation.bothHandsSeconds/metrics.duration >= .5 ? metrics.contactObservation.handTransfers : "Couverture insuffisante"} />
+               <Metric label="Retours de pied candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? metrics.contactObservation.footReturns : "—"} />
+               <Metric label="Pivots de pied candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? metrics.contactObservation.footPivots : "—"} />
+             </>}
+             <Metric label="Pics dynamiques candidats" value={hasMotionCoverage(metrics,"motionSeconds") ? Number(metrics.dynamicMoves || 0) : "Couverture insuffisante"} />
+            <Metric label="Confiance observation" value={`${Math.round((Number(metrics.observationConfidence ?? metrics.detectionRatio) || 0) * 100)} %`} />
+            <Metric label="Composante verticale du bassin" value={metrics.hipMotion && hasMotionCoverage(metrics,"motionSeconds") ? `${Math.round((Number(metrics.hipMotion.pathEfficiency) || 0) * 100)} %` : "—"} />
+            <Metric label="Décalage bassin" value={metrics.bodyPosition ? `${Number(metrics.bodyPosition.meanHipLateralOffsetHipWidths || 0).toFixed(2)} × largeur bassin` : "—"} />
+            <Metric label="Position compacte" value={metrics.bodyPosition ? `${Math.round((Number(metrics.bodyPosition.compactSeconds || 0) / Math.max(1, Number(metrics.analyzedSeconds || 1))) * 100)} %` : "—"} />
+            <Metric label="Angle moyen genoux" value={metrics.meanKneeAngleDegrees != null && Number.isFinite(Number(metrics.meanKneeAngleDegrees)) ? `${Math.round(Number(metrics.meanKneeAngleDegrees))}°` : "—"} />
             <Metric label="Bras gauche fléchi" value={analysis.display?.bentLeft || formatTimestamp(metrics.bentArmSeconds?.left)} />
             <Metric label="Bras droit fléchi" value={analysis.display?.bentRight || formatTimestamp(metrics.bentArmSeconds?.right)} />
           </div>
+
+          {metrics.contactObservation && <div className="muted-box small">Cycles 2D déplacement–stabilisation · {analysis.rules?.sampleFps} images/s. Prises non localisées : contacts non confirmés. Couverture pieds G/D : {Math.round(100*metrics.contactObservation.coverage.leftFoot/metrics.duration)} / {Math.round(100*metrics.contactObservation.coverage.rightFoot/metrics.duration)} % ; mains G/D : {Math.round(100*metrics.contactObservation.coverage.leftHand/metrics.duration)} / {Math.round(100*metrics.contactObservation.coverage.rightHand/metrics.duration)} %.</div>}
+           {previousRun?.url === selectedUrl && previousRun.analysis?.metrics && <div className="muted-box small">
+             <strong>Comparaison des deux dernières analyses de cette vidéo (en mémoire)</strong>
+             <div>Précédente : moteur {previousRun.analysis.engineVersion}, {previousRun.analysis.rules?.sampleFps} images/s · Actuelle : moteur {analysis.engineVersion}, {analysis.rules?.sampleFps} images/s.</div>
+             <div>Ajustements pieds candidats : {hasMotionCoverage(previousRun.analysis.metrics,"feetSeconds") ? previousRun.analysis.metrics.footAdjustments?.total : "—"} → {hasMotionCoverage(metrics,"feetSeconds") ? metrics.footAdjustments?.total : "—"}.</div>
+             <div>Couverture pieds : {Math.round(100*(previousRun.analysis.metrics.motionObservation?.feetSeconds ?? 0)/previousRun.analysis.metrics.duration)} % → {Math.round(100*(metrics.motionObservation?.feetSeconds ?? 0)/metrics.duration)} %. Les deux méthodes diffèrent : moins d’événements ne prouve pas une meilleure précision.</div>
+           </div>}
+           <Button type="button" variant="secondary" onClick={() => { const blob = new Blob([JSON.stringify(analysis,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="analyse-"+analysis.engineVersion+".json";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000); }}>Exporter les mesures JSON</Button>
+           <AnalysisGraphics metrics={metrics} onSeek={videoAvailable && !analyzing ? (time) => { if (videoRef.current) { videoRef.current.currentTime = time; videoRef.current.pause(); } } : undefined} />
 
           {comparisonChoices.length > 0 && primarySavedAnalysis && (
             <div className="subcard" style={{ marginTop: 12 }}>
@@ -308,6 +382,7 @@ export default function VideoTechnicalAnalysis({
 
               {comparison && (
                 <>
+                  <ComparisonGraphics comparison={comparison} />
                   <div style={{ overflowX: "auto", marginTop: 8 }}>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
@@ -340,6 +415,7 @@ export default function VideoTechnicalAnalysis({
             <div className="subcard" style={{ marginTop: 12 }}>
               <strong>Couche entraîneur</strong>
               <div className="small" style={{ marginTop: 4 }}>{coach?.summary}</div>
+              {coach?.confidenceLabel && <div className="small" style={{ marginTop: 4 }}><b>Confiance :</b> {coach.confidenceLabel} ({Math.round((Number(coach.confidence) || 0) * 100)} %)</div>}
               <div className="stack" style={{ marginTop: 8 }}>
                 {coachPriorities.map((item, index) => (
                   <div className="muted-box" key={item.code}>
@@ -353,6 +429,23 @@ export default function VideoTechnicalAnalysis({
                 ))}
               </div>
               {coach?.note && <div className="small" style={{ marginTop: 8 }}>{coach.note}</div>}
+            </div>
+          )}
+
+          {motionEvents.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <strong>Timeline technique</strong>
+              <div className="small" style={{ marginTop: 4 }}>Préparation → exécution → stabilisation et mouvements candidats. « ? » signifie que la technique doit être confirmée visuellement. Cliquer pour revoir le passage.</div>
+              <div className="group" style={{ marginTop: 6 }}>
+                {motionEvents.slice(0, 24).map((event, index) => {
+                  const labels = { "foot-transfer": "Transfert pied ?", "hand-transfer": "Transfert main ?", "foot-return": "Retour pied ?", "foot-pivot": "Pivot pied ?", pause: "Pause", dynamic: "Dynamique", "foot-adjustment": event.side === "left" ? "Ajustement pied G" : "Ajustement pied D", cross: event.side === "left" ? "Croisé main G ?" : "Croisé main D ?", "foot-switch": "Changement de pieds ?", "flag-candidate": event.side === "left" ? "Drapeau G ?" : "Drapeau D ?", movement: "Préparation", "movement-peak": "Exécution", stabilization: "Stabilisation" };
+                  return videoAvailable ? (
+                    <button type="button" className="pill" key={`${event.type}-${event.time}-${index}`} onClick={() => { if (!videoRef.current) return; videoRef.current.currentTime = Math.max(0, event.time - 1); videoRef.current.play().catch(() => {}); }}>
+                      {formatTimestamp(event.time)} · {labels[event.type] || event.type}
+                    </button>
+                  ) : <span className="pill" key={`${event.type}-${event.time}-${index}`}>{formatTimestamp(event.time)} · {labels[event.type] || event.type}</span>;
+                })}
+              </div>
             </div>
           )}
 
@@ -397,7 +490,7 @@ export default function VideoTechnicalAnalysis({
           )}
 
           <div className="small" style={{ marginTop: 10 }}>
-            Ces résultats sont des indicateurs mécaniques expérimentaux, pas un jugement automatique de la qualité du geste. Les seuils sont ajustables dans Administration → Analyse technique.
+            Ces résultats sont des indicateurs mécaniques 2D expérimentaux. La couverture de détection ne mesure pas la précision des angles. Les pauses incluent les repos utiles et les mousquetonnages ; le bassin n’est pas le centre de masse réel. Comparer de préférence la même voie, le même cadrage et les mêmes règles. Les seuils sont ajustables dans Administration → Analyse technique.
           </div>
         </div>
       )}

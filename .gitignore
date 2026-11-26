@@ -15,6 +15,7 @@ dist/
 *.secrets
 
 # Données privées / imports locaux
+docs/imports/
 backend/import-data.json
 backend/*.private.json
 *.private.json

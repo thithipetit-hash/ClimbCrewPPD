@@ -13,6 +13,7 @@ const ALLOWED_THEMES = new Set([
   "bloc_neon",
   "glacier",
   "cristal",
+  "daltonien",
 ]);
 
 export function installAuthSessionRoutes(app, {
