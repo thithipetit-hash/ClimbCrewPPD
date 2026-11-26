@@ -24,7 +24,7 @@ function validAnalysis() {
     engine: "MediaPipe Pose Landmarker Lite",
     engineVersion: "1.0.3",
     localProcessing: true,
-    rules,
+    rules: { ...rules },
     metrics: {
       duration: 60,
       analyzedSeconds: 54,
