@@ -45,6 +45,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
       "Avant de bouger, préparer les deux ou trois mouvements suivants puis repartir sans rester suspendu inutilement.",
       "Sur 2 voies faciles, lire 3 mouvements à l’avance depuis le sol puis grimper avec l’objectif de garder un rythme continu. Une pause reste autorisée si elle est nécessaire à la sécurité.",
       "2 voies faciles, 1 essai concentré par voie.",
+      "Une immobilisation peut être un repos stratégique, une lecture ou un mousquetonnage ; elle ne constitue pas une erreur en soi.",
     ));
   }
 
@@ -130,7 +131,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
       "coach-hip-trajectory",
       72 + Math.min(15, Math.round((0.42 - hipPathEfficiency) * 100)),
       "Trajectoire du bassin",
-      `La trajectoire observée du bassin est assez indirecte (indice de progression ${Math.round(hipPathEfficiency * 100)} %).`,
+      `La trajectoire observée du bassin comporte une faible composante verticale (indice ${Math.round(hipPathEfficiency * 100)} %).`,
       "Revoir les changements de direction du bassin et chercher si certains déplacements latéraux peuvent être préparés plus tôt.",
       "Sur une voie facile, grimper lentement en observant le chemin du bassin et chercher une trajectoire plus continue, sans imposer une position unique.",
       "2 passages comparés en vidéo.",

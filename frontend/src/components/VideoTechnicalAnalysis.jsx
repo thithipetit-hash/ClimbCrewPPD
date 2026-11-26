@@ -5,6 +5,7 @@ import { buildClimbingCoach } from "../lib/climbing-coach.js";
 import { analyzeClimbingVideo } from "../lib/mediapipe-video-analysis.js";
 import { buildTechnicalAnalysisComparison } from "../lib/video-analysis-comparison.js";
 import { fetchVideoAnalysisRules } from "../lib/video-analysis-rules.js";
+import { observedPauseRatio } from "../lib/video-analysis-observations.js";
 
 function playableVideoUrl(url) {
   if (String(url || "").startsWith("/")) return `${API_BASE}${url}`;
@@ -75,11 +76,12 @@ export default function VideoTechnicalAnalysis({
   realisationId = "",
   technicalAnalysis = null,
   editable = false,
+  localOnly = false,
   onSaved,
 }) {
   const analyzableUrls = React.useMemo(
-    () => [...new Set((videoUrls || []).filter(isLocalVideoUrl))],
-    [videoUrls],
+    () => [...new Set((videoUrls || []).filter((url) => localOnly ? String(url).startsWith("blob:") : isLocalVideoUrl(url)))],
+    [videoUrls, localOnly],
   );
   const storedVideos = React.useMemo(() => {
     const videos = technicalAnalysis?.videos;
@@ -148,6 +150,7 @@ export default function VideoTechnicalAnalysis({
     setProgress(0);
     try {
       const rules = await fetchVideoAnalysisRules();
+      if (controller.signal.aborted) return;
       const result = await analyzeClimbingVideo(videoRef.current, {
         rules,
         signal: controller.signal,
@@ -157,7 +160,12 @@ export default function VideoTechnicalAnalysis({
         ...result,
         coach: buildClimbingCoach(result.metrics, result.rules),
       };
+      if (controller.signal.aborted) return;
       setAnalysis(resultWithCoach);
+      if (localOnly) {
+        setSaveStatus("Analyse locale terminée. Ni la vidéo ni les mesures ne sont enregistrées.");
+        return;
+      }
 
       if (!realisationId) {
         setSaveError("Analyse calculée, mais la réalisation ne peut pas être identifiée pour enregistrer les mesures.");
@@ -202,6 +210,7 @@ export default function VideoTechnicalAnalysis({
 
   const metrics = analysis?.metrics;
   const pauses = Array.isArray(metrics?.pauses) ? metrics.pauses : [];
+  const pauseRatio = observedPauseRatio(metrics);
   const motionEvents = Array.isArray(metrics?.events) ? metrics.events : [];
   const recommendations = Array.isArray(analysis?.recommendations) ? analysis.recommendations : [];
   const coach = analysis?.coach || (metrics ? buildClimbingCoach(metrics, analysis?.rules || {}) : null);
@@ -222,6 +231,7 @@ export default function VideoTechnicalAnalysis({
           <select
             aria-label="Vidéo ou analyse technique"
             value={selectedUrl}
+            disabled={analyzing}
             onChange={(event) => {
               setSelectedUrl(event.target.value);
               setError("");
@@ -248,6 +258,7 @@ export default function VideoTechnicalAnalysis({
           controls
           playsInline
           preload="metadata"
+          onError={() => setError("Cette vidéo ne peut pas être lue par le navigateur. Essayez un fichier MP4 compatible.")}
           src={playableVideoUrl(selectedUrl)}
           style={{ width: "100%", maxHeight: "58vh", marginTop: 8, borderRadius: 12, background: "#000" }}
         >
@@ -280,13 +291,14 @@ export default function VideoTechnicalAnalysis({
           <div className="stats-grid">
             <Metric label="Corps détecté" value={analysis.display?.detection || `${Math.round((Number(metrics.detectionRatio) || 0) * 100)} %`} />
             <Metric label="Pauses" value={pauses.length} />
+            <Metric label="Temps immobile observé" value={pauseRatio === null ? "—" : `${Math.round(pauseRatio * 100)} %`} />
             <Metric label="Ajustements pieds" value={Number(metrics.footAdjustments?.total || 0)} />
             <Metric label="Pics dynamiques" value={Number(metrics.dynamicMoves || 0)} />
             <Metric label="Confiance observation" value={`${Math.round((Number(metrics.observationConfidence ?? metrics.detectionRatio) || 0) * 100)} %`} />
-            <Metric label="Trajectoire bassin" value={metrics.hipMotion ? `${Math.round((Number(metrics.hipMotion.pathEfficiency) || 0) * 100)} % directe` : "—"} />
+            <Metric label="Composante verticale du bassin" value={metrics.hipMotion ? `${Math.round((Number(metrics.hipMotion.pathEfficiency) || 0) * 100)} %` : "—"} />
             <Metric label="Décalage bassin" value={metrics.bodyPosition ? `${Number(metrics.bodyPosition.meanHipLateralOffsetHipWidths || 0).toFixed(2)} × largeur bassin` : "—"} />
             <Metric label="Position compacte" value={metrics.bodyPosition ? `${Math.round((Number(metrics.bodyPosition.compactSeconds || 0) / Math.max(1, Number(metrics.analyzedSeconds || 1))) * 100)} %` : "—"} />
-            <Metric label="Angle moyen genoux" value={Number.isFinite(Number(metrics.meanKneeAngleDegrees)) ? `${Math.round(Number(metrics.meanKneeAngleDegrees))}°` : "—"} />
+            <Metric label="Angle moyen genoux" value={metrics.meanKneeAngleDegrees != null && Number.isFinite(Number(metrics.meanKneeAngleDegrees)) ? `${Math.round(Number(metrics.meanKneeAngleDegrees))}°` : "—"} />
             <Metric label="Bras gauche fléchi" value={analysis.display?.bentLeft || formatTimestamp(metrics.bentArmSeconds?.left)} />
             <Metric label="Bras droit fléchi" value={analysis.display?.bentRight || formatTimestamp(metrics.bentArmSeconds?.right)} />
           </div>
@@ -421,7 +433,7 @@ export default function VideoTechnicalAnalysis({
           )}
 
           <div className="small" style={{ marginTop: 10 }}>
-            Ces résultats sont des indicateurs mécaniques expérimentaux, pas un jugement automatique de la qualité du geste. Les seuils sont ajustables dans Administration → Analyse technique.
+            Ces résultats sont des indicateurs mécaniques 2D expérimentaux. La couverture de détection ne mesure pas la précision des angles. Les pauses incluent les repos utiles et les mousquetonnages ; le bassin n’est pas le centre de masse réel. Comparer de préférence la même voie, le même cadrage et les mêmes règles. Les seuils sont ajustables dans Administration → Analyse technique.
           </div>
         </div>
       )}

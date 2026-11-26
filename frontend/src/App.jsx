@@ -14,6 +14,7 @@ import Voies from "./pages/Voies.jsx";
 import Progression from "./pages/Progression.jsx";
 import Profil from "./pages/Profil.jsx";
 import Competences from "./pages/Competences.jsx";
+import AnalyseVideo from "./pages/AnalyseVideo.jsx";
 import Chat from "./pages/Chat.jsx";
 import Parametres from "./pages/Parametres.jsx";
 import Administration from "./pages/Administration.jsx";
@@ -1408,6 +1409,15 @@ async function handleThemePreferenceChange(nextTheme) {
         )}
 
         {tab === "competences" && <Competences accountId={authUser?.id} />}
+
+        {tab === "analyse_video" && (
+          <AnalyseVideo
+            myRealisations={myRealisations}
+            routesById={routesById}
+            onUpdate={updateRealisation}
+            onRefresh={() => reloadApiState({ isMounted: () => true })}
+          />
+        )}
 
         {tab === "chat" && (
           <Chat
