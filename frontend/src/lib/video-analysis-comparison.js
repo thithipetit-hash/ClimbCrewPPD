@@ -238,5 +238,7 @@ export function buildTechnicalAnalysisComparison(analysisA, analysisB) {
     };
   });
 
-  return { rows: [...buildCompatibilityRows(analysisA, analysisB), ...rows], recommendations };
+  const compatibility = buildCompatibilityRows(analysisA, analysisB);
+  const comparable = compatibility[0].deltaDisplay === "Identique" && compatibility[1].deltaDisplay === "Identiques";
+  return { rows: [...compatibility, ...rows], recommendations, comparable };
 }
