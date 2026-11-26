@@ -10,7 +10,7 @@ export function correctImageAspect(point, aspectRatio) {
 // Les pauses du moteur sont des intervalles disjoints ; fusionner aussi les
 // recouvrements éventuels des mesures historiques avant de calculer le ratio.
 export function observedPauseRatio(metrics) {
-  const seconds = metrics?.analyzedSeconds;
+  const seconds = metrics?.motionObservation?.pauseSeconds ?? metrics?.analyzedSeconds;
   if (!Number.isFinite(seconds) || seconds <= 0 || !Array.isArray(metrics?.pauses)) return null;
   const intervals = [];
   for (const pause of metrics.pauses) {
@@ -25,4 +25,11 @@ export function observedPauseRatio(metrics) {
     end = Math.max(end, stop);
   }
   return Math.min(1, total / seconds);
+}
+
+ // Les anciennes analyses n’ont pas de mesure de couverture temporelle distincte.
+export function hasMotionCoverage(metrics, key) {
+  if (!metrics?.motionObservation) return true;
+  return Number.isFinite(metrics.duration) && metrics.duration > 0
+    && Number.isFinite(metrics.motionObservation[key]) && metrics.motionObservation[key] >= metrics.duration * .5;
 }

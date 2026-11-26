@@ -1,6 +1,8 @@
 import { loadVideoAnalysisRules, normalizeVideoAnalysisRules } from "./video-analysis-rules.js";
-import { correctImageAspect } from "./video-analysis-observations.js";
+import { correctImageAspect, hasMotionCoverage } from "./video-analysis-observations.js";
 import { SKELETON_JOINTS } from "./video-analysis-display.js";
+import { createCameraTracker } from "./video-camera-motion.js";
+import { createMotionTracker } from "./video-motion-tracking.js";
 
 const MEDIAPIPE_MODULE_URL = "/mediapipe-runtime/vision_bundle.mjs";
 const MEDIAPIPE_WASM_URL = "/mediapipe-runtime/wasm";
@@ -175,7 +177,7 @@ function buildRecommendations(metrics, rules) {
   const bentLeftRatio = metrics.bentArmSeconds.left / analyzedSeconds;
   const bentRightRatio = metrics.bentArmSeconds.right / analyzedSeconds;
 
-  if (metrics.longPauses.length) {
+  if (hasMotionCoverage(metrics, "pauseSeconds") && metrics.longPauses.length) {
     pushRecommendation(
       recommendations,
       "long-pauses",
@@ -183,7 +185,7 @@ function buildRecommendations(metrics, rules) {
       "Anticipation / fluidité",
       `${metrics.longPauses.length} immobilisation${metrics.longPauses.length > 1 ? "s" : ""} de plus de ${rules.longPauseMinSeconds} s détectée${metrics.longPauses.length > 1 ? "s" : ""}.`,
     );
-  } else if (metrics.pauses.length) {
+  } else if (hasMotionCoverage(metrics, "pauseSeconds") && metrics.pauses.length) {
     pushRecommendation(
       recommendations,
       "pauses",
@@ -214,18 +216,18 @@ function buildRecommendations(metrics, rules) {
     );
   }
 
-  if (metrics.footAdjustments.total >= 5) {
+  if (hasMotionCoverage(metrics, "feetSeconds") && metrics.footAdjustments.total >= 5) {
     const side = metrics.footAdjustments.left > metrics.footAdjustments.right ? "gauche" : "droit";
     pushRecommendation(
       recommendations,
       "foot-adjustments",
       "warning",
       "Précision des pieds",
-      `${metrics.footAdjustments.total} ajustements courts de pieds détectés, davantage à ${side}. Revoir les passages correspondants avant de conclure à une imprécision.`,
+      `${metrics.footAdjustments.total} repositionnements courts candidats, davantage à ${side}. Les contacts avec les prises ne sont pas vérifiés ; revoir les passages avant de conclure à une imprécision.`,
     );
   }
 
-  if (metrics.dynamicMoves >= 3) {
+  if (hasMotionCoverage(metrics, "motionSeconds") && metrics.dynamicMoves >= 3) {
     pushRecommendation(
       recommendations,
       "dynamic-moves",
@@ -268,6 +270,12 @@ export async function analyzeClimbingVideo(video, options = {}) {
   for (let time = 0; time < duration; time += sampleStep) sampleTimes.push(time);
   if (!sampleTimes.length || sampleTimes.at(-1) < duration - 0.05) sampleTimes.push(Math.max(0, duration - 0.001));
 
+  const camera = createCameraTracker(video);
+  const motionTracker = createMotionTracker(rules, video.videoHeight);
+  let reliableCameraPairs = 0;
+  let motionSeconds = 0;
+  let pauseSeconds = 0;
+  let feetSeconds = 0;
   const originalTime = video.currentTime;
   const wasPaused = video.paused;
   video.pause();
@@ -285,12 +293,9 @@ export async function analyzeClimbingVideo(video, options = {}) {
   let rightBentSeconds = 0;
   let leftLockSeconds = 0;
   let rightLockSeconds = 0;
-  let lastLeftFootAdjustment = -Infinity;
-  let lastRightFootAdjustment = -Infinity;
   let leftFootAdjustments = 0;
   let rightFootAdjustments = 0;
   let dynamicMoves = 0;
-  let previousDynamic = false;
   let hipTravelTorso = 0;
   let hipVerticalProgressTorso = 0;
   let hipSpeedSum = 0;
@@ -311,6 +316,8 @@ export async function analyzeClimbingVideo(video, options = {}) {
   const hipTrajectory = [];
   let lastCrossEvent = -Infinity;
   let lastFlagEvent = -Infinity;
+  let previousCrossSide = null;
+  let previousFlagSide = null;
   let lastFootSwitchEvent = -Infinity;
   let movementStart = null;
   let movementPeakTime = null;
@@ -337,7 +344,8 @@ export async function analyzeClimbingVideo(video, options = {}) {
     }
     leftLockStart = null;
     rightLockStart = null;
-    previousDynamic = false;
+    previousCrossSide = null;
+    previousFlagSide = null;
   };
 
   try {
@@ -345,6 +353,8 @@ export async function analyzeClimbingVideo(video, options = {}) {
       if (options.signal?.aborted) throw new DOMException("Analyse annulée", "AbortError");
       const time = sampleTimes[index];
       await seekVideo(video, time);
+      const cameraTranslation = camera.capture();
+      if (cameraTranslation) reliableCameraPairs += 1;
       const result = poseLandmarker.detectForVideo(video, Math.round(time * 1000));
       const landmarks = result?.landmarks?.[0];
       if (options.onPoseFrame) {
@@ -368,6 +378,8 @@ export async function analyzeClimbingVideo(video, options = {}) {
         // Une zone non détectée n'est pas une zone immobile : on ferme les
         // intervalles au dernier instant réellement observé et on repart à zéro.
         finishTrackedIntervals(previousTime);
+        motionTracker.reset();
+        movementStart = null; movementPeakTime = null; movementPeakSpeed = 0;
         previousPose = null;
         previousTime = null;
         continue;
@@ -398,91 +410,66 @@ export async function analyzeClimbingVideo(video, options = {}) {
         shoulderHipOffsetSamples += 1;
         shoulderHipOffsetMax = Math.max(shoulderHipOffsetMax, offset);
       }
-      if (previousPose && previousTime != null) {
-        const dt = Math.max(0.001, time - previousTime);
-        const torsoLength = Math.max(0.01, (pose.torsoLength + previousPose.torsoLength) / 2);
-        const hipSpeed = normalizeObservedSpeed(previousPose.hipCenter, pose.hipCenter, torsoLength, dt);
-        const leftWristSpeed = normalizeObservedSpeed(previousPose.leftWrist, pose.leftWrist, torsoLength, dt);
-        const rightWristSpeed = normalizeObservedSpeed(previousPose.rightWrist, pose.rightWrist, torsoLength, dt);
-        const leftAnkleSpeed = normalizeObservedSpeed(previousPose.leftAnkle, pose.leftAnkle, torsoLength, dt);
-        const rightAnkleSpeed = normalizeObservedSpeed(previousPose.rightAnkle, pose.rightAnkle, torsoLength, dt);
-        const availableSpeeds = [hipSpeed, leftWristSpeed, rightWristSpeed, leftAnkleSpeed, rightAnkleSpeed]
-          .filter(Number.isFinite);
-        const bodySpeed = availableSpeeds.length ? availableSpeeds.reduce((sum, value) => sum + value, 0) / availableSpeeds.length : 0;
-        const movementThreshold = Math.max(rules.pauseSpeedTorsoPerSecond * 2.2, 0.18);
-        if (bodySpeed >= movementThreshold) {
-          if (movementStart == null) { movementStart = previousTime; movementPeakTime = time; movementPeakSpeed = bodySpeed; }
+      const motion = motionTracker.update(pose, time, cameraTranslation);
+      if (!motion) {
+        finishInterval(pauses, pauseStart, previousTime, rules.pauseMinSeconds);
+        pauseStart = null;
+        movementStart = null; movementPeakTime = null; movementPeakSpeed = 0;
+        previousCrossSide = null; previousFlagSide = null;
+      } else {
+        const { dt, torso, hipSpeed, bodySpeed, stabilitySpeed, pauseSpeed } = motion;
+        motionSeconds += dt;
+        if (motion.feetKnown) feetSeconds += dt;
+        if (stabilitySpeed !== null) pauseSeconds += dt;
+        const movementThreshold = Math.max(pauseSpeed * 2.2, 0.18);
+        if (bodySpeed !== null && bodySpeed >= movementThreshold) {
+          if (movementStart == null) { movementStart = motion.previousTime; movementPeakTime = time; movementPeakSpeed = bodySpeed; }
           if (bodySpeed > movementPeakSpeed) { movementPeakSpeed = bodySpeed; movementPeakTime = time; }
-        } else if (movementStart != null && time - movementStart >= 0.35) {
-          movementSegments.push({ start: movementStart, peak: movementPeakTime, end: time, peakSpeed: movementPeakSpeed });
+        } else if (movementStart != null) {
+          if (motion.previousTime - movementStart >= 0.35) movementSegments.push({ start: movementStart, peak: movementPeakTime, end: motion.previousTime, peakSpeed: movementPeakSpeed });
           movementStart = null; movementPeakTime = null; movementPeakSpeed = 0;
         }
         if (Number.isFinite(hipSpeed)) {
           hipSpeedSum += hipSpeed;
           hipSpeedSamples += 1;
           maxHipSpeed = Math.max(maxHipSpeed, hipSpeed);
-          hipTravelTorso += distance(previousPose.hipCenter, pose.hipCenter) / torsoLength;
-          hipVerticalProgressTorso += Math.abs((pose.hipCenter.y || 0) - (previousPose.hipCenter.y || 0)) / torsoLength;
+          const travel = hipSpeed * dt;
+          const rawDistance = distance(motion.previous.hipCenter, motion.pose.hipCenter);
+          hipTravelTorso += travel;
+          if (rawDistance > 0) hipVerticalProgressTorso += travel * Math.abs(motion.pose.hipCenter.y-motion.previous.hipCenter.y)/rawDistance;
         }
 
-        if (bodySpeed <= rules.pauseSpeedTorsoPerSecond) {
-          if (pauseStart == null) pauseStart = previousTime;
+        if (stabilitySpeed !== null && stabilitySpeed <= (pauseStart == null ? pauseSpeed : pauseSpeed * 1.8)) {
+          if (pauseStart == null) pauseStart = motion.previousTime;
         } else if (pauseStart != null) {
-          finishInterval(pauses, pauseStart, time, rules.pauseMinSeconds);
+          finishInterval(pauses, pauseStart, motion.previousTime, rules.pauseMinSeconds);
           pauseStart = null;
         }
 
-        const leftFootDistance = previousPose.leftAnkle && pose.leftAnkle
-          ? distance(previousPose.leftAnkle, pose.leftAnkle) / torsoLength
-          : null;
-        const rightFootDistance = previousPose.rightAnkle && pose.rightAnkle
-          ? distance(previousPose.rightAnkle, pose.rightAnkle) / torsoLength
-          : null;
-        const feetContextIsStable = Number.isFinite(hipSpeed)
-          && hipSpeed <= Math.max(0.2, rules.pauseSpeedTorsoPerSecond * 3);
-        if (
-          feetContextIsStable
-          && Number.isFinite(leftAnkleSpeed)
-          && Number.isFinite(leftFootDistance)
-          && leftAnkleSpeed >= rules.footAdjustmentSpeedTorsoPerSecond
-          && leftFootDistance <= rules.footAdjustmentMaxDistanceTorso
-          && time - lastLeftFootAdjustment >= rules.footAdjustmentMinGapSeconds
-        ) {
-          leftFootAdjustments += 1;
-          lastLeftFootAdjustment = time;
-          events.push({ type: "foot-adjustment", side: "left", time, confidence: 0.8 });
+        for (const side of motion.feet) {
+          if (side === "left") leftFootAdjustments += 1;
+          else rightFootAdjustments += 1;
+          events.push({ type: "foot-adjustment", side, time, confidence: 0.65 });
         }
-        if (
-          feetContextIsStable
-          && Number.isFinite(rightAnkleSpeed)
-          && Number.isFinite(rightFootDistance)
-          && rightAnkleSpeed >= rules.footAdjustmentSpeedTorsoPerSecond
-          && rightFootDistance <= rules.footAdjustmentMaxDistanceTorso
-          && time - lastRightFootAdjustment >= rules.footAdjustmentMinGapSeconds
-        ) {
-          rightFootAdjustments += 1;
-          lastRightFootAdjustment = time;
-          events.push({ type: "foot-adjustment", side: "right", time, confidence: 0.8 });
-        }
-
-        const dynamicSpeeds = [hipSpeed, leftWristSpeed, rightWristSpeed].filter(Number.isFinite);
-        const dynamicNow = dynamicSpeeds.some((speed) => speed >= rules.dynamicSpeedTorsoPerSecond);
-        if (dynamicNow && !previousDynamic) {
+        if (motion.dynamic) {
           dynamicMoves += 1;
-          events.push({ type: "dynamic", time, confidence: 0.75 });
+          events.push({ type: "dynamic", time, confidence: 0.65 });
         }
-        previousDynamic = dynamicNow;
+      }
 
+      if (motion && previousPose && previousTime != null) {
         const shoulderWidth = distance(pose.leftShoulder, pose.rightShoulder);
-        if (shoulderWidth > 0.005 && time - lastCrossEvent >= 1.2) {
+        if (shoulderWidth > 0.005) {
           const leftCross = pose.leftWrist && pose.rightShoulder && pose.leftWrist.x > pose.rightShoulder.x + shoulderWidth * 0.08;
           const rightCross = pose.rightWrist && pose.leftShoulder && pose.rightWrist.x < pose.leftShoulder.x - shoulderWidth * 0.08;
-          if (leftCross || rightCross) {
-            events.push({ type: "cross", side: leftCross ? "left" : "right", time, confidence: 0.7 });
+          const side = leftCross ? "left" : rightCross ? "right" : null;
+          if (side && side !== previousCrossSide && time - lastCrossEvent >= 1.2) {
+            events.push({ type: "cross", side, time, confidence: 0.55 });
             lastCrossEvent = time;
           }
+          previousCrossSide = side;
         }
-        if (pose.leftAnkle && pose.rightAnkle && time - lastFootSwitchEvent >= 1.0) {
+        if (previousPose.leftAnkle && pose.leftAnkle && previousPose.rightAnkle && pose.rightAnkle && time - lastFootSwitchEvent >= 1.0) {
           const previousOrder = (previousPose.leftAnkle?.x ?? 0) - (previousPose.rightAnkle?.x ?? 0);
           const currentOrder = pose.leftAnkle.x - pose.rightAnkle.x;
           if (Math.abs(previousOrder) > 0.025 && Math.abs(currentOrder) > 0.025 && Math.sign(previousOrder) !== Math.sign(currentOrder)) {
@@ -490,13 +477,15 @@ export async function analyzeClimbingVideo(video, options = {}) {
             lastFootSwitchEvent = time;
           }
         }
-        if (hipWidth > 0.005 && pose.leftAnkle && pose.rightAnkle && time - lastFlagEvent >= 1.2) {
+        if (hipWidth > 0.005 && pose.leftAnkle && pose.rightAnkle) {
           const leftFlag = pose.leftAnkle.x > pose.rightHip.x + hipWidth * 0.45;
           const rightFlag = pose.rightAnkle.x < pose.leftHip.x - hipWidth * 0.45;
-          if (leftFlag || rightFlag) {
-            events.push({ type: "flag-candidate", side: leftFlag ? "left" : "right", time, confidence: 0.58 });
+          const side = leftFlag ? "left" : rightFlag ? "right" : null;
+          if (side && side !== previousFlagSide && time - lastFlagEvent >= 1.2) {
+            events.push({ type: "flag-candidate", side, time, confidence: 0.55 });
             lastFlagEvent = time;
           }
+          previousFlagSide = side;
         }
       }
 
@@ -602,6 +591,13 @@ export async function analyzeClimbingVideo(video, options = {}) {
       compactSeconds: Math.min(duration, compactSeconds),
     },
     observationConfidence,
+    motionObservation: {
+      cameraPairs: Math.max(0, sampleTimes.length - 1),
+      reliableCameraPairs,
+      motionSeconds: Math.min(duration, motionSeconds),
+      pauseSeconds: Math.min(duration, pauseSeconds),
+      feetSeconds: Math.min(duration, feetSeconds),
+    },
     events: events.slice(0, 1000),
     movementSegments: movementSegments.slice(0, 500),
     hipTrajectory,
@@ -609,7 +605,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
 
   return {
     engine: "MediaPipe Pose Landmarker Lite",
-    engineVersion: "1.4.0",
+    engineVersion: "1.5.0",
     localProcessing: true,
     rules,
     metrics,

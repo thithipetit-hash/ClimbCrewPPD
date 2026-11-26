@@ -5,7 +5,7 @@ import { buildClimbingCoach } from "../lib/climbing-coach.js";
 import { analyzeClimbingVideo } from "../lib/mediapipe-video-analysis.js";
 import { buildTechnicalAnalysisComparison } from "../lib/video-analysis-comparison.js";
 import { fetchVideoAnalysisRules } from "../lib/video-analysis-rules.js";
-import { observedPauseRatio } from "../lib/video-analysis-observations.js";
+import { observedPauseRatio, hasMotionCoverage } from "../lib/video-analysis-observations.js";
 import { AnalysisGraphics, ComparisonGraphics } from "./VideoAnalysisGraphics.jsx";
 import VideoSkeletonOverlay from "./VideoSkeletonOverlay.jsx";
 import { selectAnalysisUrl, resolveDisplayedAnalysis } from "../lib/video-analysis-result.js";
@@ -309,15 +309,17 @@ export default function VideoTechnicalAnalysis({
       {analysis && metrics && (
         <div ref={resultRef} style={{ marginTop: 12, scrollMarginTop: 16 }}>
           <h3>Résultats de l’analyse</h3>
+          {analysis.engineVersion && !metrics.motionObservation && <div className="muted-box">Ancienne méthode ({analysis.engineVersion}) : les mouvements de caméra et le bruit articulaire peuvent gonfler les événements. Relancer l’analyse avec le moteur actuel pour obtenir des mesures filtrées.</div>}
+          {metrics.motionObservation && <div className="muted-box small">Moteur {analysis.engineVersion} · compensation de translation du mur · couverture temporelle : mouvements {Math.round(100*metrics.motionObservation.motionSeconds/metrics.duration)} %, pieds {Math.round(100*metrics.motionObservation.feetSeconds/metrics.duration)} %, pauses {Math.round(100*metrics.motionObservation.pauseSeconds/metrics.duration)} %. Les périodes insuffisamment observables ne sont pas des repos. Les appuis restent des candidats.</div>}
           <div className="stats-grid">
             <Metric label="Corps détecté" value={analysis.display?.detection || `${Math.round((Number(metrics.detectionRatio) || 0) * 100)} %`} />
             <Metric label="Durée vidéo" value={formatTimestamp(metrics.duration)} />
             <Metric label="Temps analysable" value={formatTimestamp(metrics.analyzedSeconds)} />
-            <Metric label="Pauses" value={pauses.length} />
-            <Metric label="Pauses longues" value={Array.isArray(metrics.longPauses) ? metrics.longPauses.length : "—"} />
-            <Metric label="Temps immobile observé" value={pauseRatio === null ? "—" : `${Math.round(pauseRatio * 100)} %`} />
-            <Metric label="Ajustements pieds" value={Number(metrics.footAdjustments?.total || 0)} />
-            <Metric label="Pics dynamiques" value={Number(metrics.dynamicMoves || 0)} />
+            <Metric label="Pauses détectées" value={hasMotionCoverage(metrics,"pauseSeconds") ? pauses.length : "Couverture insuffisante"} />
+            <Metric label="Pauses longues" value={hasMotionCoverage(metrics,"pauseSeconds") && Array.isArray(metrics.longPauses) ? metrics.longPauses.length : "—"} />
+            <Metric label="Temps immobile observé" value={pauseRatio === null || !hasMotionCoverage(metrics,"pauseSeconds") ? "—" : `${Math.round(pauseRatio * 100)} %`} />
+            <Metric label="Repositionnements pieds candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? Number(metrics.footAdjustments?.total || 0) : "Couverture insuffisante"} />
+            <Metric label="Pics dynamiques candidats" value={hasMotionCoverage(metrics,"motionSeconds") ? Number(metrics.dynamicMoves || 0) : "Couverture insuffisante"} />
             <Metric label="Confiance observation" value={`${Math.round((Number(metrics.observationConfidence ?? metrics.detectionRatio) || 0) * 100)} %`} />
             <Metric label="Composante verticale du bassin" value={metrics.hipMotion ? `${Math.round((Number(metrics.hipMotion.pathEfficiency) || 0) * 100)} %` : "—"} />
             <Metric label="Décalage bassin" value={metrics.bodyPosition ? `${Number(metrics.bodyPosition.meanHipLateralOffsetHipWidths || 0).toFixed(2)} × largeur bassin` : "—"} />

@@ -1,3 +1,5 @@
+import { hasMotionCoverage } from "./video-analysis-observations.js";
+
 const COACH_VERSION = 2;
 
 function finite(value, fallback = 0) {
@@ -33,7 +35,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
   const compactRatio = ratio(metrics.bodyPosition?.compactSeconds, analyzedSeconds);
   const candidates = [];
 
-  if (longPauses.length > 0 || pauses.length >= 3) {
+  if (hasMotionCoverage(metrics, "pauseSeconds") && (longPauses.length > 0 || pauses.length >= 3)) {
     const threshold = finite(rules.longPauseMinSeconds, 4);
     candidates.push(priority(
       "coach-fluidity",
@@ -61,15 +63,16 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
     ));
   }
 
-  if (footAdjustments >= 5) {
+  if (hasMotionCoverage(metrics, "feetSeconds") && footAdjustments >= 5) {
     candidates.push(priority(
       "coach-foot-precision",
       86 + Math.min(12, Math.round(footAdjustments)),
       "Précision des pieds",
-      `${Math.round(footAdjustments)} ajustements courts de pieds ont été détectés.`,
+      `${Math.round(footAdjustments)} repositionnements courts candidats ont été détectés.`,
       "Regarder la prise de pied jusqu’au contact et viser une pose unique, silencieuse, avant de transférer le poids.",
       "Faire des voies faciles en « pieds silencieux » : un placement volontaire par prise de pied, sans reprise sauf nécessité de sécurité.",
       "3 passages courts ou 2 voies faciles.",
+      "Le déplacement de cheville ne prouve pas un contact avec une prise ; confirmer les reprises d’appui à la vidéo.",
     ));
   }
 
@@ -87,7 +90,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
     ));
   }
 
-  if (dynamicMoves >= 3) {
+  if (hasMotionCoverage(metrics, "motionSeconds") && dynamicMoves >= 3) {
     candidates.push(priority(
       "coach-dynamic-control",
       45 + Math.min(12, dynamicMoves),
@@ -126,7 +129,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
     ));
   }
 
-  if (hipTravel >= 1.5 && hipPathEfficiency > 0 && hipPathEfficiency < 0.42) {
+  if (hasMotionCoverage(metrics, "motionSeconds") && hipTravel >= 1.5 && hipPathEfficiency > 0 && hipPathEfficiency < 0.42) {
     candidates.push(priority(
       "coach-hip-trajectory",
       72 + Math.min(15, Math.round((0.42 - hipPathEfficiency) * 100)),
