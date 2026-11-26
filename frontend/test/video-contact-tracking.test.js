@@ -11,3 +11,9 @@ test('occlusion resets cycle',()=>assert.deepEqual(sequence([...block(10,.3,.32)
 test('jitter and insufficient stabilization',()=>assert.deepEqual(sequence([...block(10,.3,.32),...Array.from({length:20},(_,i)=>[.3+(i%2)*.003,.32+(i%2)*.003]),...block(2,.5,.52)]),[]));
 test('wall translation alone',()=>{const c=createContactTracker({sampleFps:8,footAdjustmentMaxDistanceTorso:.35},1000);for(let i=0;i<40;i++){let x=i*.003;assert.deepEqual(c.update({hipCenter:point(.4+x),torsoLength:.2,leftFoot:point(.3+x),leftFootSecondary:point(.32+x)},i/8,i?{x:.003,y:0}:null),[]);}assert.equal(c.summary(5).footTransfers,0);});
 test('benchmark matches once by side and type',()=>{const a={type:'foot-transfer',side:'left',time:2};const s=scoreContactEvents([a,{...a,time:2.1},{...a,side:'right'}],[a]);assert.deepEqual([s.tp,s.fp,s.fn,s.f1],[1,2,0,.5]);assert.equal(scoreContactEvents([],[]).f1,null);});
+
+test('disjoint foot observations cannot inflate simultaneous coverage',()=>{
+ const c=createContactTracker({sampleFps:8,footAdjustmentMaxDistanceTorso:.35},1000);
+ for(let i=0;i<20;i++){const side=i<10?'left':'right';c.update({hipCenter:point(.4),torsoLength:.2,[side+'Foot']:point(.3),[side+'FootSecondary']:point(.32)},i/8,i?{x:0,y:0}:null);}
+ const s=c.summary(3);assert.equal(s.bothFeetSeconds,0);assert.equal(s.coverage.leftFoot>0,true);assert.equal(s.coverage.rightFoot>0,true);
+});

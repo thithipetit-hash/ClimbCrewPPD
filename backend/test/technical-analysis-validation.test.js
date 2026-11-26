@@ -94,3 +94,12 @@ test("conserve la couverture temporelle 1.5 et refuse les durées incohérentes"
   value.metrics.motionObservation = {...motion,feetSeconds:-1};
   assert.throws(()=>normalizeTechnicalAnalysis(value),/feetSeconds/);
 });
+
+test("conserve les nouveaux événements et la couverture 1.6",()=>{
+ const value=validAnalysis();value.engineVersion="1.6.0";
+ const contact={footTransfers:2,handTransfers:3,footReturns:1,footPivots:0,bothFeetSeconds:20,bothHandsSeconds:22,coverage:{leftFoot:25,rightFoot:30,leftHand:24,rightHand:26}};
+ value.metrics.contactObservation=contact;
+ value.metrics.events=[{type:"foot-transfer",side:"left",time:1,end:2,confidence:.55},{type:"hand-transfer",side:"right",time:3,end:4,confidence:.55}];
+ const r=normalizeTechnicalAnalysis(value);assert.deepEqual(r.metrics.contactObservation,contact);assert.deepEqual(r.metrics.events,value.metrics.events);
+ contact.bothFeetSeconds=26;assert.throws(()=>normalizeTechnicalAnalysis(value),/bothFeetSeconds/);
+});

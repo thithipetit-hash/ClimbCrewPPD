@@ -38,6 +38,7 @@ export function createContactTracker(rules,imageHeight){
  const cycles=Object.fromEntries(limbs.map(l=>[l,createContactCycle({fps:rules.sampleFps,imageHeight,shortDistance:rules.footAdjustmentMaxDistanceTorso,foot:l.endsWith('Foot')})]));
  const coverage=Object.fromEntries(limbs.map(l=>[l,0]));
  const counts={footTransfers:0,handTransfers:0,footReturns:0,footPivots:0};
+ let bothFeetSeconds=0,bothHandsSeconds=0;
  let offset={x:0,y:0},last=null,previousTorso=null,previousValid={};
  function reset(){offset={x:0,y:0};last=null;previousTorso=null;previousValid={};Object.values(cycles).forEach(c=>c.reset());}
  function update(pose,time,translation){
@@ -45,12 +46,12 @@ export function createContactTracker(rules,imageHeight){
   if(!translation||!valid(translation)||last!==null&&(time<=last||time-last>1.6/rules.sampleFps)||previousTorso!==null&&Math.max(pose.torsoLength,previousTorso)/Math.min(pose.torsoLength,previousTorso)>1.35)reset();
   else {offset.x+=translation.x;offset.y+=translation.y;}
   const dt=last===null?0:time-last, corrected=p=>valid(p)?{x:p.x-offset.x,y:p.y-offset.y}:null;
-  const events=[];
+  const events=[],paired={};
   for(const limb of limbs){
    const foot=limb.endsWith('Foot'),side=limb.startsWith('left')?'left':'right';
    const p=corrected(pose[limb]),q=corrected(pose[limb+'Secondary']);
    const ok=valid(p)&&valid(q)&&dist(p,q)>2/imageHeight;
-   if(ok&&previousValid[limb])coverage[limb]+=dt;previousValid[limb]=ok;
+   paired[limb]=Boolean(ok&&previousValid[limb]);if(paired[limb])coverage[limb]+=dt;previousValid[limb]=ok;
    const event=cycles[limb].update(ok?p:null,ok?q:null,pose.torsoLength,time);
    if(!event)continue;
    let type=null;
@@ -60,9 +61,11 @@ export function createContactTracker(rules,imageHeight){
    else if(foot&&event.kind==='pivot'){type='foot-pivot';counts.footPivots++;}
    if(type)events.push({type,side,time:event.start,end:event.time,confidence:.55});
   }
+  if(paired.leftFoot&&paired.rightFoot)bothFeetSeconds+=dt;
+  if(paired.leftHand&&paired.rightHand)bothHandsSeconds+=dt;
   last=time;previousTorso=pose.torsoLength;return events;
  }
- return {update,reset,summary:duration=>({...counts,coverage:Object.fromEntries(limbs.map(l=>[l,Math.min(duration,coverage[l])]))})};
+ return {update,reset,summary:duration=>({...counts,bothFeetSeconds:Math.min(duration,bothFeetSeconds),bothHandsSeconds:Math.min(duration,bothHandsSeconds),coverage:Object.fromEntries(limbs.map(l=>[l,Math.min(duration,coverage[l])]))})};
 }
 export function scoreContactEvents(predicted,reference,tolerance=.5){
  if(!Number.isFinite(tolerance)||tolerance<0)throw Error('Tolérance invalide');

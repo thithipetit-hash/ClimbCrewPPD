@@ -105,6 +105,7 @@ export default function VideoTechnicalAnalysis({
   const [computedResult, setComputedResult] = React.useState(null);
   const [progress, setProgress] = React.useState(0);
   const [analysisMode, setAnalysisMode] = React.useState("standard");
+  const [previousRun,setPreviousRun] = React.useState(null);
   const [error, setError] = React.useState("");
   const [saveError, setSaveError] = React.useState("");
   const [saveStatus, setSaveStatus] = React.useState("");
@@ -151,6 +152,8 @@ export default function VideoTechnicalAnalysis({
     const controller = new AbortController();
     abortRef.current = controller;
     setAnalyzing(true);
+    if (computedResult?.url === selectedUrl) setPreviousRun(computedResult);
+    else setPreviousRun(null);
     setComputedResult(null);
     setError("");
     setSaveError("");
@@ -175,6 +178,10 @@ export default function VideoTechnicalAnalysis({
       if (controller.signal.aborted) return;
       setComputedResult({ url: selectedUrl, analysis: resultWithCoach });
       setPoseReplay({ url: selectedUrl, frames: poseFrames, sampleFps: result.rules.sampleFps });
+      if (analysisMode === "legacy") {
+        setSaveStatus("Analyse de référence locale : les mesures enregistrées ne sont pas remplacées.");
+        return;
+      }
       if (localOnly) {
         setSaveStatus("Analyse locale terminée. Ni la vidéo ni les mesures ne sont enregistrées.");
         return;
@@ -328,7 +335,7 @@ export default function VideoTechnicalAnalysis({
             <Metric label="Repositionnements pieds candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? Number(metrics.footAdjustments?.total || 0) : "Couverture insuffisante"} />
             {metrics.contactObservation && <>
                <Metric label="Transferts pieds candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? metrics.contactObservation.footTransfers : "Couverture insuffisante"} />
-               <Metric label="Transferts mains candidats" value={Math.min(metrics.contactObservation.coverage.leftHand,metrics.contactObservation.coverage.rightHand)/metrics.duration >= .5 ? metrics.contactObservation.handTransfers : "Couverture insuffisante"} />
+               <Metric label="Transferts mains candidats" value={metrics.contactObservation.bothHandsSeconds/metrics.duration >= .5 ? metrics.contactObservation.handTransfers : "Couverture insuffisante"} />
                <Metric label="Retours de pied candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? metrics.contactObservation.footReturns : "—"} />
                <Metric label="Pivots de pied candidats" value={hasMotionCoverage(metrics,"feetSeconds") ? metrics.contactObservation.footPivots : "—"} />
              </>}
@@ -343,6 +350,13 @@ export default function VideoTechnicalAnalysis({
           </div>
 
           {metrics.contactObservation && <div className="muted-box small">Cycles 2D déplacement–stabilisation · {analysis.rules?.sampleFps} images/s. Prises non localisées : contacts non confirmés. Couverture pieds G/D : {Math.round(100*metrics.contactObservation.coverage.leftFoot/metrics.duration)} / {Math.round(100*metrics.contactObservation.coverage.rightFoot/metrics.duration)} % ; mains G/D : {Math.round(100*metrics.contactObservation.coverage.leftHand/metrics.duration)} / {Math.round(100*metrics.contactObservation.coverage.rightHand/metrics.duration)} %.</div>}
+           {previousRun?.url === selectedUrl && previousRun.analysis?.metrics && <div className="muted-box small">
+             <strong>Comparaison des deux dernières analyses de cette vidéo (en mémoire)</strong>
+             <div>Précédente : moteur {previousRun.analysis.engineVersion}, {previousRun.analysis.rules?.sampleFps} images/s · Actuelle : moteur {analysis.engineVersion}, {analysis.rules?.sampleFps} images/s.</div>
+             <div>Ajustements pieds candidats : {hasMotionCoverage(previousRun.analysis.metrics,"feetSeconds") ? previousRun.analysis.metrics.footAdjustments?.total : "—"} → {hasMotionCoverage(metrics,"feetSeconds") ? metrics.footAdjustments?.total : "—"}.</div>
+             <div>Couverture pieds : {Math.round(100*(previousRun.analysis.metrics.motionObservation?.feetSeconds ?? 0)/previousRun.analysis.metrics.duration)} % → {Math.round(100*(metrics.motionObservation?.feetSeconds ?? 0)/metrics.duration)} %. Les deux méthodes diffèrent : moins d’événements ne prouve pas une meilleure précision.</div>
+           </div>}
+           <Button type="button" variant="secondary" onClick={() => { const blob = new Blob([JSON.stringify(analysis,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="analyse-"+analysis.engineVersion+".json";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000); }}>Exporter les mesures JSON</Button>
            <AnalysisGraphics metrics={metrics} onSeek={videoAvailable && !analyzing ? (time) => { if (videoRef.current) { videoRef.current.currentTime = time; videoRef.current.pause(); } } : undefined} />
 
           {comparisonChoices.length > 0 && primarySavedAnalysis && (

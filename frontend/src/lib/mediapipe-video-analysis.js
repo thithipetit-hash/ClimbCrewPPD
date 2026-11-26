@@ -620,7 +620,7 @@ export async function analyzeClimbingVideo(video, options = {}) {
       reliableCameraPairs,
       motionSeconds: Math.min(duration, motionSeconds),
       pauseSeconds: Math.min(duration, pauseSeconds),
-      feetSeconds: Math.min(duration, contactObservation ? Math.min(contactObservation.coverage.leftFoot, contactObservation.coverage.rightFoot) : feetSeconds),
+      feetSeconds: Math.min(duration, contactObservation ? contactObservation.bothFeetSeconds : feetSeconds),
     },
     events: events.slice(0, 1000),
     movementSegments: movementSegments.slice(0, 500),

@@ -176,6 +176,8 @@ function normalizeMotionExtras(metrics, duration) {
     output.contactObservation = {
       ...Object.fromEntries(["footTransfers","handTransfers","footReturns","footPivots"].map(key => [key, finiteNumber(contact[key], "metrics.contactObservation."+key, {min:0,max:20000,integer:true})])),
       coverage: Object.fromEntries(["leftFoot","rightFoot","leftHand","rightHand"].map(key => [key,finiteNumber(coverage[key], "metrics.contactObservation.coverage."+key,{min:0,max:duration})])),
+      bothFeetSeconds: finiteNumber(contact.bothFeetSeconds,"metrics.contactObservation.bothFeetSeconds",{min:0,max:Math.min(Number(coverage.leftFoot),Number(coverage.rightFoot))}),
+      bothHandsSeconds: finiteNumber(contact.bothHandsSeconds,"metrics.contactObservation.bothHandsSeconds",{min:0,max:Math.min(Number(coverage.leftHand),Number(coverage.rightHand))}),
     };
   }
   if (metrics.events !== undefined) {
