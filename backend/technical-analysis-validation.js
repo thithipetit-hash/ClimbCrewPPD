@@ -161,6 +161,15 @@ function normalizeMotionExtras(metrics, duration) {
   }
   if (metrics.meanKneeAngleDegrees !== undefined && metrics.meanKneeAngleDegrees !== null) output.meanKneeAngleDegrees = finiteNumber(metrics.meanKneeAngleDegrees, "metrics.meanKneeAngleDegrees", { min: 0, max: 180 });
   if (metrics.observationConfidence !== undefined) output.observationConfidence = finiteNumber(metrics.observationConfidence, "metrics.observationConfidence", { min: 0, max: 1 });
+  if (metrics.motionObservation !== undefined) {
+    const motion = objectValue(metrics.motionObservation, "metrics.motionObservation");
+    const cameraPairs = finiteNumber(motion.cameraPairs, "motionObservation.cameraPairs", { min: 0, max: 20000, integer: true });
+    const reliableCameraPairs = finiteNumber(motion.reliableCameraPairs, "motionObservation.reliableCameraPairs", { min: 0, max: cameraPairs, integer: true });
+    const motionSeconds = finiteNumber(motion.motionSeconds, "motionObservation.motionSeconds", { min: 0, max: duration });
+    const pauseSeconds = finiteNumber(motion.pauseSeconds, "motionObservation.pauseSeconds", { min: 0, max: motionSeconds });
+    const feetSeconds = finiteNumber(motion.feetSeconds, "motionObservation.feetSeconds", { min: 0, max: motionSeconds });
+    output.motionObservation = { cameraPairs, reliableCameraPairs, motionSeconds, pauseSeconds, feetSeconds };
+  }
   if (metrics.events !== undefined) {
     if (!Array.isArray(metrics.events) || metrics.events.length > MAX_EVENTS) throw badRequest("metrics.events est invalide.");
     output.events = metrics.events.map((item, index) => {

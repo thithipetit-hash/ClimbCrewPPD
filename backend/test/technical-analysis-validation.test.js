@@ -24,7 +24,7 @@ function validAnalysis() {
     engine: "MediaPipe Pose Landmarker Lite",
     engineVersion: "1.0.3",
     localProcessing: true,
-    rules,
+    rules: { ...rules },
     metrics: {
       duration: 60,
       analyzedSeconds: 54,
@@ -79,4 +79,18 @@ test("refuse un moteur ou des règles hors limites", () => {
   const badRules = validAnalysis();
   badRules.rules.sampleFps = 100;
   assert.throws(() => normalizeTechnicalAnalysis(badRules), /sampleFps/);
+});
+
+test("conserve la couverture temporelle 1.5 et refuse les durées incohérentes", () => {
+  const value = validAnalysis();
+  value.engineVersion = "1.5.0";
+  const motion = {cameraPairs:99,reliableCameraPairs:85,motionSeconds:45,pauseSeconds:40,feetSeconds:35};
+  value.metrics.motionObservation = motion;
+  assert.deepEqual(normalizeTechnicalAnalysis(value).metrics.motionObservation,motion);
+  value.metrics.motionObservation = {...motion,reliableCameraPairs:100};
+  assert.throws(()=>normalizeTechnicalAnalysis(value),/reliableCameraPairs/);
+  value.metrics.motionObservation = {...motion,pauseSeconds:46};
+  assert.throws(()=>normalizeTechnicalAnalysis(value),/pauseSeconds/);
+  value.metrics.motionObservation = {...motion,feetSeconds:-1};
+  assert.throws(()=>normalizeTechnicalAnalysis(value),/feetSeconds/);
 });

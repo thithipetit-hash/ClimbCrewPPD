@@ -1,4 +1,4 @@
-import { observedPauseRatio } from "./video-analysis-observations.js";
+import { observedPauseRatio, hasMotionCoverage } from "./video-analysis-observations.js";
 
 function finiteNumberOrNull(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -74,50 +74,50 @@ const METRICS = [
   {
     key: "pauses",
     label: "Pauses",
-    value: (metrics) => Array.isArray(metrics.pauses) ? metrics.pauses.length : null,
+    value: (metrics) => hasMotionCoverage(metrics,"pauseSeconds") && Array.isArray(metrics.pauses) ? metrics.pauses.length : null,
     format: formatCount,
   },
   {
     key: "pauseRatio",
     label: "Part du temps immobile observé",
-    value: observedPauseRatio,
+    value: (metrics) => hasMotionCoverage(metrics,"pauseSeconds") ? observedPauseRatio(metrics) : null,
     format: formatPercent,
     deltaFormat: (delta) => `${delta >= 0 ? "+" : ""}${Math.round(delta * 100)} pt`,
   },
   {
     key: "pausesPerMinute",
     label: "Pauses par minute analysée",
-    value: (metrics) => ratePerMinute(Array.isArray(metrics.pauses) ? metrics.pauses.length : null, metrics),
+    value: (metrics) => hasMotionCoverage(metrics,"pauseSeconds") ? ratePerMinute(Array.isArray(metrics.pauses) ? metrics.pauses.length : null, { analyzedSeconds: metrics.motionObservation?.pauseSeconds ?? metrics.analyzedSeconds }) : null,
     format: formatRate,
   },
   {
     key: "longPauses",
     label: "Pauses longues",
-    value: (metrics) => Array.isArray(metrics.longPauses) ? metrics.longPauses.length : null,
+    value: (metrics) => hasMotionCoverage(metrics,"pauseSeconds") && Array.isArray(metrics.longPauses) ? metrics.longPauses.length : null,
     format: formatCount,
   },
   {
     key: "footAdjustments",
     label: "Ajustements pieds",
-    value: (metrics) => metrics.footAdjustments?.total,
+    value: (metrics) => hasMotionCoverage(metrics,"feetSeconds") ? metrics.footAdjustments?.total : null,
     format: formatCount,
   },
   {
     key: "footAdjustmentsPerMinute",
     label: "Ajustements pieds par minute analysée",
-    value: (metrics) => ratePerMinute(metrics.footAdjustments?.total, metrics),
+    value: (metrics) => hasMotionCoverage(metrics,"feetSeconds") ? ratePerMinute(metrics.footAdjustments?.total, { analyzedSeconds: metrics.motionObservation?.feetSeconds ?? metrics.analyzedSeconds }) : null,
     format: formatRate,
   },
   {
     key: "dynamicMoves",
     label: "Pics dynamiques",
-    value: (metrics) => metrics.dynamicMoves,
+    value: (metrics) => hasMotionCoverage(metrics,"motionSeconds") ? metrics.dynamicMoves : null,
     format: formatCount,
   },
   {
     key: "dynamicMovesPerMinute",
     label: "Pics dynamiques par minute analysée",
-    value: (metrics) => ratePerMinute(metrics.dynamicMoves, metrics),
+    value: (metrics) => hasMotionCoverage(metrics,"motionSeconds") ? ratePerMinute(metrics.dynamicMoves, { analyzedSeconds: metrics.motionObservation?.motionSeconds ?? metrics.analyzedSeconds }) : null,
     format: formatRate,
   },
   {
@@ -152,7 +152,7 @@ const METRICS = [
     deltaFormat: (delta) => `${delta >= 0 ? "+" : ""}${Math.round(delta * 100)} pt`,
   },
   {
-    key: "hipPathEfficiency", label: "Composante verticale bassin", value: (metrics) => metrics.hipMotion?.pathEfficiency, format: formatPercent, deltaFormat: (delta) => `${delta >= 0 ? "+" : ""}${Math.round(delta * 100)} pt`,
+    key: "hipPathEfficiency", label: "Composante verticale bassin", value: (metrics) => hasMotionCoverage(metrics,"motionSeconds") ? metrics.hipMotion?.pathEfficiency : null, format: formatPercent, deltaFormat: (delta) => `${delta >= 0 ? "+" : ""}${Math.round(delta * 100)} pt`,
   },
   {
     key: "hipLateral", label: "Décalage latéral bassin", value: (metrics) => metrics.bodyPosition?.meanHipLateralOffsetHipWidths, format: (value) => value === null ? "—" : `${value.toFixed(2)} ×`,
@@ -161,7 +161,7 @@ const METRICS = [
     key: "compactRatio", label: "Position compacte", value: (metrics) => metrics.bodyPosition && metrics.analyzedSeconds ? metrics.bodyPosition.compactSeconds / metrics.analyzedSeconds : null, format: formatPercent, deltaFormat: (delta) => `${delta >= 0 ? "+" : ""}${Math.round(delta * 100)} pt`,
   },
   {
-    key: "movementSegments", label: "Séquences de mouvement", value: (metrics) => Array.isArray(metrics.movementSegments) ? metrics.movementSegments.length : null, format: formatCount,
+    key: "movementSegments", label: "Séquences de mouvement", value: (metrics) => hasMotionCoverage(metrics,"motionSeconds") && Array.isArray(metrics.movementSegments) ? metrics.movementSegments.length : null, format: formatCount,
   },
 ];
 

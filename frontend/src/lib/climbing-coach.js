@@ -1,3 +1,5 @@
+import { hasMotionCoverage } from "./video-analysis-observations.js";
+
 const COACH_VERSION = 2;
 
 function finite(value, fallback = 0) {
@@ -32,8 +34,9 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
   const hipLateral = Math.max(0, finite(metrics.bodyPosition?.meanHipLateralOffsetHipWidths, 0));
   const compactRatio = ratio(metrics.bodyPosition?.compactSeconds, analyzedSeconds);
   const candidates = [];
+  const limitedMotion = metrics.motionObservation && !["motionSeconds", "pauseSeconds", "feetSeconds"].every(key => hasMotionCoverage(metrics, key));
 
-  if (longPauses.length > 0 || pauses.length >= 3) {
+  if (hasMotionCoverage(metrics, "pauseSeconds") && (longPauses.length > 0 || pauses.length >= 3)) {
     const threshold = finite(rules.longPauseMinSeconds, 4);
     candidates.push(priority(
       "coach-fluidity",
@@ -61,15 +64,16 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
     ));
   }
 
-  if (footAdjustments >= 5) {
+  if (hasMotionCoverage(metrics, "feetSeconds") && footAdjustments >= 5) {
     candidates.push(priority(
       "coach-foot-precision",
       86 + Math.min(12, Math.round(footAdjustments)),
       "Précision des pieds",
-      `${Math.round(footAdjustments)} ajustements courts de pieds ont été détectés.`,
+      `${Math.round(footAdjustments)} repositionnements courts candidats ont été détectés.`,
       "Regarder la prise de pied jusqu’au contact et viser une pose unique, silencieuse, avant de transférer le poids.",
       "Faire des voies faciles en « pieds silencieux » : un placement volontaire par prise de pied, sans reprise sauf nécessité de sécurité.",
       "3 passages courts ou 2 voies faciles.",
+      "Le déplacement de cheville ne prouve pas un contact avec une prise ; confirmer les reprises d’appui à la vidéo.",
     ));
   }
 
@@ -87,7 +91,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
     ));
   }
 
-  if (dynamicMoves >= 3) {
+  if (hasMotionCoverage(metrics, "motionSeconds") && dynamicMoves >= 3) {
     candidates.push(priority(
       "coach-dynamic-control",
       45 + Math.min(12, dynamicMoves),
@@ -126,7 +130,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
     ));
   }
 
-  if (hipTravel >= 1.5 && hipPathEfficiency > 0 && hipPathEfficiency < 0.42) {
+  if (hasMotionCoverage(metrics, "motionSeconds") && hipTravel >= 1.5 && hipPathEfficiency > 0 && hipPathEfficiency < 0.42) {
     candidates.push(priority(
       "coach-hip-trajectory",
       72 + Math.min(15, Math.round((0.42 - hipPathEfficiency) * 100)),
@@ -147,7 +151,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
       "coach-consolidation",
       10,
       "Consolider le geste",
-      "Aucun des signaux mécaniques suivis ne ressort fortement sur cette vidéo.",
+      limitedMotion ? "La couverture temporelle est partielle : filmer de plus près ou avec un cadre plus stable avant d’interpréter l’absence de signaux." : "Aucun des signaux mécaniques suivis ne ressort fortement sur cette vidéo.",
       "Conserver la qualité de placement et chercher surtout une grimpe relâchée et intentionnelle.",
       "Refaire une voie facile en choisissant un seul thème d’attention : pieds, bassin ou relâchement des bras.",
       "1 à 2 passages de consolidation.",
@@ -166,7 +170,7 @@ export function buildClimbingCoach(metrics = {}, rules = {}) {
     priorities,
     confidence: observationConfidence,
     confidenceLabel: observationConfidence >= 0.8 ? "élevée" : observationConfidence >= 0.6 ? "moyenne" : "faible",
-    note: lowDetection
+    note: lowDetection || limitedMotion
       ? "La détection du corps est partielle : utiliser ces priorités comme pistes à confirmer visuellement ou sur une autre vidéo."
       : "Les priorités sont déduites des mesures de cette vidéo et doivent être interprétées avec le contexte de la voie. La trajectoire du bassin reste une mesure 2D et ne mesure pas directement le centre de gravité ni les forces.",
   };

@@ -30,7 +30,7 @@ export function AnalysisGraphics({ metrics, onSeek }) {
       {[["Gauche", data.armLeftRatio], ["Droite", data.armRightRatio]].map(([label, ratio]) => <div key={label} style={{ marginTop: 6 }}>
         <div className="small">Bras {label.toLowerCase()} fléchi : {pct(ratio)} du temps analysable</div><Bar ratio={ratio} color={COLORS.pause} />
       </div>)}
-      <p className="small">Le temps analysable est estimé à partir de la couverture du corps, pas de la visibilité individuelle des coudes.</p>
+      <p className="small">Les bras sont rapportés au temps analysable du corps. Les pauses sont rapportées aux intervalles de mouvement observables lorsque cette couverture est disponible.</p>
     </section>
     {items.length > 0 && <section className="subcard">
       <strong>Chronologie des événements</strong>

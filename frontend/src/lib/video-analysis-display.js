@@ -1,4 +1,4 @@
-import { observedPauseRatio } from "./video-analysis-observations.js";
+import { observedPauseRatio, hasMotionCoverage } from "./video-analysis-observations.js";
 
 export const SKELETON_JOINTS = Object.freeze([11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]);
 export const SKELETON_LINKS = Object.freeze([[0,1],[0,2],[2,4],[1,3],[3,5],[0,6],[1,7],[6,7],[6,8],[8,10],[7,9],[9,11]]);
@@ -29,15 +29,15 @@ export function buildVideoDisplay(metrics = {}) {
   const seconds = finiteMetric(metrics.analyzedSeconds);
   const count = (items) => Array.isArray(items) ? items.length : null;
   return {
-    pauseRatio: observedPauseRatio(metrics),
+    pauseRatio: hasMotionCoverage(metrics,"pauseSeconds") ? observedPauseRatio(metrics) : null,
     armLeftRatio: observedRatio(metrics.bentArmSeconds?.left, seconds),
     armRightRatio: observedRatio(metrics.bentArmSeconds?.right, seconds),
     domains: [
-      { label: "Fluidité", observations: [["Pauses", count(metrics.pauses)], ["Pauses longues", count(metrics.longPauses)]], context: "Distinguer les repos, la lecture et le mousquetonnage des hésitations." },
-      { label: "Pieds", observations: [["Ajustements gauche", finiteMetric(metrics.footAdjustments?.left)], ["Ajustements droite", finiteMetric(metrics.footAdjustments?.right)]], context: "Un déplacement de cheville n’est pas une preuve de mauvaise pose." },
+      { label: "Fluidité", observations: [["Pauses", hasMotionCoverage(metrics,"pauseSeconds") ? count(metrics.pauses) : null], ["Pauses longues", hasMotionCoverage(metrics,"pauseSeconds") ? count(metrics.longPauses) : null]], context: "Distinguer les repos, la lecture et le mousquetonnage des hésitations." },
+      { label: "Pieds", observations: [["Repositionnements gauche", hasMotionCoverage(metrics,"feetSeconds") ? finiteMetric(metrics.footAdjustments?.left) : null], ["Repositionnements droite", hasMotionCoverage(metrics,"feetSeconds") ? finiteMetric(metrics.footAdjustments?.right) : null]], context: "Un déplacement de cheville n’est pas une preuve de mauvaise pose." },
       { label: "Bras", observations: [["Bras G fléchi (s)", finiteMetric(metrics.bentArmSeconds?.left)], ["Bras D fléchi (s)", finiteMetric(metrics.bentArmSeconds?.right)]], context: "Vérifier les possibilités de relâchement selon le tracé." },
       { label: "Bassin et jambes", observations: [["Composante verticale (%)", finiteMetric(metrics.hipMotion?.pathEfficiency) === null ? null : 100 * metrics.hipMotion.pathEfficiency], ["Genoux (°)", finiteMetric(metrics.meanKneeAngleDegrees)]], context: "Le déplacement 2D dépend du cadrage et du profil de la voie." },
-      { label: "Coordination", observations: [["Séquences détectées", count(metrics.movementSegments)], ["Pics dynamiques", finiteMetric(metrics.dynamicMoves)]], context: "Les pics peuvent être volontaires ; confirmer les techniques à la vidéo." },
+      { label: "Coordination", observations: [["Séquences détectées", hasMotionCoverage(metrics,"motionSeconds") ? count(metrics.movementSegments) : null], ["Pics dynamiques", hasMotionCoverage(metrics,"motionSeconds") ? finiteMetric(metrics.dynamicMoves) : null]], context: "Les pics peuvent être volontaires ; confirmer les techniques à la vidéo." },
     ],
   };
 }
