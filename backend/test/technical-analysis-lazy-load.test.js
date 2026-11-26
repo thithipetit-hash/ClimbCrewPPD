@@ -123,3 +123,24 @@ test("historique ciblé : propriétaire issu de la session, voie paramétrée, n
   assert.match(calls[0].sql, /r.participant_id = \$1 and r.voie_id = \$2/);
   assert.match(calls[0].sql, /limit 20/);
 });
+
+test("la liste des analyses ne charge que les résumés du propriétaire authentifié", async () => {
+  let handler;
+  const calls = [];
+  const rows = [{realisationId:"r1",routeId:"v1",dateRealisation:"2026-11-26",analysisCount:2}];
+  installRealisationTechnicalAnalysisRoutes(
+    { get(path, ...handlers) { if (path === "/video-analysis/saved") handler = handlers.at(-1); }, put() {} },
+    { requireAuth() {}, pool: { async query(sql, params) { calls.push({sql,params}); return {rows}; } } }
+  );
+  const denied = responseRecorder();
+  await handler({auth:{user:{role:"admin"}}},denied);
+  assert.equal(denied.statusCode,403);
+  assert.equal(calls.length,0);
+  const response = responseRecorder();
+  await handler({auth:{user:{participantId:"7"}},query:{participantId:"8"}},response);
+  assert.deepEqual(response.body,{realisations:rows});
+  assert.deepEqual(calls[0].params,["7"]);
+  assert.match(calls[0].sql,/where r.participant_id = \$1/);
+  assert.match(calls[0].sql,/count\(\*\)::int/);
+  assert.match(calls[0].sql,/limit 100/);
+});

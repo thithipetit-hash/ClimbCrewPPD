@@ -8,6 +8,7 @@ import { fetchVideoAnalysisRules } from "../lib/video-analysis-rules.js";
 import { observedPauseRatio } from "../lib/video-analysis-observations.js";
 import { AnalysisGraphics, ComparisonGraphics } from "./VideoAnalysisGraphics.jsx";
 import VideoSkeletonOverlay from "./VideoSkeletonOverlay.jsx";
+import { selectAnalysisUrl, resolveDisplayedAnalysis } from "../lib/video-analysis-result.js";
 
 function playableVideoUrl(url) {
   if (String(url || "").startsWith("/")) return `${API_BASE}${url}`;
@@ -98,9 +99,10 @@ export default function VideoTechnicalAnalysis({
     [analyzableUrls, savedUrls],
   );
 
-  const [selectedUrl, setSelectedUrl] = React.useState(selectionUrls[0] || "");
+  const [requestedUrl, setSelectedUrl] = React.useState("");
+  const selectedUrl = selectAnalysisUrl(requestedUrl, selectionUrls, savedUrls);
   const [comparisonUrl, setComparisonUrl] = React.useState("");
-  const [analysis, setAnalysis] = React.useState(() => storedVideos[selectionUrls[0]] || null);
+  const [computedResult, setComputedResult] = React.useState(null);
   const [progress, setProgress] = React.useState(0);
   const [error, setError] = React.useState("");
   const [saveError, setSaveError] = React.useState("");
@@ -108,19 +110,20 @@ export default function VideoTechnicalAnalysis({
   const [analyzing, setAnalyzing] = React.useState(false);
   const [poseReplay, setPoseReplay] = React.useState(null);
   const videoRef = React.useRef(null);
+  const resultRef = React.useRef(null);
   const abortRef = React.useRef(null);
 
   React.useEffect(() => {
-    const nextUrl = selectionUrls.includes(selectedUrl) ? selectedUrl : (selectionUrls[0] || "");
-    if (nextUrl !== selectedUrl) {
-      setSelectedUrl(nextUrl);
-      return;
-    }
-    setAnalysis(nextUrl ? (storedVideos[nextUrl] || null) : null);
     setError("");
     setSaveError("");
     setSaveStatus("");
-  }, [selectionUrls, selectedUrl, storedVideos]);
+  }, [selectedUrl]);
+
+  React.useEffect(() => {
+    if (!analyzing && computedResult?.url === selectedUrl && resultRef.current) {
+      resultRef.current.scrollIntoView({ block: "start", behavior: "auto" });
+    }
+  }, [analyzing, computedResult, selectedUrl]);
 
   React.useEffect(() => {
     const alternatives = savedUrls.filter((url) => url !== selectedUrl);
@@ -131,6 +134,7 @@ export default function VideoTechnicalAnalysis({
 
   React.useEffect(() => () => abortRef.current?.abort(), []);
 
+  const analysis = analyzing ? null : resolveDisplayedAnalysis(selectedUrl, computedResult, storedVideos);
   const videoAvailable = analyzableUrls.includes(selectedUrl);
   const primarySavedAnalysis = storedVideos[selectedUrl] || null;
   const comparisonAnalysis = comparisonUrl ? (storedVideos[comparisonUrl] || null) : null;
@@ -146,7 +150,7 @@ export default function VideoTechnicalAnalysis({
     const controller = new AbortController();
     abortRef.current = controller;
     setAnalyzing(true);
-    setAnalysis(null);
+    setComputedResult(null);
     setError("");
     setSaveError("");
     setSaveStatus("");
@@ -167,7 +171,7 @@ export default function VideoTechnicalAnalysis({
         coach: buildClimbingCoach(result.metrics, result.rules),
       };
       if (controller.signal.aborted) return;
-      setAnalysis(resultWithCoach);
+      setComputedResult({ url: selectedUrl, analysis: resultWithCoach });
       setPoseReplay({ url: selectedUrl, frames: poseFrames, sampleFps: result.rules.sampleFps });
       if (localOnly) {
         setSaveStatus("Analyse locale terminée. Ni la vidéo ni les mesures ne sont enregistrées.");
@@ -187,7 +191,7 @@ export default function VideoTechnicalAnalysis({
             body: JSON.stringify({ videoUrl: selectedUrl, analysis: resultWithCoach }),
           },
         );
-        setAnalysis(saved?.analysis || resultWithCoach);
+        setComputedResult({ url: selectedUrl, analysis: saved?.analysis || resultWithCoach });
         setSaveStatus("Mesures et conseils entraîneur enregistrés avec cette réalisation.");
         if (typeof onSaved === "function") await onSaved(saved?.technicalAnalysis);
       } catch (saveFailure) {
@@ -205,6 +209,7 @@ export default function VideoTechnicalAnalysis({
 
   function cancelAnalysis() {
     abortRef.current?.abort();
+    setSaveStatus("Analyse annulée.");
   }
 
   if (!selectionUrls.length) {
@@ -288,6 +293,8 @@ export default function VideoTechnicalAnalysis({
         </div>
       )}
 
+      {analysis?.metrics && <Button type="button" variant="secondary" onClick={() => resultRef.current?.scrollIntoView({ block: "start" })}>Voir les résultats</Button>}
+
       {videoAvailable && analysis && !analyzing && poseReplay?.url !== selectedUrl && <p className="small">Relancer l’analyse pour afficher le squelette : les repères détaillés restent uniquement en mémoire sur cet appareil.</p>}
 
       {analyzing && (
@@ -298,8 +305,10 @@ export default function VideoTechnicalAnalysis({
       {saveError && <div className="error" style={{ marginTop: 10 }}>{saveError}</div>}
       {saveStatus && <div className="small" role="status" style={{ marginTop: 10 }}>{saveStatus}</div>}
 
+      {!analysis && !analyzing && !error && !saveError && <p className="small" role="status">Aucun résultat pour cette vidéo. {videoAvailable && editable ? "Cliquez sur Analyser la technique." : "Aucune mesure disponible."}</p>}
       {analysis && metrics && (
-        <div style={{ marginTop: 12 }}>
+        <div ref={resultRef} style={{ marginTop: 12, scrollMarginTop: 16 }}>
+          <h3>Résultats de l’analyse</h3>
           <div className="stats-grid">
             <Metric label="Corps détecté" value={analysis.display?.detection || `${Math.round((Number(metrics.detectionRatio) || 0) * 100)} %`} />
             <Metric label="Durée vidéo" value={formatTimestamp(metrics.duration)} />
