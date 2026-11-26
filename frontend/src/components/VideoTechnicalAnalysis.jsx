@@ -6,6 +6,8 @@ import { analyzeClimbingVideo } from "../lib/mediapipe-video-analysis.js";
 import { buildTechnicalAnalysisComparison } from "../lib/video-analysis-comparison.js";
 import { fetchVideoAnalysisRules } from "../lib/video-analysis-rules.js";
 import { observedPauseRatio } from "../lib/video-analysis-observations.js";
+import { AnalysisGraphics, ComparisonGraphics } from "./VideoAnalysisGraphics.jsx";
+import VideoSkeletonOverlay from "./VideoSkeletonOverlay.jsx";
 
 function playableVideoUrl(url) {
   if (String(url || "").startsWith("/")) return `${API_BASE}${url}`;
@@ -104,6 +106,7 @@ export default function VideoTechnicalAnalysis({
   const [saveError, setSaveError] = React.useState("");
   const [saveStatus, setSaveStatus] = React.useState("");
   const [analyzing, setAnalyzing] = React.useState(false);
+  const [poseReplay, setPoseReplay] = React.useState(null);
   const videoRef = React.useRef(null);
   const abortRef = React.useRef(null);
 
@@ -148,6 +151,8 @@ export default function VideoTechnicalAnalysis({
     setSaveError("");
     setSaveStatus("");
     setProgress(0);
+    setPoseReplay(null);
+    const poseFrames = [];
     try {
       const rules = await fetchVideoAnalysisRules();
       if (controller.signal.aborted) return;
@@ -155,6 +160,7 @@ export default function VideoTechnicalAnalysis({
         rules,
         signal: controller.signal,
         onProgress: setProgress,
+        onPoseFrame: (frame) => poseFrames.push(frame),
       });
       const resultWithCoach = {
         ...result,
@@ -162,6 +168,7 @@ export default function VideoTechnicalAnalysis({
       };
       if (controller.signal.aborted) return;
       setAnalysis(resultWithCoach);
+      setPoseReplay({ url: selectedUrl, frames: poseFrames, sampleFps: result.rules.sampleFps });
       if (localOnly) {
         setSaveStatus("Analyse locale terminée. Ni la vidéo ni les mesures ne sont enregistrées.");
         return;
@@ -253,6 +260,7 @@ export default function VideoTechnicalAnalysis({
       </div>
 
       {videoAvailable ? (
+        <div style={{ position: "relative", marginTop: 8 }}>
         <video
           ref={videoRef}
           controls
@@ -260,10 +268,12 @@ export default function VideoTechnicalAnalysis({
           preload="metadata"
           onError={() => setError("Cette vidéo ne peut pas être lue par le navigateur. Essayez un fichier MP4 compatible.")}
           src={playableVideoUrl(selectedUrl)}
-          style={{ width: "100%", maxHeight: "58vh", marginTop: 8, borderRadius: 12, background: "#000" }}
+          style={{ display: "block", width: "100%", maxHeight: "58vh", objectFit: "contain", borderRadius: 12, background: "#000" }}
         >
           Votre navigateur ne permet pas la lecture de cette vidéo.
         </video>
+        {poseReplay?.url === selectedUrl && !analyzing && <VideoSkeletonOverlay videoRef={videoRef} frames={poseReplay.frames} sampleFps={poseReplay.sampleFps} />}
+        </div>
       ) : (
         <div className="muted-box" style={{ marginTop: 8 }}>
           La vidéo n’est plus disponible, mais les mesures de son analyse technique sont conservées avec la réalisation.
@@ -278,6 +288,8 @@ export default function VideoTechnicalAnalysis({
         </div>
       )}
 
+      {videoAvailable && analysis && !analyzing && poseReplay?.url !== selectedUrl && <p className="small">Relancer l’analyse pour afficher le squelette : les repères détaillés restent uniquement en mémoire sur cet appareil.</p>}
+
       {analyzing && (
         <progress value={progress} max={1} style={{ width: "100%", marginTop: 8 }} aria-label="Progression de l’analyse vidéo" />
       )}
@@ -290,7 +302,10 @@ export default function VideoTechnicalAnalysis({
         <div style={{ marginTop: 12 }}>
           <div className="stats-grid">
             <Metric label="Corps détecté" value={analysis.display?.detection || `${Math.round((Number(metrics.detectionRatio) || 0) * 100)} %`} />
+            <Metric label="Durée vidéo" value={formatTimestamp(metrics.duration)} />
+            <Metric label="Temps analysable" value={formatTimestamp(metrics.analyzedSeconds)} />
             <Metric label="Pauses" value={pauses.length} />
+            <Metric label="Pauses longues" value={Array.isArray(metrics.longPauses) ? metrics.longPauses.length : "—"} />
             <Metric label="Temps immobile observé" value={pauseRatio === null ? "—" : `${Math.round(pauseRatio * 100)} %`} />
             <Metric label="Ajustements pieds" value={Number(metrics.footAdjustments?.total || 0)} />
             <Metric label="Pics dynamiques" value={Number(metrics.dynamicMoves || 0)} />
@@ -302,6 +317,8 @@ export default function VideoTechnicalAnalysis({
             <Metric label="Bras gauche fléchi" value={analysis.display?.bentLeft || formatTimestamp(metrics.bentArmSeconds?.left)} />
             <Metric label="Bras droit fléchi" value={analysis.display?.bentRight || formatTimestamp(metrics.bentArmSeconds?.right)} />
           </div>
+
+          <AnalysisGraphics metrics={metrics} onSeek={videoAvailable && !analyzing ? (time) => { if (videoRef.current) { videoRef.current.currentTime = time; videoRef.current.pause(); } } : undefined} />
 
           {comparisonChoices.length > 0 && primarySavedAnalysis && (
             <div className="subcard" style={{ marginTop: 12 }}>
@@ -326,6 +343,7 @@ export default function VideoTechnicalAnalysis({
 
               {comparison && (
                 <>
+                  <ComparisonGraphics comparison={comparison} />
                   <div style={{ overflowX: "auto", marginTop: 8 }}>
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>

@@ -1,5 +1,6 @@
 import { loadVideoAnalysisRules, normalizeVideoAnalysisRules } from "./video-analysis-rules.js";
 import { correctImageAspect } from "./video-analysis-observations.js";
+import { SKELETON_JOINTS } from "./video-analysis-display.js";
 
 const MEDIAPIPE_MODULE_URL = "/mediapipe-runtime/vision_bundle.mjs";
 const MEDIAPIPE_WASM_URL = "/mediapipe-runtime/wasm";
@@ -346,6 +347,13 @@ export async function analyzeClimbingVideo(video, options = {}) {
       await seekVideo(video, time);
       const result = poseLandmarker.detectForVideo(video, Math.round(time * 1000));
       const landmarks = result?.landmarks?.[0];
+      if (options.onPoseFrame) {
+        const points = SKELETON_JOINTS.map((id) => {
+          const point = visibleLandmark(landmarks, id, rules.minVisibility);
+          return point && Number.isFinite(point.x) && Number.isFinite(point.y) ? { x: point.x, y: point.y } : null;
+        });
+        options.onPoseFrame({ time, points });
+      }
       let pose = buildFramePose(landmarks, rules, aspectRatio);
       if (!pose && landmarks?.length) {
         // Second passage plus tolérant : utile quand le grimpeur est petit dans

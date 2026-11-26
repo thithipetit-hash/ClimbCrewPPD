@@ -104,3 +104,22 @@ test("la lecture dédiée respecte propriétaire, admin, profil public et profil
   assert.equal(publicProfile.statusCode, 200);
   assert.deepEqual(publicProfile.body.technicalAnalysis, analysisDocument);
 });
+
+test("historique ciblé : propriétaire issu de la session, voie paramétrée, nombre borné", async () => {
+  let handler;
+  const app = { get(path, ...handlers) { if (path === "/video-analysis/history/:routeId") handler = handlers.at(-1); }, put() {} };
+  const calls = [];
+  const rows = [{ realisationId: "r1", dateRealisation: "2026-11-26", analysis: { metrics: { duration: 40 } } }];
+  installRealisationTechnicalAnalysisRoutes(app, { requireAuth() {}, pool: { async query(sql, params) { calls.push({sql, params}); return { rows }; } } });
+  const denied = responseRecorder();
+  await handler({ params: { routeId: "v1" }, auth: { user: { role: "admin" } } }, denied);
+  assert.equal(denied.statusCode, 403);
+  assert.equal(calls.length, 0);
+  const result = responseRecorder();
+  await handler({ params: { routeId: "v1" }, query: { participantId: "other" }, auth: { user: { participantId: "7" } } }, result);
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(result.body.analyses, rows);
+  assert.deepEqual(calls[0].params, ["7", "v1"]);
+  assert.match(calls[0].sql, /r.participant_id = \$1 and r.voie_id = \$2/);
+  assert.match(calls[0].sql, /limit 20/);
+});

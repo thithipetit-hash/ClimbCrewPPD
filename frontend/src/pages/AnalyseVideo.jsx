@@ -2,6 +2,7 @@ import React from "react";
 import VideoTechnicalAnalysis from "../components/VideoTechnicalAnalysis.jsx";
 import RealisationVideoAnalysis from "../components/RealisationVideoAnalysis.jsx";
 import Button from "../components/Button.jsx";
+import VideoAnalysisHistory from "../components/VideoAnalysisHistory.jsx";
 import { USE_API } from "../lib/api.js";
 import { formatRouteName, formatDateShortFr } from "../lib/domain.js";
 
@@ -82,6 +83,7 @@ export default function AnalyseVideo({ myRealisations = [], routesById = {}, onU
             </label>
           ) : <p className="small">Aucune réalisation enregistrée. Vous pouvez analyser une vidéo locale ou enregistrer une réalisation depuis votre profil.</p>}
           {selectedRealisation && (
+            <>
             <RealisationVideoAnalysis
               key={selectedRealisation.id}
               realisation={selectedRealisation}
@@ -90,6 +92,8 @@ export default function AnalyseVideo({ myRealisations = [], routesById = {}, onU
               onUpdate={(patch) => onUpdate(selectedRealisation.id, patch)}
               onRefresh={onRefresh}
             />
+            <VideoAnalysisHistory key={selectedRealisation.voieId} routeId={selectedRealisation.voieId} />
+            </>
           )}
         </div>
       )}
