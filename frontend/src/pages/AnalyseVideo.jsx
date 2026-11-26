@@ -3,11 +3,12 @@ import VideoTechnicalAnalysis from "../components/VideoTechnicalAnalysis.jsx";
 import RealisationVideoAnalysis from "../components/RealisationVideoAnalysis.jsx";
 import Button from "../components/Button.jsx";
 import VideoAnalysisHistory from "../components/VideoAnalysisHistory.jsx";
+import SavedVideoAnalyses from "../components/SavedVideoAnalyses.jsx";
 import { USE_API } from "../lib/api.js";
 import { formatRouteName, formatDateShortFr } from "../lib/domain.js";
 
 export default function AnalyseVideo({ myRealisations = [], routesById = {}, onUpdate, onRefresh }) {
-  const [mode, setMode] = React.useState("local");
+  const [mode, setMode] = React.useState(USE_API ? "saved" : "local");
   const [localVideo, setLocalVideo] = React.useState(null);
   const [realisationId, setRealisationId] = React.useState("");
   const selectedRealisation = myRealisations.find((item) => String(item.id) === realisationId);
@@ -38,6 +39,7 @@ export default function AnalyseVideo({ myRealisations = [], routesById = {}, onU
         </div>
       </div>
       <div className="group" style={{ marginTop: 10 }}>
+        {USE_API && <Button variant={mode === "saved" ? "primary" : "secondary"} onClick={() => selectMode("saved")}>Mes analyses enregistrées</Button>}
         <Button variant={mode === "local" ? "primary" : "secondary"} onClick={() => selectMode("local")}>Vidéo de mon appareil</Button>
         {USE_API && <Button variant={mode === "realisation" ? "primary" : "secondary"} onClick={() => selectMode("realisation")}>Mes réalisations</Button>}
       </div>
@@ -47,7 +49,9 @@ export default function AnalyseVideo({ myRealisations = [], routesById = {}, onU
         <p>La vidéo 2D ne mesure ni les forces ni la distance réelle à la paroi. Les pauses, les mouvements et les angles sont des observations indicatives à confirmer avec un encadrant ; ne jamais supprimer un repos ou un geste de sécurité pour améliorer un indicateur.</p>
         <p className="small">Références : <a href="https://doi.org/10.3389/fpsyg.2020.00249" target="_blank" rel="noreferrer">Fluidité en escalade (2020)</a> · <a href="https://doi.org/10.3390/s23198216" target="_blank" rel="noreferrer">Analyse du squelette (2023)</a> · <a href="https://openaccess.thecvf.com/content/CVPR2025W/CVSPORTS/html/Maschek_The_Way_Up_A_Dataset_for_Hold_Usage_Detection_in_CVPRW_2025_paper.html" target="_blank" rel="noreferrer">The Way Up (2025)</a>.</p>
       </details>
-      {mode === "local" ? (
+      {mode === "saved" ? (
+        <SavedVideoAnalyses realisations={myRealisations} routesById={routesById} />
+      ) : mode === "local" ? (
         <div className="subcard" style={{ marginTop: 12 }}>
           <strong>Analyser une vidéo sans l’envoyer au serveur</strong>
           <p className="small">Choisir une vidéo déjà filmée (8 minutes maximum). La vidéo et les résultats de ce mode restent sur cet appareil pendant la consultation ; ils ne sont pas enregistrés dans le profil.</p>

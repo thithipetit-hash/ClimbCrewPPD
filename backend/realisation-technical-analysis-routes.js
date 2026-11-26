@@ -27,6 +27,30 @@ function currentAnalysisDocument(value) {
 }
 
 export function installRealisationTechnicalAnalysisRoutes(app, { requireAuth, pool }) {
+  app.get("/video-analysis/saved", requireAuth, async (req, res) => {
+    const participantId = req.auth?.user?.participantId;
+    if (!participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
+    try {
+      const result = await pool.query(`
+        select r.id as "realisationId", r.voie_id as "routeId", r.date_realisation as "dateRealisation",
+               count(*)::int as "analysisCount"
+        from realisations r
+        cross join lateral jsonb_each(
+          case when jsonb_typeof(r.technical_analysis->'videos') = 'object'
+            then r.technical_analysis->'videos' else '{}'::jsonb end
+        ) v
+        where r.participant_id = $1 and jsonb_typeof(v.value->'metrics') = 'object'
+        group by r.id, r.voie_id, r.date_realisation
+        order by r.date_realisation desc, r.id desc
+        limit 100
+      `, [participantId]);
+      return res.json({ realisations: result.rows });
+    } catch (error) {
+      console.error("Chargement des analyses enregistrées impossible", error);
+      return res.status(500).json({ error: "Chargement des analyses enregistrées impossible." });
+    }
+  });
+
   app.get("/video-analysis/history/:routeId", requireAuth, async (req, res) => {
     const participantId = req.auth?.user?.participantId;
     if (!participantId) return res.status(403).json({ error: "Compte non relié à un grimpeur" });
