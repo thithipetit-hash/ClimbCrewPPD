@@ -1,0 +1,12 @@
+{
+  "name": "cristalclimbclub-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "dependencies": {
+    "@capacitor/core": "8.0.0",
+    "@capacitor/android": "8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.0.0"
+  }
+}
