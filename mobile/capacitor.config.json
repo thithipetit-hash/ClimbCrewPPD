@@ -1,0 +1,9 @@
+{
+  "appId": "com.cristalclimbclub.app",
+  "appName": "CristalClimbClub",
+  "webDir": "www",
+  "server": {
+    "url": "https://climbcrew.dip-tcs.com",
+    "cleartext": false
+  }
+}
